@@ -28,6 +28,6 @@ You will receive a response within 72 hours. We aim to patch critical vulnerabil
 - Refresh token rotation on every use (mitigates token replay)
 - Rate limiting on `/api/auth/login` (5 attempts / 15 min) and `/api/sync/**`
 - All secrets loaded via environment variables — never hardcoded
-- GoCardless credentials are never stored in the database
+- Enable Banking credentials are never stored in the database
 - No PII or financial balances in application logs
 - Dependencies monitored via GitHub Dependabot

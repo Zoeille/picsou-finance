@@ -41,8 +41,8 @@ public class Account extends AuditableEntity {
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
 
-    @Column(name = "gocardless_account_id", length = 100)
-    private String gocardlessAccountId;
+    @Column(name = "external_account_id", length = 100)
+    private String externalAccountId;
 
     @Column(name = "is_manual", nullable = false)
     @Builder.Default

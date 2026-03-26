@@ -133,7 +133,7 @@ export function SettingsPage() {
           </GlassCard>
         </motion.div>
 
-        {/* GoCardless info */}
+        {/* Enable Banking info */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -149,7 +149,7 @@ export function SettingsPage() {
               </p>
             </div>
             <p className="text-gray-500 mb-3" style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5 }}>
-              Les identifiants GoCardless sont configurés via variables d'environnement dans le fichier{' '}
+              Les identifiants Enable Banking sont configurés via variables d'environnement dans le fichier{' '}
               <code className="text-[#c2c4c9] bg-black/[0.04] px-1 py-0.5 rounded-[4px]" style={{ fontFamily: 'monospace', fontSize: 12 }}>
                 .env
               </code>{' '}

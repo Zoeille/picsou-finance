@@ -16,7 +16,7 @@ public class Requisition extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** GoCardless requisition UUID */
+    /** Enable Banking session ID */
     @Column(name = "requisition_id", nullable = false, unique = true, length = 100)
     private String requisitionId;
 

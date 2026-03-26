@@ -96,7 +96,7 @@
             <version>${bucket4j.version}</version>
         </dependency>
 
-        <!-- HTTP client for GoCardless / price APIs -->
+        <!-- HTTP client for Enable Banking / price APIs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>

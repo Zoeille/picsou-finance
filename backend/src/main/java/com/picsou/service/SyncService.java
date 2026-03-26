@@ -40,7 +40,7 @@ public class SyncService {
         this.accountService = accountService;
     }
 
-    /** Step 1: Initiate GoCardless bank connection for a given institution. */
+    /** Step 1: Initiate Enable Banking bank connection for a given institution. */
     public InitiateResponse initiateConnection(String institutionId, String institutionName) {
         BankConnectorPort.InitiateResult result = bankConnector.initiateConnection(institutionId);
 
@@ -184,7 +184,7 @@ public class SyncService {
     // ─── Private ─────────────────────────────────────────────────────────────
 
     private AccountResponse upsertAccount(BankConnectorPort.AccountData data, String provider) {
-        Optional<Account> existing = accountRepository.findByGocardlessAccountId(data.externalId());
+        Optional<Account> existing = accountRepository.findByExternalAccountId(data.externalId());
 
         Account account;
         if (existing.isPresent()) {
@@ -199,7 +199,7 @@ public class SyncService {
                 .currency(data.currency() != null ? data.currency() : "EUR")
                 .currentBalance(data.balance())
                 .lastSyncedAt(Instant.now())
-                .gocardlessAccountId(data.externalId())
+                .externalAccountId(data.externalId())
                 .isManual(false)
                 .color("#6366f1")
                 .build();

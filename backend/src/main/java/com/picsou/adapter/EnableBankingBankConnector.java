@@ -30,7 +30,7 @@ import java.util.Map;
  * https://enablebanking.com/docs/api/reference/
  *
  * Auth: JWT signed with your RSA private key (RS256).
- * Equivalent to GoCardless requisitions → Enable Banking sessions.
+ * Sessions are initiated via OAuth and tracked in the requisition table.
  */
 @Component
 public class EnableBankingBankConnector implements BankConnectorPort {

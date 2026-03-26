@@ -246,7 +246,7 @@ public class TradeRepublicSyncService {
     // ─── Private ──────────────────────────────────────────────────────────────
 
     private AccountResponse upsertAccount(TrAccountData data) {
-        Optional<Account> existing = accountRepository.findByGocardlessAccountId(data.externalId());
+        Optional<Account> existing = accountRepository.findByExternalAccountId(data.externalId());
 
         Account account;
         if (existing.isPresent()) {
@@ -261,7 +261,7 @@ public class TradeRepublicSyncService {
                 .currency("EUR")
                 .currentBalance(data.balanceEur())
                 .lastSyncedAt(Instant.now())
-                .gocardlessAccountId(data.externalId())
+                .externalAccountId(data.externalId())
                 .isManual(false)
                 .color(colorFor(data.type()))
                 .build();
