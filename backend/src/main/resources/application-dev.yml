@@ -1,0 +1,21 @@
+app:
+  secure-cookies: false   # HTTP in dev — no Secure flag needed
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+  devtools:
+    restart:
+      enabled: true
+
+server:
+  error:
+    include-stacktrace: on_param   # allow ?trace=true in dev only
+
+logging:
+  level:
+    com.picsou: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG

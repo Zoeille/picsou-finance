@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: picsou
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/picsou}
+    username: ${SPRING_DATASOURCE_USERNAME:picsou}
+    password: ${SPRING_DATASOURCE_PASSWORD:picsou}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Flyway owns the schema
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        default_schema: public
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 1MB
+
+server:
+  port: 8080
+  error:
+    include-stacktrace: never     # never expose stack traces to clients
+    include-message: never
+  compression:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiry-minutes: 15
+    refresh-token-expiry-days: 7
+  user:
+    username: ${APP_USERNAME}
+    password-hash: ${APP_PASSWORD_HASH}
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+  secure-cookies: true   # set Secure flag on JWT cookies; override to false for local HTTP dev
+  tr-auth:
+    url: ${TR_AUTH_URL:http://tr-auth:8001}
+  enablebanking:
+    application-id: ${ENABLEBANKING_APPLICATION_ID:}
+    key-id: ${ENABLEBANKING_KEY_ID:}
+    redirect-uri: ${ENABLEBANKING_REDIRECT_URI:http://localhost:5173/sync/callback}
+    private-key: ${ENABLEBANKING_PRIVATE_KEY:}
+    private-key-path: ${ENABLEBANKING_PRIVATE_KEY_PATH:}
+    base-url: ${ENABLEBANKING_BASE_URL:https://api.enablebanking.com}

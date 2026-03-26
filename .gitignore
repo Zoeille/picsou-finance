@@ -1,0 +1,38 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Secrets & cryptographic material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets/
+
+# Java / Maven
+backend/target/
+backend/.mvn/repository/
+*.jar
+*.war
+*.class
+*.log
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Docker overrides (may contain local ports, credentials)
+docker-compose.override.yml
+docker-compose.override.*.yml
