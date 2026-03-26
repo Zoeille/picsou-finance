@@ -52,7 +52,7 @@ Self-hosted, open-source, single-user. Construit avec Spring Boot + React.
 ### 1. Cloner le dépôt
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Zoeille/picsou-finance.git
 cd picsou
 ```
 
