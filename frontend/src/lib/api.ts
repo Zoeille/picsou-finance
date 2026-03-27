@@ -188,6 +188,49 @@ export const authApi = {
   refresh: () => api.post<{ username: string }>('/auth/refresh').then(r => r.data),
 }
 
+// Crypto Exchange
+export type ExchangeType = 'BINANCE' | 'KRAKEN'
+
+export interface ExchangeStatus {
+  id: number
+  exchangeType: ExchangeType
+  status: string
+  lastSyncedAt: string | null
+}
+
+export const cryptoExchangeApi = {
+  add: (type: ExchangeType, apiKey: string, apiSecret: string) =>
+    api.post<Account>('/crypto/exchange', { type, apiKey, apiSecret }).then(r => r.data),
+  sync: (id: number) =>
+    api.post<Account>(`/crypto/exchange/${id}/sync`).then(r => r.data),
+  status: () =>
+    api.get<ExchangeStatus[]>('/crypto/exchange/status').then(r => r.data),
+  remove: (id: number) =>
+    api.delete(`/crypto/exchange/${id}`),
+}
+
+// Crypto Wallet
+export type ChainType = 'SOLANA' | 'ETHEREUM' | 'BITCOIN'
+
+export interface WalletStatus {
+  id: number
+  chain: ChainType
+  address: string
+  label: string | null
+  lastSyncedAt: string | null
+}
+
+export const cryptoWalletApi = {
+  add: (chain: ChainType, address: string, label?: string) =>
+    api.post<Account>('/crypto/wallet', { chain, address, label }).then(r => r.data),
+  sync: (id: number) =>
+    api.post<Account>(`/crypto/wallet/${id}/sync`).then(r => r.data),
+  list: () =>
+    api.get<WalletStatus[]>('/crypto/wallet').then(r => r.data),
+  remove: (id: number) =>
+    api.delete(`/crypto/wallet/${id}`),
+}
+
 // Trade Republic
 export interface TrSessionStatus {
   isActive: boolean

@@ -7,6 +7,8 @@ import { AccountDetailPage } from './pages/accounts/AccountDetailPage'
 import { GoalsPage } from './pages/goals/GoalsPage'
 import { SyncPage } from './pages/sync/SyncPage'
 import { TrSyncPage } from './pages/sync/TrSyncPage'
+import { CryptoExchangeSyncPage } from './pages/sync/CryptoExchangeSyncPage'
+import { WalletSyncPage } from './pages/sync/WalletSyncPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
 
 function isAuthenticated(): boolean {
@@ -42,6 +44,8 @@ export const router = createBrowserRouter([
       { path: 'sync', element: <SyncPage /> },
       { path: 'sync/callback', element: <SyncPage /> },
       { path: 'sync/trade-republic', element: <TrSyncPage /> },
+      { path: 'sync/crypto-exchange', element: <CryptoExchangeSyncPage /> },
+      { path: 'sync/crypto-wallet', element: <WalletSyncPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

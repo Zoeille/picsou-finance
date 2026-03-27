@@ -22,17 +22,27 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     // Map from ticker (uppercase) → CoinGecko coin ID
-    private static final Map<String, String> TICKER_TO_ID = Map.of(
-        "BTC", "bitcoin",
-        "ETH", "ethereum",
-        "SOL", "solana",
-        "BNB", "binancecoin",
-        "ADA", "cardano",
-        "XRP", "ripple",
-        "DOGE", "dogecoin",
-        "DOT", "polkadot",
-        "MATIC", "matic-network",
-        "AVAX", "avalanche-2"
+    private static final Map<String, String> TICKER_TO_ID = Map.ofEntries(
+        Map.entry("BTC", "bitcoin"),
+        Map.entry("ETH", "ethereum"),
+        Map.entry("SOL", "solana"),
+        Map.entry("BNB", "binancecoin"),
+        Map.entry("ADA", "cardano"),
+        Map.entry("XRP", "ripple"),
+        Map.entry("DOGE", "dogecoin"),
+        Map.entry("DOT", "polkadot"),
+        Map.entry("MATIC", "matic-network"),
+        Map.entry("AVAX", "avalanche-2"),
+        Map.entry("LINK", "chainlink"),
+        Map.entry("UNI", "uniswap"),
+        Map.entry("ATOM", "cosmos"),
+        Map.entry("LTC", "litecoin"),
+        Map.entry("NEAR", "near"),
+        Map.entry("ARB", "arbitrum"),
+        Map.entry("OP", "optimism"),
+        Map.entry("SHIB", "shiba-inu"),
+        Map.entry("PEPE", "pepe"),
+        Map.entry("SUI", "sui")
     );
 
     private final WebClient webClient;
