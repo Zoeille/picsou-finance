@@ -26,19 +26,25 @@ public class SchedulerService {
     private final SyncService syncService;
     private final TradeRepublicSyncService trSyncService;
     private final PriceService priceService;
+    private final CryptoExchangeSyncService cryptoExchangeSyncService;
+    private final WalletSyncService walletSyncService;
 
     public SchedulerService(
         AccountRepository accountRepository,
         BalanceSnapshotRepository snapshotRepository,
         SyncService syncService,
         TradeRepublicSyncService trSyncService,
-        PriceService priceService
+        PriceService priceService,
+        CryptoExchangeSyncService cryptoExchangeSyncService,
+        WalletSyncService walletSyncService
     ) {
         this.accountRepository = accountRepository;
         this.snapshotRepository = snapshotRepository;
         this.syncService = syncService;
         this.trSyncService = trSyncService;
         this.priceService = priceService;
+        this.cryptoExchangeSyncService = cryptoExchangeSyncService;
+        this.walletSyncService = walletSyncService;
     }
 
     /**
@@ -53,6 +59,17 @@ public class SchedulerService {
             log.error("Daily Enable Banking sync failed", ex);
         }
         trSyncService.resyncIfSessionActive();
+
+        try {
+            cryptoExchangeSyncService.resyncAll();
+        } catch (Exception ex) {
+            log.error("Daily crypto exchange sync failed", ex);
+        }
+        try {
+            walletSyncService.resyncAll();
+        } catch (Exception ex) {
+            log.error("Daily wallet sync failed", ex);
+        }
     }
 
     /**

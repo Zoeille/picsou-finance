@@ -10,6 +10,8 @@ import {
   LogOut,
   DollarSign,
   TrendingUp,
+  Bitcoin,
+  Link,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -19,6 +21,8 @@ const NAV_ITEMS = [
   { to: '/goals', label: 'Objectifs', icon: Target },
   { to: '/sync', label: 'Synchronisation', icon: RefreshCw },
   { to: '/sync/trade-republic', label: 'Trade Republic', icon: TrendingUp },
+  { to: '/sync/crypto-exchange', label: 'Exchanges', icon: Bitcoin },
+  { to: '/sync/crypto-wallet', label: 'Wallets', icon: Link },
 ] as const
 
 export function Sidebar() {

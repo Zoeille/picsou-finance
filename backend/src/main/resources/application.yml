@@ -66,6 +66,8 @@ app:
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
   secure-cookies: true   # set Secure flag on JWT cookies; override to false for local HTTP dev
+  crypto:
+    encryption-key: ${CRYPTO_ENCRYPTION_KEY:}
   tr-auth:
     url: ${TR_AUTH_URL:http://tr-auth:8001}
   enablebanking:
