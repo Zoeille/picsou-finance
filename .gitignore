@@ -11,6 +11,8 @@
 *.crt
 *.cer
 secrets/
+backend/.local/
+frontend/.local/
 
 # Java / Maven
 backend/target/
@@ -70,6 +72,7 @@ docs_template*/
 docs_template*.zip
 
 # Tooling caches / local-only
+.local/
 .playwright-mcp/
 .superpowers/
 docs/superpowers/

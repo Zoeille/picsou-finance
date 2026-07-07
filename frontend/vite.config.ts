@@ -2,6 +2,17 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import fs from 'node:fs'
+
+const localCertPath = path.resolve(__dirname, '.local/certs/picsou-local-cert.pem')
+const localKeyPath = path.resolve(__dirname, '.local/certs/picsou-local-key.pem')
+const localHttps =
+  fs.existsSync(localCertPath) && fs.existsSync(localKeyPath)
+    ? {
+        cert: fs.readFileSync(localCertPath),
+        key: fs.readFileSync(localKeyPath),
+      }
+    : undefined
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -48,6 +59,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    https: localHttps,
     proxy: {
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://localhost:8080',

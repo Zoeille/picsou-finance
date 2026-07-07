@@ -1,5 +1,9 @@
 app:
   secure-cookies: false   # HTTP in dev — no Secure flag needed
+  tr-auth:
+    url: ${TR_AUTH_URL:http://127.0.0.1:8001}
+  enablebanking:
+    private-key-path: ${ENABLEBANKING_PRIVATE_KEY_PATH:.local/keys/enablebanking-private.pem}
 
 spring:
   jpa:
