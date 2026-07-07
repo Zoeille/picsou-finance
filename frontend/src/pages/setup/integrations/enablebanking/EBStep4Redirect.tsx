@@ -86,7 +86,7 @@ export function EBStep4Redirect({ onNext, onBack }: Props) {
           <Button
             size="lg"
             onClick={onNext}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="h-10 w-full rounded-full px-8 text-sm sm:w-auto"
           >
             {t('setup.enablebanking.redirect.addedCta')}
           </Button>

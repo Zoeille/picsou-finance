@@ -100,8 +100,7 @@ describe('AddAccountModal Trade Republic wizard', () => {
     fillPhoneAndPin()
     fireEvent.click(screen.getByRole('button', { name: 'sync.tr.connect' }))
 
-    expect(await screen.findByText('sync.tr.tan')).toBeInTheDocument()
-    const tanInput = screen.getByRole('textbox')
+    const tanInput = await screen.findByLabelText('sync.tr.tan')
     fireEvent.change(tanInput, { target: { value: '9876' } })
     fireEvent.click(screen.getByRole('button', { name: 'sync.tr.connect' }))
 

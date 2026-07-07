@@ -66,16 +66,16 @@ export function SetupLayout() {
 
       <header className="fixed left-4 right-4 top-4 z-40 flex items-center justify-between gap-3 sm:left-6 sm:right-6 sm:top-6">
         <div
-          role="tablist"
+          role="radiogroup"
           aria-label={t('setup.intro.language')}
           className="inline-flex min-h-12 shrink-0 items-center rounded-2xl border border-border/60 bg-background/80 p-1 backdrop-blur-md"
         >
           {(['fr', 'en'] as const).map((lng) => (
             <button
               key={lng}
-              role="tab"
+              role="radio"
               type="button"
-              aria-selected={activeLanguage === lng}
+              aria-checked={activeLanguage === lng}
               onClick={() => switchLang(lng)}
               className={cn(
                 'inline-flex h-10 min-w-16 items-center justify-center rounded-xl px-6 text-sm font-medium transition-[background-color,color]',

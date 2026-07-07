@@ -101,6 +101,7 @@
     "netWorthChange": "Gain / perte",
     "marketsClosed": "Marchés fermés — aucune donnée intraday disponible",
     "distribution": "Répartition",
+    "accountsLabel": "comptes",
     "ranges": {
       "24H": "24H",
       "7D": "7J",

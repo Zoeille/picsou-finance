@@ -292,7 +292,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
             size="lg"
             onClick={onNext}
             disabled={!pem}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="h-10 w-full rounded-full px-8 text-sm sm:w-auto"
           >
             {t('setup.enablebanking.keypair.uploadedCta')}
           </Button>

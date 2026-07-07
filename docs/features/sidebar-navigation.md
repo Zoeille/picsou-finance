@@ -21,7 +21,7 @@ Desktop navigation starts directly with the route list; there is no brand logo i
 
 The admin switcher is backed by `profile-store.activeMemberId`. Selecting a managed profile calls `setActiveMember(member.id)` and invalidates TanStack Query so the current page refetches under the new `?memberId=` scope. Selecting the admin's own account clears the override with `setActiveMember(null)`.
 
-The switcher loads family members through `useFamilyMembers({ enabled: isAdmin })`. It must stay disabled for non-admin and demo sessions because `/family/members` is admin-only and a regular member would otherwise be redirected to the global 403 page.
+The switcher loads family members through `useFamilyMembers({ enabled: canSwitchProfile })`, where `canSwitchProfile = !demoMode && user?.role === 'ADMIN'`. It must stay disabled for non-admin and demo sessions because `/family/members` is admin-only and a regular member would otherwise be redirected to the global 403 page.
 
 ### Mobile: `MobileBottomNav` (hidden on desktop via `md:hidden`)
 

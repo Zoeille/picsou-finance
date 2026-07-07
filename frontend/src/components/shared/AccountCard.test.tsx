@@ -5,7 +5,10 @@ import { AccountCard } from './AccountCard'
 import type { Account } from '@/types/api'
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en', resolvedLanguage: 'en' },
+  }),
 }))
 
 /**

@@ -324,10 +324,10 @@ function GoalCard({ goal, onEdit, onDelete, onCalendar, onOpenDetail }: GoalCard
             {statusBadge}
           </div>
           <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon" onClick={onEdit}>
+            <Button variant="ghost" size="icon" onClick={onEdit} aria-label={t('common.edit')}>
               <Pencil className="size-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={onCalendar}>
+            <Button variant="ghost" size="icon" onClick={onCalendar} aria-label={t('goals.viewCalendar')}>
               <Calendar className="size-4" />
             </Button>
             <Button
@@ -335,6 +335,7 @@ function GoalCard({ goal, onEdit, onDelete, onCalendar, onOpenDetail }: GoalCard
               size="icon"
               className="text-muted-foreground hover:text-destructive"
               onClick={onDelete}
+              aria-label={t('goals.deleteGoal')}
             >
               <Trash2 className="size-4" />
             </Button>

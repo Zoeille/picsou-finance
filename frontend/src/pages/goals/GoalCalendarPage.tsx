@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
 import { ArrowLeft, Calendar, LayoutGrid, Clock, Loader2, Plus } from 'lucide-react'
-import { cn, formatCurrency, parseAmount } from '@/lib/utils'
+import { cn, formatCurrency, localeFromLanguage, parseAmount } from '@/lib/utils'
 import type { GoalMonthEntry } from '@/types/api'
 
 // ---------------------------------------------------------------------------
@@ -118,12 +118,17 @@ function getProgressColor(entry: GoalMonthEntry, isPast: boolean): { color: stri
 
 function formatCompact(value: number, locale: string, currency: string): string {
   const abs = Math.abs(value)
-  if (abs >= 1_000_000)
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 2 }).format(value)
-  if (abs >= 10_000)
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 0 }).format(value)
-  if (abs >= 1_000)
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  try {
+    if (abs >= 1_000_000)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 2 }).format(value)
+    if (abs >= 10_000)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 0 }).format(value)
+    if (abs >= 1_000)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  } catch {
+    // Invalid currency/locale makes Intl.NumberFormat throw a RangeError —
+    // fall through to formatCurrency, which degrades gracefully.
+  }
   return formatCurrency(value, currency, locale)
 }
 
@@ -135,8 +140,8 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
   months: GoalMonthEntry[]; selectedYm: string | null; onSelect: (ym: string) => void
   onAddPreviousMonth: () => void; isAddingMonth: boolean
 }) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const currency = t('common.currency')
   const years = useMemo(() => groupByYear((months ?? []).filter(e => isPastOrCurrent(e.yearMonth))), [months])
   const earliestYear = years[0]?.year
@@ -236,8 +241,8 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
 function TimelineView({ months, selectedYm, onSelect }: {
   months: GoalMonthEntry[]; selectedYm: string | null; onSelect: (ym: string) => void
 }) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const sorted = useMemo(() =>
     [...(months ?? [])].filter(e => isPastOrCurrent(e.yearMonth)).reverse(),
     [months]
@@ -290,8 +295,8 @@ function TimelineView({ months, selectedYm, onSelect }: {
 function CalendarGridView({ months, selectedYm, onSelect }: {
   months: GoalMonthEntry[]; selectedYm: string | null; onSelect: (ym: string) => void
 }) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const years = useMemo(() => groupByYear(months), [months])
 
   return (
@@ -355,8 +360,8 @@ function CalendarGridView({ months, selectedYm, onSelect }: {
 function MonthDetailPanel({ goalId, entry, onClose, className }: {
   goalId: number; entry: GoalMonthEntry; onClose: () => void; className?: string
 }) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const setOverride = useSetMonthOverride()
   const deleteOverride = useDeleteMonthOverride()
   const setManual = useSetManualContribution()
@@ -499,8 +504,8 @@ export function GoalCalendarPage() {
   const { id } = useParams<{ id: string }>()
   const goalId = Number(id)
   const navigate = useNavigate()
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
 
   const { data: goal, isLoading: goalLoading, error: goalError } = useGoal(goalId)
   const { data: months, isLoading: monthsLoading } = useGoalMonths(goalId)

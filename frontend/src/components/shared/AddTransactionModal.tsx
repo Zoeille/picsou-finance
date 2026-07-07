@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/shared/NumericInput'
 import { DateInput } from '@/components/shared/DateInput'
 import { Label } from '@/components/ui/label'
-import { formatCurrency, parseAmount } from '@/lib/utils'
+import { formatCurrency, localeFromLanguage, parseAmount } from '@/lib/utils'
+import { extractErrorMessage } from '@/lib/errors'
 import { Loader2 } from 'lucide-react'
 import type { AccountType, TransactionRequest } from '@/types/api'
 import { accountsApi } from '@/features/accounts/api'
@@ -64,8 +65,8 @@ interface TransactionFormProps {
 }
 
 function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoading, initialValues }: TransactionFormProps) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const isInvestment = INVESTMENT_TYPES.includes(accountType)
   const isInvestmentTx = initialValues?.txType === 'BUY' || initialValues?.txType === 'SELL'
 
@@ -143,8 +144,8 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
     try {
       await onSubmit(data)
       onOpenChange(false)
-    } catch {
-      setError(t('common.error'))
+    } catch (err) {
+      setError(extractErrorMessage(err, t('common.error')))
     }
   }
 

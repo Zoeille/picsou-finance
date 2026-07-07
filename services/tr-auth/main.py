@@ -116,7 +116,8 @@ def normalise_phone(phone: str) -> str:
 
 
 def mask_phone(phone: str) -> str:
-    if len(phone) <= 4:
+    # Below 7 chars, prefix + suffix would reveal most (or all) of the number.
+    if len(phone) <= 6:
         return "****"
     return phone[:3] + "****" + phone[-2:]
 

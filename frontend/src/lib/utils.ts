@@ -117,12 +117,13 @@ export function formatPercent(value: number, locale = getLocale()): string {
 
 function capitalizeFirstCharacter(value: string, locale = getLocale()): string {
   const [first = '', ...rest] = Array.from(value)
-  return first.toLocaleUpperCase(locale) + rest.join('')
+  return first.toLocaleUpperCase(normalizeIntlLocale(locale)) + rest.join('')
 }
 
 export function todayLabel(locale = getLocale(), date = new Date()): string {
-  const label = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date)
-  return capitalizeFirstCharacter(label, locale)
+  const safeLocale = normalizeIntlLocale(locale)
+  const label = new Intl.DateTimeFormat(safeLocale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date)
+  return capitalizeFirstCharacter(label, safeLocale)
 }
 
 export function formatLocalDate(dateStr: string | null | undefined, locale = getLocale()): string {

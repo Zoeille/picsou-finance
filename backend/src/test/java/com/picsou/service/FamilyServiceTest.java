@@ -226,6 +226,7 @@ class FamilyServiceTest {
         verify(sharingSettingsRepository, never()).save(any());
         verify(sharedResourceRepository, never()).deleteAllByOwnerMemberIdAndResourceType(any(), any());
         verify(sharedResourceRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).saveAll(any());
     }
 
     @Test
@@ -249,6 +250,7 @@ class FamilyServiceTest {
         verify(sharingSettingsRepository, never()).save(any());
         verify(sharedResourceRepository, never()).deleteAllByOwnerMemberIdAndResourceType(any(), any());
         verify(sharedResourceRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).saveAll(any());
     }
 
     @Test
@@ -280,9 +282,10 @@ class FamilyServiceTest {
 
         verify(sharingSettingsRepository).save(any());
         verify(sharedResourceRepository).deleteAllByOwnerMemberIdAndResourceType(3L, "ACCOUNT");
-        ArgumentCaptor<SharedResource> captor = ArgumentCaptor.forClass(SharedResource.class);
-        verify(sharedResourceRepository, org.mockito.Mockito.times(2)).save(captor.capture());
-        assertThat(captor.getAllValues())
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SharedResource>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sharedResourceRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
             .extracting(SharedResource::getResourceId)
             .containsExactly(10L, 20L);
     }
@@ -299,5 +302,6 @@ class FamilyServiceTest {
         verify(sharingSettingsRepository, never()).save(any());
         verify(sharedResourceRepository, never()).deleteAllByOwnerMemberIdAndResourceType(any(), any());
         verify(sharedResourceRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).saveAll(any());
     }
 }

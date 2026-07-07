@@ -526,46 +526,36 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
         }
     }
 
-    private String sub(int id, String type, String token) {
+    private String buildSub(int id, Map<String, Object> payload) {
         try {
-            return "sub " + id + " " + objectMapper.writeValueAsString(
-                    Map.of("type", type, "token", token));
+            return "sub " + id + " " + objectMapper.writeValueAsString(payload);
         } catch (Exception ex) {
             throw new SyncException("Failed to build subscription message: " + ex.getMessage());
         }
+    }
+
+    private String sub(int id, String type, String token) {
+        return buildSub(id, Map.of("type", type, "token", token));
     }
 
     private String subWithId(int id, String type, String idParam, String token) {
-        try {
-            return "sub " + id + " " + objectMapper.writeValueAsString(
-                    Map.of("type", type, "id", idParam, "token", token));
-        } catch (Exception ex) {
-            throw new SyncException("Failed to build subscription message: " + ex.getMessage());
-        }
+        return buildSub(id, Map.of("type", type, "id", idParam, "token", token));
     }
 
     private String subCompactPortfolio(int id, String secAccNo, String token) {
-        try {
-            Map<String, Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("type", "compactPortfolioByType");
-            payload.put("secAccNo", secAccNo);
-            payload.put("token", token);
-            return "sub " + id + " " + objectMapper.writeValueAsString(payload);
-        } catch (Exception ex) {
-            throw new SyncException("Failed to build subscription message: " + ex.getMessage());
-        }
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("type", "compactPortfolioByType");
+        payload.put("secAccNo", secAccNo);
+        payload.put("token", token);
+        return buildSub(id, payload);
     }
 
     private String subAvailableCash(int id, String cashAccountNumber, String token) {
-        try {
-            Map<String, Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("type", "availableCash");
-            payload.put("accountNumber", cashAccountNumber);
-            payload.put("token", token);
-            return "sub " + id + " " + objectMapper.writeValueAsString(payload);
-        } catch (Exception ex) {
-            throw new SyncException("Failed to build subscription message: " + ex.getMessage());
-        }
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("type", "availableCash");
+        payload.put("accountNumber", cashAccountNumber);
+        payload.put("token", token);
+        return buildSub(id, payload);
     }
 
     private List<SecAccount> extractSecAccounts(String sessionToken) {

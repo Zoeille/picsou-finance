@@ -17,68 +17,16 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import type { TrSessionStatus } from '@/types/api'
-import { extractErrorMessage, getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { formatTrAuthError } from '@/lib/errors'
 import { formatDateTime } from '@/lib/utils'
+import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 
 type AuthState = 'IDLE' | 'AWAITING_TAN' | 'CONNECTED' | 'ERROR'
-const TR_VERIFICATION_CODE_LENGTH = 4
 
 export function TradeRepublicTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const formatAuthError = (error: unknown): string => {
-    const status = getErrorStatus(error)
-
-    // Rate limit error
-    if (status === 429) {
-      return t('sync.tr.errors.tooManyAttempts')
-    }
-
-    // Bad gateway or TR rejection
-    if (status === 500 || status === 502 || status === 503) {
-      const detail = getErrorDetail(error) || ''
-
-      if (detail.includes('authentication service is unavailable')) {
-        return t('sync.tr.errors.serviceUnavailable')
-      }
-
-      if (detail.includes('VALIDATION_CODE_INVALID') || detail.includes('verification code is invalid')) {
-        return t('sync.tr.errors.invalidTan')
-      }
-
-      // Try to extract specific TR error
-      if (detail.includes('NUMBER_INVALID')) {
-        return t('sync.tr.errors.invalidPhoneNumber')
-      }
-      if (detail.includes('PIN_INVALID')) {
-        return t('sync.tr.errors.invalidPin')
-      }
-      if (detail.includes('AUTHENTICATION_ERROR')) {
-        return t('sync.tr.errors.authenticationFailed')
-      }
-
-      return t('sync.tr.errors.serverError')
-    }
-
-    // Validation errors (422)
-    if (status === 422) {
-      const errors =
-        (error as { response?: { data?: { errors?: Record<string, unknown> } } })?.response
-          ?.data?.errors ?? {}
-      if (errors.phoneNumber) {
-        return t('sync.tr.errors.phoneNumberRequired')
-      }
-      if (errors.pin) {
-        return t('sync.tr.errors.pinRequired')
-      }
-      return t('sync.tr.errors.validationFailed')
-    }
-
-    // Fallback
-    return extractErrorMessage(error, t('sync.tr.errors.unknownError'))
-  }
 
   const [authState, setAuthState] = useState<AuthState>('IDLE')
   const [phone, setPhone] = useState('')
@@ -105,7 +53,7 @@ export function TradeRepublicTab() {
       setErrorMsg(null)
     },
     onError: (error: unknown) => {
-      const friendlyMsg = formatAuthError(error)
+      const friendlyMsg = formatTrAuthError(error, t)
       setErrorMsg(friendlyMsg)
       setProcessId(null)
       setTan('')
@@ -126,7 +74,7 @@ export function TradeRepublicTab() {
       queryClient.invalidateQueries({ queryKey: ['sync', 'tr', 'status'] })
     },
     onError: (error: unknown) => {
-      const friendlyMsg = formatAuthError(error)
+      const friendlyMsg = formatTrAuthError(error, t)
       setErrorMsg(friendlyMsg)
       setTan('')
       setAuthState('AWAITING_TAN')

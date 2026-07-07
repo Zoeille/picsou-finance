@@ -79,6 +79,7 @@ export function SetupStepSecurity() {
                     <Input
                       placeholder="https://example.com"
                       aria-invalid={showOriginError}
+                      aria-describedby={showOriginError ? `origin-error-${idx}` : undefined}
                       {...register(`allowedOrigins.${idx}` as const)}
                     />
                     {fields.length > 1 && (
@@ -95,7 +96,7 @@ export function SetupStepSecurity() {
                     )}
                   </div>
                   {showOriginError && (
-                    <p className="text-xs text-destructive">
+                    <p id={`origin-error-${idx}`} className="text-xs text-destructive">
                       {t(originMessage)}
                     </p>
                   )}

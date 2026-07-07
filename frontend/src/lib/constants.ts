@@ -39,6 +39,13 @@ export const QUERY_STALE_TIMES = {
 } as const
 
 /**
+ * Length of the SMS verification code (TAN) Trade Republic sends during device
+ * pairing. Shared by every TR entry point (AddAccountModal, SyncAllModal,
+ * TradeRepublicTab) so client-side validation stays consistent.
+ */
+export const TR_VERIFICATION_CODE_LENGTH = 4
+
+/**
  * How long a successful `session-probe` result (RequireAuth's cookie-backed
  * session check) may sit in the query cache after it stops being observed
  * (isAuthenticated flips true). Bounded rather than Infinity so a stale

@@ -52,6 +52,7 @@ import {
 } from '@/features/sync/hooks'
 import { useAccounts } from '@/features/accounts/hooks'
 import { formatTimeAgo } from '@/lib/utils'
+import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 
 type SyncConnection = {
   id: string
@@ -62,7 +63,6 @@ type SyncConnection = {
   syncId?: number
 }
 
-const TR_VERIFICATION_CODE_LENGTH = 4
 
 const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{ className?: string }>> = {
   bank: Landmark,

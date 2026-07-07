@@ -240,7 +240,7 @@ export function DistributionPie({ data }: DistributionPieProps) {
                                 y={(viewBox.cy || 0) + 20}
                                 className="fill-muted-foreground text-xs"
                               >
-                                comptes
+                                {t('dashboard.accountsLabel')}
                               </tspan>
                             </text>
                           )

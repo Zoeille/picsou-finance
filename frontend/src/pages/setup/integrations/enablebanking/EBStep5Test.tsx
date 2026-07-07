@@ -146,7 +146,7 @@ export function EBStep5Test({ onBack }: Props) {
               <Button
                 type="button"
                 onClick={run}
-                className="h-10 w-full rounded-full px-8 text-sm"
+                className="h-10 w-full rounded-full px-8 text-sm sm:w-auto"
               >
                 {t('setup.enablebanking.test.retry')}
               </Button>

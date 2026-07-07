@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { AccountTypeBadge } from '@/components/shared/AccountTypeBadge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, localeFromLanguage } from '@/lib/utils'
 
 interface AccountCardProps {
   account: Account
@@ -21,8 +21,8 @@ function AccountAvatar({ logoUrl, color }: { logoUrl: string | null; color: stri
 }
 
 export function AccountCard({ account, onClick }: AccountCardProps) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const isLoan = account.type === 'LOAN'
   const isRealEstate = account.type === 'REAL_ESTATE'
 

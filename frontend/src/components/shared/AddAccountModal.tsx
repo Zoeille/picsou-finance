@@ -14,8 +14,8 @@ import { Label } from '@/components/ui/label'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { AccountForm } from '@/components/shared/AccountForm'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
-import { ACCOUNT_COLORS } from '@/lib/constants'
-import { extractErrorMessage, getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { ACCOUNT_COLORS, TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
+import { extractErrorMessage, formatTrAuthError, getErrorStatus, getErrorDetail } from '@/lib/errors'
 import { useCreateAccount, useUpdateDebtMetadata } from '@/features/accounts/hooks'
 import {
   useSearchInstitutions,
@@ -63,7 +63,6 @@ interface AddAccountModalProps {
 }
 
 type WizardStep = 'selector' | 'banks' | 'exchanges' | 'wallets' | 'tr' | 'finary' | 'manual'
-const TR_VERIFICATION_CODE_LENGTH = 4
 
 /**
  * Masked variant of InputOTPSlot — replaces the typed character with a bullet
@@ -581,29 +580,6 @@ function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
 
 type TrState = 'IDLE' | 'AWAITING_TAN' | 'CONNECTED' | 'ERROR'
 
-function formatTrAuthError(error: unknown, t: (key: string) => string): string {
-  const status = getErrorStatus(error)
-  if (status === 429) return t('sync.tr.errors.tooManyAttempts')
-  if (status === 500 || status === 502 || status === 503) {
-    const detail = getErrorDetail(error) || ''
-    if (detail.includes('authentication service is unavailable')) return t('sync.tr.errors.serviceUnavailable')
-    if (detail.includes('VALIDATION_CODE_INVALID') || detail.includes('verification code is invalid')) return t('sync.tr.errors.invalidTan')
-    if (detail.includes('NUMBER_INVALID')) return t('sync.tr.errors.invalidPhoneNumber')
-    if (detail.includes('PIN_INVALID')) return t('sync.tr.errors.invalidPin')
-    if (detail.includes('AUTHENTICATION_ERROR')) return t('sync.tr.errors.authenticationFailed')
-    return t('sync.tr.errors.serverError')
-  }
-  if (status === 422) {
-    const errors =
-      (error as { response?: { data?: { errors?: Record<string, unknown> } } })?.response?.data
-        ?.errors ?? {}
-    if (errors.phoneNumber) return t('sync.tr.errors.phoneNumberRequired')
-    if (errors.pin) return t('sync.tr.errors.pinRequired')
-    return t('sync.tr.errors.validationFailed')
-  }
-  return (error as { message?: string })?.message || t('sync.tr.errors.unknownError')
-}
-
 function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
   const { t } = useTranslation()
   const [authState, setAuthState] = useState<TrState>('IDLE')
@@ -661,11 +637,11 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
     )
   }
 
+  // Only dismiss the banner: the mutations' onError handlers already reset
+  // authState/processId appropriately per failure type. Resetting to IDLE here
+  // would throw away a still-valid TAN session after a completion failure.
   function handleRetry() {
     setErrorMsg(null)
-    setAuthState('IDLE')
-    setProcessId(null)
-    setTan('')
   }
 
   if (authState === 'CONNECTED') {
@@ -732,6 +708,7 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
                 {t('sync.tr.tan')}
               </Label>
               <InputOTP
+                id="tr-tan"
                 maxLength={TR_VERIFICATION_CODE_LENGTH}
                 value={tan}
                 onChange={(value) => setTan(value.replace(/\D/g, '').slice(0, TR_VERIFICATION_CODE_LENGTH))}
@@ -1048,6 +1025,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                   <button
                     type="button"
                     onClick={() => setShowPassword((p) => !p)}
+                    aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                     className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

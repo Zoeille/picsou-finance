@@ -84,6 +84,39 @@ type TFunc = (key: string) => string
  * Never returns raw axios text or leaked internals — those are filtered by
  * {@link safeBackendMessage}.
  */
+/**
+ * Maps Trade Republic auth errors (credentials initiation / TAN completion) to
+ * translated messages. TR rejections surface as 5xx from the backend proxy with
+ * the upstream error code embedded in the `detail` string. Shared by
+ * AddAccountModal and TradeRepublicTab so the mappings can't drift.
+ */
+export function formatTrAuthError(err: unknown, t: TFunc): string {
+  const status = getErrorStatus(err)
+
+  if (status === 429) return t('sync.tr.errors.tooManyAttempts')
+
+  if (status === 500 || status === 502 || status === 503) {
+    const detail = getErrorDetail(err) || ''
+    if (detail.includes('authentication service is unavailable')) return t('sync.tr.errors.serviceUnavailable')
+    if (detail.includes('VALIDATION_CODE_INVALID') || detail.includes('verification code is invalid')) return t('sync.tr.errors.invalidTan')
+    if (detail.includes('NUMBER_INVALID')) return t('sync.tr.errors.invalidPhoneNumber')
+    if (detail.includes('PIN_INVALID')) return t('sync.tr.errors.invalidPin')
+    if (detail.includes('AUTHENTICATION_ERROR')) return t('sync.tr.errors.authenticationFailed')
+    return t('sync.tr.errors.serverError')
+  }
+
+  if (status === 422) {
+    const errors =
+      (err as { response?: { data?: { errors?: Record<string, unknown> } } })?.response?.data
+        ?.errors ?? {}
+    if (errors.phoneNumber) return t('sync.tr.errors.phoneNumberRequired')
+    if (errors.pin) return t('sync.tr.errors.pinRequired')
+    return t('sync.tr.errors.validationFailed')
+  }
+
+  return extractErrorMessage(err, t('sync.tr.errors.unknownError'))
+}
+
 export function formatApiError(err: unknown, t: TFunc, fallbackKey = 'common.error'): string {
   const status = (err as { response?: { status?: number } })?.response?.status
 

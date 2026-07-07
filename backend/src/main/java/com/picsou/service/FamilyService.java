@@ -257,14 +257,14 @@ public class FamilyService {
         sharedResourceRepository.deleteAllByOwnerMemberIdAndResourceType(memberId, resourceType);
 
         if (sharingLevel == SharingLevel.MANUAL) {
-            for (Long resourceId : manualResourceIds) {
-                SharedResource sr = SharedResource.builder()
+            List<SharedResource> resources = manualResourceIds.stream()
+                .map(resourceId -> SharedResource.builder()
                     .ownerMember(member)
                     .resourceType(resourceType)
                     .resourceId(resourceId)
-                    .build();
-                sharedResourceRepository.save(sr);
-            }
+                    .build())
+                .toList();
+            sharedResourceRepository.saveAll(resources);
         }
     }
 
