@@ -15,4 +15,6 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
     List<Goal> findAllByMemberIdOrderByCreatedAtAsc(Long memberId);
 
     Optional<Goal> findByIdAndMemberId(Long id, Long memberId);
+
+    List<Goal> findByIdInAndMemberId(List<Long> ids, Long memberId);
 }

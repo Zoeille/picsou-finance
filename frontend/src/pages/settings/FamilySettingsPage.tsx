@@ -25,9 +25,9 @@ export function FamilySettingsPage() {
   const isAdmin = user?.role === 'ADMIN'
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       <PageHeader
-        title={t('family.settings.title', 'Family Settings')}
+        title={t('family.settings.title')}
       />
 
       {isAdmin && <MemberManagement />}
@@ -58,10 +58,10 @@ function MemberManagement() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="size-5" />
-          {t('family.settings.members', 'Family Members')}
+          {t('family.settings.members')}
         </CardTitle>
         <CardDescription>
-          {t('family.settings.membersDesc', 'Add and manage family members and managed profiles.')}
+          {t('family.settings.membersDesc')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -77,17 +77,17 @@ function MemberManagement() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{member.displayName}</p>
                     {isOwnProfile && (
-                      <span className="text-xs text-muted-foreground">(vous)</span>
+                      <span className="text-xs text-muted-foreground">({t('family.settings.you')})</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {isIndependent
-                      ? t('family.settings.memberIndependent', 'Compte indépendant')
+                      ? t('family.settings.memberIndependent')
                       : member.managed
                         ? member.hasLogin
-                          ? t('family.settings.memberPending', 'Activation en attente')
-                          : t('family.settings.memberManaged', 'Profil géré')
-                        : t('family.settings.memberAdmin', 'Administrateur')}
+                          ? t('family.settings.memberPending')
+                          : t('family.settings.memberManaged')
+                        : t('family.settings.memberAdmin')}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -102,7 +102,7 @@ function MemberManagement() {
                       }}
                     >
                       <Link className="mr-1 size-3" />
-                      {t('family.settings.createLogin', 'Create login')}
+                      {t('family.settings.createLogin')}
                     </Button>
                   )}
                   {!isIndependent && !member.activated && member.hasLogin && (
@@ -116,7 +116,7 @@ function MemberManagement() {
                       }}
                     >
                       <Link className="mr-1 size-3" />
-                      {t('family.settings.regenerateLink', 'Regenerate link')}
+                      {t('family.settings.regenerateLink')}
                     </Button>
                   )}
                   {!isOwnProfile && (
@@ -143,7 +143,7 @@ function MemberManagement() {
         {/* Activation link display */}
         {activationLink && (
           <div className="rounded-lg border bg-muted p-3">
-            <p className="text-xs font-medium mb-1">Activation link (copy and share):</p>
+            <p className="text-sm font-medium mb-1">{t('family.settings.activationLink')}</p>
             <code className="text-xs break-all">{window.location.origin}{activationLink}</code>
           </div>
         )}
@@ -151,7 +151,7 @@ function MemberManagement() {
         {/* Add member form */}
         <div className="flex gap-2">
           <Input
-            placeholder={t('family.settings.memberName', 'Member name')}
+            placeholder={t('family.settings.memberName')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
@@ -171,19 +171,15 @@ function MemberManagement() {
             disabled={!newName.trim()}
           >
             <Plus className="mr-1 size-4" />
-            {t('common.add', 'Add')}
+            {t('common.add')}
           </Button>
         </div>
 
         <ConfirmDialog
           open={memberToDelete !== null}
           onOpenChange={(open) => { if (!open) { setMemberToDelete(null); deleteMember.reset() } }}
-          title={t('family.settings.deleteMemberTitle', 'Delete member')}
-          description={t(
-            'family.settings.deleteMemberWarning',
-            'This permanently deletes {{name}}, their login and all of their data (accounts, goals, syncs). This cannot be undone.',
-            { name: memberToDelete?.displayName },
-          )}
+          title={t('family.settings.deleteMemberTitle')}
+          description={t('family.settings.deleteMemberWarning', { name: memberToDelete?.displayName })}
           onConfirm={() => {
             if (memberToDelete) {
               // Close only on success — on error the dialog stays open and shows why.
@@ -208,8 +204,8 @@ function SharingSection() {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <SharingCard resourceType="ACCOUNT" title={t('family.settings.shareAccounts', 'Share Accounts')} />
-      <SharingCard resourceType="GOAL" title={t('family.settings.shareGoals', 'Share Goals')} />
+      <SharingCard resourceType="ACCOUNT" title={t('family.settings.shareAccounts')} />
+      <SharingCard resourceType="GOAL" title={t('family.settings.shareGoals')} />
     </div>
   )
 }
@@ -256,9 +252,9 @@ function SharingCard({ resourceType, title }: { resourceType: string; title: str
               size="sm"
               onClick={() => handleLevelChange(level)}
             >
-              {level === 'NONE' ? t('family.settings.shareNone', 'Private') :
-               level === 'ALL' ? t('family.settings.shareAll', 'Share all') :
-               t('family.settings.shareManual', 'Select')}
+              {level === 'NONE' ? t('family.settings.shareNone') :
+               level === 'ALL' ? t('family.settings.shareAll') :
+               t('family.settings.shareManual')}
             </Button>
           ))}
         </div>
