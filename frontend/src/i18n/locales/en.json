@@ -490,7 +490,10 @@
       "deleteConnectionConfirm": "Remove stored Finary credentials? Accounts already imported will be kept.",
       "newAccounts": "New accounts detected",
       "accountsSyncedToast": "Accounts synced: {{count}}",
-      "allAccountsMapped": "All accounts already mapped, syncing..."
+      "allAccountsMapped": "All accounts already mapped, syncing...",
+      "serviceUnavailable": "Finary service is temporarily unavailable. Please try again in a few minutes.",
+      "syncFailed": "Finary sync failed",
+      "authFailed": "Invalid Finary credentials. Please check your email and password."
     },
     "all": {
       "title": "Sync accounts",

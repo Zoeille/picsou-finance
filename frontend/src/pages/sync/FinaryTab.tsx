@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ACCOUNT_COLORS, ACCOUNT_TYPES } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
-import { extractErrorMessage, getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { getErrorStatus, getErrorDetail } from '@/lib/errors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -143,7 +143,7 @@ export function FinaryTab() {
       },
       onError: (err: unknown) => {
         setLoading(false)
-        setError(getErrorDetail(err) || t('common.retry'))
+        setError(getFinaryError(err))
       },
     })
   }
@@ -173,7 +173,7 @@ export function FinaryTab() {
         if (getErrorStatus(err) === 403) {
           setTotpRequired(true)
         } else {
-          setError(getErrorDetail(err) || t('common.retry'))
+          setError(getFinaryError(err))
         }
       },
     })
@@ -196,7 +196,7 @@ export function FinaryTab() {
         if (getErrorStatus(err) === 403) {
           setTotpRequired(true)
         } else {
-          setError(getErrorDetail(err) || t('common.retry'))
+          setError(getFinaryError(err))
         }
       },
     })
@@ -214,7 +214,7 @@ export function FinaryTab() {
     }
     const onError = (err: unknown) => {
       setLoading(false)
-      setError(extractErrorMessage(err, t('common.retry')))
+      setError(getFinaryError(err))
     }
 
     // Each mutation takes a distinct payload shape — branch so the call stays
@@ -241,7 +241,7 @@ export function FinaryTab() {
       },
       onError: (err: unknown) => {
         setLoading(false)
-        setError(extractErrorMessage(err, t('common.retry')))
+        setError(getFinaryError(err))
       },
     })
   }
@@ -333,6 +333,14 @@ export function FinaryTab() {
     setTotpRequired(false)
     setTotpCode('')
     setIsApiSync(false)
+  }
+
+  function getFinaryError(err: unknown): string {
+    const status = getErrorStatus(err)
+    if (status === 502) return t('sync.finary.serviceUnavailable')
+    const detail = getErrorDetail(err)
+    if (detail) return detail
+    return t('sync.finary.syncFailed')
   }
 
   const hasSkipAll = mappings.every((m) => m.action === 'SKIP')

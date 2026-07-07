@@ -1,6 +1,6 @@
 # Feature: Finary Import
 
-> Last updated: 2026-06-27
+> Last updated: 2026-07-07
 
 ## Context
 
@@ -66,6 +66,7 @@ Possible status values: `OK`, `NEEDS_MAPPING`, `TOTP_REQUIRED`, `NOT_CONNECTED`.
 - `finary/client/FinaryApiClient.java` -- Finary/Clerk HTTP client (6-step auth, TOTP, pagination, `fetchLoans()`)
 - `finary/dto/FinaryLoanDto.java` -- a loan/mortgage entry from the dedicated `/loans` endpoint
 - `exception/TotpRequiredException.java` -- Thrown when 2FA is required but no TOTP provided (returns 403)
+- `exception/FinaryServiceUnavailableException.java` -- Thrown when Clerk/Finary APIs are unreachable (network, timeout, DNS); returns 502
 - `finary/FinaryPersistenceHelper.java` -- Shared helper: account creation, snapshot reconstruction, transaction import (preserves manual transactions), type suggestion
 - `controller/FinaryImportController.java` -- REST endpoints for xlsx upload
 - `controller/FinaryApiSyncController.java` -- REST endpoints for API sync (`/preview`, `/execute`, `/auto`)
@@ -169,6 +170,9 @@ POST /api/finary/api-sync/auto
 | Apache POI for xlsx | Standard Java library for Excel; Finary exports in xlsx format | CSV parsing (Finary does not export CSV) |
 | Clerk auth flow reimplemented | Finary uses Clerk for auth; no official API; must reverse-engineer the 6-step flow | Finary API key (does not exist) |
 | `TotpRequiredException` → 403 | Frontend already checks for 403 on preview mutations; 401 would trigger the Picsou JWT refresh flow which is wrong | Using 401 (conflicts with Picsou auth refresh), using 502 (frontend can't distinguish from real errors) |
+| `FinaryServiceUnavailableException` → 502 | Distinguishes upstream outage (Clerk/Finary unreachable) from data sync issues; frontend shows "service unavailable" message | Returning 502 for all sync errors (confusing, cannot distinguish cause) |
+| `SyncException` → 422 | Data/sync issues (bad response, mapping failures) are client errors, not gateway errors | 502 BAD_GATEWAY (semantically wrong for data processing failures) |
+| Retry with exponential backoff | Transient HTTP 5xx and network errors from Clerk/Finary are common; retry reduces false failures | No retry (fails on first attempt even for transient issues) |
 | Auto-mapping by name | Simple heuristic that works for most cases after first manual import | ML-based matching (unnecessary complexity) |
 
 ## Gotchas / Pitfalls
@@ -183,6 +187,8 @@ POST /api/finary/api-sync/auto
 - **External IDs use Finary category + ID**: Format is `finary_{category}_{finaryId}`. This means the same Finary account always maps to the same external ID, preventing duplicates across imports.
 - **Loans come from a separate endpoint (issue #11)**: loan/mortgage accounts are *not* returned by the portfolio `credits`/`credit_accounts` categories — they live on the dedicated `/loans` endpoint. The API sync fetches them via `FinaryApiClient.fetchLoans()` and adapts each entry to the common `FinaryAccountDto` under a synthetic `loans` category (external ID `finary_loans_{id}`), so they flow through the normal preview/mapping/execute pipeline and map to `AccountType.LOAN`. The outstanding amount is stored as a **negative** balance (a loan is a liability). Only the balance is imported — the loans payload does not expose the original principal or interest rate, so **no `Debt` row is created**; the imported LOAN account shows a static balance until the user fills in the loan parameters for the amortization view (see [loans.md](loans.md)). The exact `/loans` JSON shape and path are best-effort from the issue's sample (`type`, `name`, `outstanding_amount`, `monthly_repayment`, `start_date`, `end_date`); `FinaryLoanDto` maps the snake_case keys explicitly and accepts camelCase aliases as a fallback.
 - **Import mapping wizard type dropdown includes all account types (fix #17)**: The `CREATE_NEW` type selector in `FinaryTab` now uses `ACCOUNT_TYPES` from `@/lib/constants` instead of a hard-coded subset. This ensures `LOAN` and `REAL_ESTATE` are available in the dropdown, so loans imported from `/loans` are no longer forced into `OTHER` when the user overrides the backend suggestion.
+- **Error status codes are differentiated (fix #27)**: `FinaryServiceUnavailableException` returns 502 (Clerk/Finary unreachable), `SyncException` returns 422 (data/sync issue), `TotpRequiredException` returns 403. Previously all sync errors returned 502. The frontend uses a `getFinaryError()` helper to show localized messages per status code.
+- **HTTP calls retry transient failures (fix #27)**: `FinaryApiClient.sendWithRetry()` retries up to 3 times with exponential backoff (1s, 2s) on HTTP 5xx and network errors from Clerk/Finary.
 
 ## Tests
 

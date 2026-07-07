@@ -490,7 +490,10 @@
       "deleteConnectionConfirm": "Supprimer les identifiants Finary stockés ? Les comptes déjà importés seront conservés.",
       "newAccounts": "Nouveaux comptes détectés",
       "accountsSyncedToast": "Comptes synchronisés : {{count}}",
-      "allAccountsMapped": "Tous les comptes déjà mappés, synchronisation..."
+      "allAccountsMapped": "Tous les comptes déjà mappés, synchronisation...",
+      "serviceUnavailable": "Le service Finary est temporairement indisponible. Réessayez dans quelques minutes.",
+      "syncFailed": "La synchronisation Finary a échoué",
+      "authFailed": "Identifiants Finary invalides. Vérifiez votre email et mot de passe."
     },
     "all": {
       "title": "Synchroniser les comptes",

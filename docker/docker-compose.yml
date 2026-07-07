@@ -10,7 +10,9 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     volumes:
       # /data holds auto-generated secrets, Enable Banking keys, and the
       # wizard's crypto key. Mounted named volume so they persist across
@@ -40,7 +42,9 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-picsou}
       POSTGRES_USER: ${POSTGRES_USER:-picsou}
