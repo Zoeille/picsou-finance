@@ -108,14 +108,7 @@ public class SyncService {
             .flatMap(Optional::stream)
             .toList();
 
-        // If the bank hasn't finished linking accounts yet, leave the
-        // requisition retryable (status=FAILED so the UI shows the retry
-        // button). The session id is preserved, so retrySync() just refetches
-        // without going back through OAuth.
-        if (accountDataList.isEmpty()) {
-            requisition.setStatus(RequisitionStatus.FAILED);
-            requisitionRepository.save(requisition);
-            log.info("Enable Banking session {} not yet populated — marking retryable", sessionId);
+        if (markRetryableIfEmpty(requisition, accountDataList, "completion")) {
             return responses;
         }
 
@@ -164,6 +157,10 @@ public class SyncService {
             .flatMap(Optional::stream)
             .toList();
 
+        if (markRetryableIfEmpty(req, accountDataList, "retry")) {
+            return responses;
+        }
+
         req.setStatus(RequisitionStatus.LINKED);
         req.setLastSyncedAt(Instant.now());
         requisitionRepository.save(req);
@@ -201,6 +198,9 @@ public class SyncService {
             try {
                 ensureLogoUrl(req);
                 List<BankConnectorPort.AccountData> accounts = bankConnector.fetchBalances(req.getRequisitionId());
+                if (markRetryableIfEmpty(req, accounts, "resync")) {
+                    continue;
+                }
                 FamilyMember member = req.getMember();
                 accounts.forEach(data -> upsertAccount(data, req, member));
                 req.setLastSyncedAt(Instant.now());
@@ -225,6 +225,9 @@ public class SyncService {
         FamilyMember member = req.getMember();
 
         List<BankConnectorPort.AccountData> accountDataList = bankConnector.fetchBalances(req.getRequisitionId());
+        if (markRetryableIfEmpty(req, accountDataList, "refresh")) {
+            return List.of();
+        }
         List<AccountResponse> responses = accountDataList.stream()
             .map(data -> upsertAccount(data, req, member))
             .flatMap(Optional::stream)
@@ -236,6 +239,25 @@ public class SyncService {
     }
 
     // --- Private ---
+
+    /**
+     * Enable Banking can return an empty account list while the provider is still
+     * linking accounts asynchronously. Treating that as success hides the retry
+     * button and makes the UI claim "synced" even though no account changed.
+     */
+    private boolean markRetryableIfEmpty(
+        Requisition requisition,
+        List<BankConnectorPort.AccountData> accountDataList,
+        String operation
+    ) {
+        if (!accountDataList.isEmpty()) return false;
+
+        requisition.setStatus(RequisitionStatus.FAILED);
+        requisitionRepository.save(requisition);
+        log.info("Enable Banking session {} returned no accounts during {} — marking retryable",
+            requisition.getRequisitionId(), operation);
+        return true;
+    }
 
     /**
      * Best-effort backfill for requisitions created before bank logos were captured

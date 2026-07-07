@@ -132,7 +132,7 @@ export function FinaryTab() {
       onSuccess: (data: FinaryAutoSyncResponse) => {
         setLoading(false)
         if (data.status === 'OK') {
-          toast.success(`${data.accountsSynced} compte${data.accountsSynced !== 1 ? 's' : ''} synchronisé${data.accountsSynced !== 1 ? 's' : ''}`)
+          toast.success(t('sync.finary.accountsSyncedToast', { count: data.accountsSynced }))
         } else if (data.status === 'NEEDS_MAPPING') {
           handleApiSyncPreview()
         } else if (data.status === 'TOTP_REQUIRED') {
@@ -659,7 +659,7 @@ function MappingCard({
 
         {mapping.action === 'MAP_EXISTING' && (
           <select
-            className="h-9 w-full rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
             value={mapping.targetAccountId ?? ''}
             onChange={(e) => {
               const val = e.target.value
@@ -680,7 +680,7 @@ function MappingCard({
         {mapping.action === 'CREATE_NEW' && mapping.newAccount && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label>{t('accounts.addAccount')}</Label>
+              <Label>{t('accounts.accountName')}</Label>
               <Input
                 value={mapping.newAccount.name}
                 onChange={(e) => onNewAccountField('name', e.target.value)}
@@ -690,7 +690,7 @@ function MappingCard({
             <div className="space-y-1">
               <Label>{t('sync.exchanges.type')}</Label>
               <select
-                className="h-9 w-full rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
                 value={mapping.newAccount.type}
                 onChange={(e) => onNewAccountField('type', e.target.value)}
               >
@@ -702,7 +702,7 @@ function MappingCard({
               </select>
             </div>
             <div className="space-y-1">
-              <Label>{t('sync.wallets.label')}</Label>
+              <Label>{t('accounts.provider')}</Label>
               <Input
                 value={mapping.newAccount.provider}
                 onChange={(e) => onNewAccountField('provider', e.target.value)}
@@ -717,15 +717,15 @@ function MappingCard({
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <Label>Color</Label>
+              <Label>{t('accounts.color')}</Label>
               <div className="flex flex-wrap gap-2">
                 {ACCOUNT_COLORS.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`size-6 rounded-full border-2 transition-transform hover:scale-110 ${
+                    className={`size-8 rounded-full border-2 transition-[border-color,box-shadow] ${
                       mapping.newAccount?.color === color
-                        ? 'border-foreground scale-110'
+                        ? 'border-background ring-2 ring-foreground'
                         : 'border-transparent'
                     }`}
                     style={{ backgroundColor: color }}

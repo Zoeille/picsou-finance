@@ -5,6 +5,12 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useConnectivityStore } from '@/stores/connectivity-store'
 import { useProfileStore } from '@/stores/profile-store'
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    skipGlobalErrorRedirect?: boolean
+  }
+}
+
 export const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
@@ -40,6 +46,16 @@ function notifyRefreshSubscribers() {
   refreshSubscribers = []
 }
 
+export function isSetupRequiredResponse(status: number | undefined, data: unknown): boolean {
+  if (status !== 503) return false
+  if (typeof data === 'string') return data.includes('setup_required')
+  if (data && typeof data === 'object') {
+    const body = data as { code?: unknown; detail?: unknown }
+    return body.code === 'setup_required' || body.detail === 'setup_required'
+  }
+  return false
+}
+
 api.interceptors.response.use(
   res => {
     // Mark as connected on any successful response (skip demo mode)
@@ -68,13 +84,12 @@ api.interceptors.response.use(
     // wizard hasn't been completed yet. Bounce to /setup instead of the
     // generic 5xx error page.
     //
-    // We detect it by status + the "setup_required" detail so a genuine
-    // 503 (maintenance, LB drain) still goes to the error page.
-    const setupRequiredBody =
-      error.response?.status === 503 &&
-      ((error.response.data as { detail?: string })?.detail === 'setup_required' ||
-        (typeof error.response.data === 'string' &&
-          error.response.data.includes('setup_required')))
+    // The backend sets code: "setup_required"; the detail fallback keeps
+    // compatibility with older or stringified responses.
+    const setupRequiredBody = isSetupRequiredResponse(
+      error.response?.status,
+      error.response?.data,
+    )
     if (setupRequiredBody && window.location.pathname !== '/setup') {
       window.location.href = '/setup'
       return Promise.reject(error)
@@ -84,7 +99,8 @@ api.interceptors.response.use(
     if (
       error.response?.status >= 500 &&
       error.response?.status < 600 &&
-      error.config?.method === 'get'
+      error.config?.method === 'get' &&
+      !error.config?.skipGlobalErrorRedirect
     ) {
       window.location.href = '/error/500?code=' + error.response.status
       return Promise.reject(error)

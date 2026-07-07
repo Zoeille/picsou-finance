@@ -51,6 +51,12 @@ function statusClasses(status: string): string {
   }
 }
 
+function cleanBankCallbackUrl() {
+  if (window.location.pathname.endsWith('/sync/callback')) {
+    window.history.replaceState(window.history.state, '', '/sync?tab=banks')
+  }
+}
+
 export function BankSyncTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -67,6 +73,7 @@ export function BankSyncTab() {
     mutationFn: (code: string) => api.get('/sync/complete', { params: { code } }).then(r => r.data),
     onSuccess: () => {
       setCallbackStatus('done')
+      cleanBankCallbackUrl()
       queryClient.invalidateQueries({ queryKey: ['sync', 'connections'] })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -207,14 +214,15 @@ export function BankSyncTab() {
           <div className="space-y-2">
             {institutions.map(inst => (
               <Card key={inst.id} size="sm">
-                <CardContent className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <Landmark className="size-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">{inst.name}</span>
-                    <span className="text-xs text-muted-foreground">{inst.country}</span>
+                <CardContent className="grid grid-cols-[minmax(0,1fr)_2.5rem_auto] items-center gap-4 py-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Landmark className="size-5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 text-sm font-medium leading-5">{inst.name}</span>
                   </div>
+                  <span className="justify-self-center text-xs text-muted-foreground">{inst.country}</span>
                   <Button
                     size="sm"
+                    className="justify-self-end"
                     onClick={() =>
                       initiateMutation.mutate({ institutionId: inst.id, institutionName: inst.name })
                     }

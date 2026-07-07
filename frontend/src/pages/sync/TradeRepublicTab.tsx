@@ -21,6 +21,7 @@ import { extractErrorMessage, getErrorStatus, getErrorDetail } from '@/lib/error
 import { formatDateTime } from '@/lib/utils'
 
 type AuthState = 'IDLE' | 'AWAITING_TAN' | 'CONNECTED' | 'ERROR'
+const TR_VERIFICATION_CODE_LENGTH = 4
 
 export function TradeRepublicTab() {
   const { t } = useTranslation()
@@ -36,8 +37,16 @@ export function TradeRepublicTab() {
     }
 
     // Bad gateway or TR rejection
-    if (status === 502) {
+    if (status === 500 || status === 502 || status === 503) {
       const detail = getErrorDetail(error) || ''
+
+      if (detail.includes('authentication service is unavailable')) {
+        return t('sync.tr.errors.serviceUnavailable')
+      }
+
+      if (detail.includes('VALIDATION_CODE_INVALID') || detail.includes('verification code is invalid')) {
+        return t('sync.tr.errors.invalidTan')
+      }
 
       // Try to extract specific TR error
       if (detail.includes('NUMBER_INVALID')) {
@@ -91,19 +100,22 @@ export function TradeRepublicTab() {
       api.post<{ processId: string }>('/tr/auth/initiate', { phoneNumber: params.phone, pin: params.pin }).then(r => r.data),
     onSuccess: (data) => {
       setProcessId(data.processId)
+      setTan('')
       setAuthState('AWAITING_TAN')
       setErrorMsg(null)
     },
     onError: (error: unknown) => {
       const friendlyMsg = formatAuthError(error)
       setErrorMsg(friendlyMsg)
-      setAuthState('ERROR')
+      setProcessId(null)
+      setTan('')
+      setAuthState('IDLE')
     },
   })
 
   const submitTanMutation = useMutation({
-    mutationFn: (tanCode: string) =>
-      api.post('/tr/auth/complete', { processId: processId!, tan: tanCode }).then(r => r.data),
+    mutationFn: (params: { processId: string; tan: string }) =>
+      api.post('/tr/auth/complete', params).then(r => r.data),
     onSuccess: () => {
       setAuthState('IDLE')
       setTan('')
@@ -116,7 +128,8 @@ export function TradeRepublicTab() {
     onError: (error: unknown) => {
       const friendlyMsg = formatAuthError(error)
       setErrorMsg(friendlyMsg)
-      setAuthState('ERROR')
+      setTan('')
+      setAuthState('AWAITING_TAN')
     },
   })
 
@@ -163,7 +176,8 @@ export function TradeRepublicTab() {
 
   function handleTan(e: React.FormEvent) {
     e.preventDefault()
-    submitTanMutation.mutate(tan)
+    if (!processId || tan.length !== TR_VERIFICATION_CODE_LENGTH) return
+    submitTanMutation.mutate({ processId, tan })
   }
 
   function handleCsvChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -308,13 +322,16 @@ export function TradeRepublicTab() {
                 <Input
                   id="tr-tan"
                   value={tan}
-                  onChange={(e) => setTan(e.target.value)}
+                  onChange={(e) => setTan(e.target.value.replace(/\D/g, '').slice(0, TR_VERIFICATION_CODE_LENGTH))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={TR_VERIFICATION_CODE_LENGTH}
                   required
                   autoFocus
                 />
               </div>
 
-              <Button type="submit" disabled={submitTanMutation.isPending} className="w-full">
+              <Button type="submit" disabled={submitTanMutation.isPending || tan.length !== TR_VERIFICATION_CODE_LENGTH} className="w-full">
                 {t('sync.tr.connect')}
               </Button>
             </CardContent>
