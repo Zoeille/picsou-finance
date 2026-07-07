@@ -48,7 +48,7 @@ export function SecuritySection({ settings }: { settings: AdminSecuritySettings 
   })
 
   return (
-    <Card className="rounded-4xl bg-card shadow-md">
+    <Card className="rounded-4xl bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <ShieldCheck className="size-5 text-muted-foreground" />
@@ -60,7 +60,7 @@ export function SecuritySection({ settings }: { settings: AdminSecuritySettings 
         <form onSubmit={onSubmit} className="space-y-5" noValidate>
           <div className="space-y-2">
             <Label>{t('admin.security.originsLabel')}</Label>
-            <p className="text-xs text-muted-foreground">{t('admin.security.originsHint')}</p>
+            <p className="text-sm text-muted-foreground">{t('admin.security.originsHint')}</p>
             <div className="space-y-2">
               {fields.map((field, idx) => (
                 <div key={field.id} className="flex items-center gap-2">
@@ -98,21 +98,21 @@ export function SecuritySection({ settings }: { settings: AdminSecuritySettings 
               </Button>
             </div>
             {reloadCors.error && (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-sm text-destructive">
                 {extractErrorMessage(reloadCors.error)}
               </p>
             )}
             {reloadCors.isSuccess && (
-              <p className="text-xs text-emerald-600">{t('admin.security.reloadFromEnvDone')}</p>
+              <p className="text-sm text-emerald-600">{t('admin.security.reloadFromEnvDone')}</p>
             )}
           </div>
 
-          <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 p-4">
+          <div className="flex items-start justify-between gap-4 rounded-2xl border border-border/60 p-4">
             <div className="space-y-1">
               <Label htmlFor="admin-secure-cookies" className="text-sm font-medium">
                 {t('admin.security.secureCookiesLabel')}
               </Label>
-              <p className="text-xs text-muted-foreground">{t('admin.security.secureCookiesHint')}</p>
+              <p className="text-sm text-muted-foreground">{t('admin.security.secureCookiesHint')}</p>
             </div>
             <Controller control={control} name="secureCookies"
               render={({ field }) => (
@@ -127,7 +127,7 @@ export function SecuritySection({ settings }: { settings: AdminSecuritySettings 
             </p>
           )}
 
-          <Button type="submit" disabled={update.isPending || !formState.isDirty}>
+          <Button type="submit" disabled={update.isPending || !formState.isDirty} className="min-w-44">
             {update.isPending ? t('admin.security.saving') : t('admin.security.save')}
           </Button>
           {update.isSuccess && !formState.isDirty && (

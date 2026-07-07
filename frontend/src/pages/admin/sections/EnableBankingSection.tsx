@@ -69,7 +69,7 @@ export function EnableBankingSection({ settings }: { settings: AdminEnableBankin
   if (!settings.privateKeyPresent) missing.push(t('admin.enableBanking.privateKey'))
 
   return (
-    <Card className="rounded-4xl bg-card shadow-md">
+    <Card className="rounded-4xl bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Landmark className="size-5 text-muted-foreground" />
@@ -102,9 +102,9 @@ export function EnableBankingSection({ settings }: { settings: AdminEnableBankin
                 {...register(name)}
               />
               {formState.errors[name] ? (
-                <p className="text-xs text-destructive">{formState.errors[name]?.message}</p>
+                <p className="text-sm text-destructive">{formState.errors[name]?.message}</p>
               ) : hintKey ? (
-                <p className="text-xs text-muted-foreground">{t(hintKey)}</p>
+                <p className="text-sm text-muted-foreground">{t(hintKey)}</p>
               ) : null}
             </div>
           ))}
@@ -220,13 +220,13 @@ function KeypairPanel({ privateKeyPresent }: { privateKeyPresent: boolean }) {
       </div>
 
       {/* Mode toggle */}
-      <div className="flex gap-1 rounded-lg border border-border/60 p-1">
+      <div className="flex gap-1 rounded-2xl bg-muted p-1">
         {(['generate', 'import'] as Mode[]).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => switchMode(m)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-xl px-6 py-2 text-sm font-medium transition-colors ${
               mode === m
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -275,12 +275,12 @@ function KeypairPanel({ privateKeyPresent }: { privateKeyPresent: boolean }) {
             <Upload className="mr-2 size-4" />
             {t('admin.enableBanking.keypair.chooseFile')}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">{t('admin.enableBanking.keypair.orPaste')}</p>
+          <p className="text-center text-sm text-muted-foreground">{t('admin.enableBanking.keypair.orPaste')}</p>
           <textarea
             value={privatePem}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrivatePem(e.target.value)}
             placeholder={'-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'}
-            className="min-h-[140px] w-full resize-none rounded-xl border border-border/60 bg-muted/40 p-3 font-mono text-[11px] leading-snug focus:outline-none focus:ring-2 focus:ring-ring"
+            className="min-h-[140px] w-full resize-none rounded-xl border border-input bg-input/20 p-3 font-mono text-sm leading-snug placeholder:text-muted-foreground/80 dark:bg-input/30"
           />
           {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
           <Button

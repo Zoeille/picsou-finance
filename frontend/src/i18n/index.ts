@@ -4,6 +4,11 @@ import LanguageDetector from 'i18next-browser-languagedetector'
 import fr from './locales/fr.json'
 import en from './locales/en.json'
 
+function syncDocumentLanguage(language: string | undefined) {
+  if (typeof document === 'undefined' || !language) return
+  document.documentElement.lang = language.startsWith('fr') ? 'fr' : 'en'
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -25,5 +30,10 @@ i18n
       lookupLocalStorage: 'picsou-locale',
     },
   })
+  .then(() => syncDocumentLanguage(i18n.resolvedLanguage ?? i18n.language))
+
+i18n.on('languageChanged', (language) => {
+  syncDocumentLanguage(language)
+})
 
 export default i18n

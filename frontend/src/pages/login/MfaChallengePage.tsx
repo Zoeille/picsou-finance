@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useVerifyMfa } from '@/features/mfa/hooks'
 import { safeRedirect } from '@/lib/utils'
-import { getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { formatApiError, getErrorStatus } from '@/lib/errors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,7 +42,7 @@ export function MfaChallengePage() {
       const status = getErrorStatus(err)
       const ax = err as { response?: unknown; message?: string }
       if (!ax.response) {
-        setError(`Network error (${ax.message ?? 'Network Error'})`)
+        setError(t('auth.networkError'))
       } else if (status === 401) {
         // Most likely the mfa_challenge cookie expired (default 5 minutes)
         // or the user lingered on this page. Send them back to /login.
@@ -53,7 +53,7 @@ export function MfaChallengePage() {
       } else if (status === 400) {
         setError(t('auth.mfaInvalidCode'))
       } else {
-        setError(`${status} — ${getErrorDetail(err) ?? ax.message}`)
+        setError(formatApiError(err, t, 'auth.mfaGenericError'))
       }
     }
   }
@@ -64,20 +64,20 @@ export function MfaChallengePage() {
   const codeInputMode = isRecoveryCode ? 'text' : 'numeric'
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="max-w-sm w-full mx-4 flex flex-col gap-4">
-        <Card>
-          <CardHeader className="items-center text-center">
-            <CardTitle className="text-xl">{t('auth.mfaTitle')}</CardTitle>
-            <CardDescription className="mt-0.5">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+        <Card className="py-8 sm:py-10">
+          <CardHeader className="items-center gap-2 px-6 text-center sm:px-10">
+            <CardTitle className="text-3xl font-semibold sm:text-4xl">{t('auth.mfaTitle')}</CardTitle>
+            <CardDescription className="mt-1 max-w-lg text-base leading-6">
               {isRecoveryCode ? t('auth.mfaRecoveryLabel') : t('auth.mfaDesc')}
             </CardDescription>
           </CardHeader>
 
-          <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={codeInputId}>
+          <CardContent className="px-6 sm:px-10">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor={codeInputId} className="text-base font-semibold">
                   {isRecoveryCode ? t('auth.mfaRecoveryLabel') : t('auth.mfaCodeLabel')}
                 </Label>
                 <Input
@@ -92,7 +92,7 @@ export function MfaChallengePage() {
                   autoFocus
                   required
                   placeholder={isRecoveryCode ? '12345678' : '123456'}
-                  className="text-center text-lg tracking-widest font-mono"
+                  className="h-12 rounded-xl px-4 text-center font-mono text-lg md:text-lg"
                 />
               </div>
 
@@ -103,33 +103,39 @@ export function MfaChallengePage() {
                   setCode('')
                   setError(null)
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline self-start"
+                className="text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               >
                 {isRecoveryCode ? t('auth.mfaUseTotp') : t('auth.mfaUseRecovery')}
               </button>
 
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-3 rounded-xl py-1">
                 <input
                   id="trustDevice"
                   type="checkbox"
                   checked={trustDevice}
                   onChange={e => setTrustDevice(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded"
+                  className="mt-1 h-5 w-5 shrink-0 rounded-md accent-primary"
                 />
                 <div className="flex flex-col">
-                  <Label htmlFor="trustDevice" className="text-sm cursor-pointer">
+                  <Label htmlFor="trustDevice" className="cursor-pointer text-base font-semibold">
                     {t('auth.mfaTrustDevice')}
                   </Label>
-                  <p className="text-xs text-muted-foreground">{t('auth.mfaTrustDeviceDesc')}</p>
+                  <p className="text-sm text-muted-foreground">{t('auth.mfaTrustDeviceDesc')}</p>
                 </div>
               </div>
 
               {error && (
-                <p className="text-sm font-medium text-destructive">{error}</p>
+                <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                  {error}
+                </p>
               )}
 
-              <Button type="submit" disabled={verify.isPending || code.length === 0} className="w-full mt-1">
-                {verify.isPending && <Loader2 size={16} className="animate-spin" />}
+              <Button
+                type="submit"
+                disabled={verify.isPending || code.length === 0}
+                className="mt-2 h-12 w-full rounded-full px-8 text-base transition-transform active:scale-[0.96]"
+              >
+                {verify.isPending && <Loader2 className="size-5 animate-spin" />}
                 {verify.isPending ? t('auth.mfaVerifying') : t('auth.mfaVerifyButton')}
               </Button>
             </form>

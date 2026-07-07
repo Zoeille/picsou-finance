@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAddSnapshot } from '@/features/accounts/hooks'
 import { extractErrorMessage } from '@/lib/errors'
-import { parseAmount } from '@/lib/utils'
+import { localeFromLanguage, parseAmount } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { NumericInput } from '@/components/shared/NumericInput'
 import { Label } from '@/components/ui/label'
@@ -12,7 +12,7 @@ import {
 import { Loader2 } from 'lucide-react'
 import type { BalanceSnapshot } from '@/types/api'
 
-function getLast12Months() {
+function getLast12Months(locale: string) {
   const months = []
   const now = new Date()
   for (let i = 0; i < 12; i++) {
@@ -22,7 +22,7 @@ function getLast12Months() {
     const key = `${year}-${String(month).padStart(2, '0')}`
     const lastDay = new Date(year, month, 0).getDate()
     const date = `${key}-${String(lastDay).padStart(2, '0')}`
-    const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+    const label = d.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
     months.push({ key, year, month, date, label })
   }
   return months
@@ -49,7 +49,7 @@ export function MonthEndBalanceModal({ open, onClose, accountId, history }: Mont
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('accounts.monthlyHistory')}</DialogTitle>
         </DialogHeader>
@@ -75,10 +75,11 @@ interface MonthEndFormProps {
 }
 
 function MonthEndForm({ accountId, history, onClose }: MonthEndFormProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const addSnapshot = useAddSnapshot()
 
-  const months = useMemo(() => getLast12Months(), [])
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
+  const months = useMemo(() => getLast12Months(locale), [locale])
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
     months.forEach(({ key, year, month }) => {
@@ -132,7 +133,7 @@ function MonthEndForm({ accountId, history, onClose }: MonthEndFormProps) {
             >
               <Label
                 htmlFor={`month-${key}`}
-                className={`flex-1 capitalize text-xs ${isModified ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`}
+                className={`flex-1 capitalize text-sm ${isModified ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`}
               >
                 {label}
               </Label>
@@ -141,7 +142,7 @@ function MonthEndForm({ accountId, history, onClose }: MonthEndFormProps) {
                 value={values[key] ?? ''}
                 onChange={e => handleChange(key, e.target.value)}
                 placeholder="—"
-                className="w-28 h-7 text-right text-xs"
+                className="w-40 text-right"
               />
             </div>
           )

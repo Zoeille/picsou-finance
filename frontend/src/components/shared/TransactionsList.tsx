@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Trash2, Pencil } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, localeFromLanguage } from '@/lib/utils'
 
 interface TransactionsListProps {
   transactions: Transaction[]
@@ -16,8 +16,9 @@ interface TransactionsListProps {
 }
 
 export function TransactionsList({ transactions, onDelete, onEdit }: TransactionsListProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [search, setSearch] = useState('')
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
 
   const filtered = search
     ? transactions.filter(tr =>
@@ -52,8 +53,8 @@ export function TransactionsList({ transactions, onDelete, onEdit }: Transaction
         {sortedDates.map((date, dateIdx) => (
           <div key={date}>
             {dateIdx > 0 && <Separator className="my-3" />}
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {new Date(date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+            <p className="mb-2 text-sm font-medium text-muted-foreground">
+              {formatTransactionDate(date, locale)}
             </p>
             <div className="space-y-0.5">
               {grouped[date].map((tr, rowIdx) => (
@@ -69,7 +70,7 @@ export function TransactionsList({ transactions, onDelete, onEdit }: Transaction
                     <p className="truncate text-sm font-medium">{tr.description}</p>
                     {tr.isManual && (
                       <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground shrink-0">
-                        Manuel
+                        {t('accounts.manual')}
                       </span>
                     )}
                   </div>
@@ -86,20 +87,20 @@ export function TransactionsList({ transactions, onDelete, onEdit }: Transaction
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground"
                         onClick={() => onEdit(tr)}
                       >
-                        <Pencil size={14} />
+                        <Pencil className="size-4" />
                       </Button>
                     )}
                     {onDelete && tr.isManual && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        className="text-muted-foreground hover:text-destructive"
                         onClick={() => onDelete(tr.id)}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 className="size-4" />
                       </Button>
                     )}
                   </div>
@@ -111,4 +112,13 @@ export function TransactionsList({ transactions, onDelete, onEdit }: Transaction
       </CardContent>
     </Card>
   )
+}
+
+function formatTransactionDate(date: string, locale: string): string {
+  const label = new Intl.DateTimeFormat(locale, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(date))
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1)
 }

@@ -71,9 +71,7 @@ export function ConfirmDialog({
         {phraseRequired && (
           <div className="space-y-2">
             <p className="text-sm">
-              {t('common.confirmTypePrompt', 'Type {{phrase}} to confirm.', {
-                phrase: confirmPhrase,
-              })}
+              {t('common.confirmTypePrompt', { phrase: confirmPhrase })}
             </p>
             <Input
               value={typed}

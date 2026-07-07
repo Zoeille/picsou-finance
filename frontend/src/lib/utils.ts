@@ -18,20 +18,32 @@ export function parseAmount(value: string | null | undefined): number {
 
 export function getLocale(): string {
   try {
-    const lang = document.documentElement.lang || navigator.language
-    return lang.startsWith('fr') ? 'fr-FR' : 'en-US'
+    return localeFromLanguage(document.documentElement.lang || navigator.language)
+  } catch {
+    return 'fr-FR'
+  }
+}
+
+export function localeFromLanguage(language: string | null | undefined): string {
+  return language?.startsWith('fr') ? 'fr-FR' : 'en-US'
+}
+
+function normalizeIntlLocale(locale: string): string {
+  try {
+    return Intl.NumberFormat.supportedLocalesOf(locale).length > 0 ? locale : 'fr-FR'
   } catch {
     return 'fr-FR'
   }
 }
 
 export function formatCurrency(value: number, currency = 'EUR', locale = getLocale()): string {
+  const safeLocale = normalizeIntlLocale(locale)
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(value)
+    return new Intl.NumberFormat(safeLocale, { style: 'currency', currency }).format(value)
   } catch {
     // An unknown/invalid ISO 4217 code makes Intl.NumberFormat throw a RangeError.
     // Degrade to a plain decimal + the raw code instead of crashing the whole app (issue #9).
-    const num = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+    const num = new Intl.NumberFormat(safeLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
     return `${num} ${currency}`
   }
 }
@@ -103,8 +115,14 @@ export function formatPercent(value: number, locale = getLocale()): string {
   return new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)
 }
 
-export function todayLabel(locale = getLocale()): string {
-  return new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
+function capitalizeFirstCharacter(value: string, locale = getLocale()): string {
+  const [first = '', ...rest] = Array.from(value)
+  return first.toLocaleUpperCase(locale) + rest.join('')
+}
+
+export function todayLabel(locale = getLocale(), date = new Date()): string {
+  const label = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date)
+  return capitalizeFirstCharacter(label, locale)
 }
 
 export function formatLocalDate(dateStr: string | null | undefined, locale = getLocale()): string {

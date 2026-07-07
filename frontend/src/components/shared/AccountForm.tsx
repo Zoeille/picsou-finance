@@ -72,6 +72,8 @@ const EMPTY_DEFAULTS: AccountFormData = {
   endDate: '',
 }
 
+const selectControlClassName = "flex h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+
 export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title, loading }: AccountFormProps) {
   const { t } = useTranslation()
   const { register, handleSubmit, setValue, reset, control } = useForm<AccountFormData>({
@@ -120,23 +122,23 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title ?? t('accounts.addAccount')}</DialogTitle>
           <DialogDescription />
         </DialogHeader>
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">{t('accounts.addAccount')}</Label>
+            <Label htmlFor="name">{t('accounts.accountName')}</Label>
             <Input id="name" {...register('name')} placeholder="PEA Boursorama" />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="type">{t('accounts.allTypes')}</Label>
+            <Label htmlFor="type">{t('accounts.accountType')}</Label>
             <select
               id="type"
               {...register('type')}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus:border-ring"
+              className={selectControlClassName}
             >
               {ACCOUNT_TYPES.map((at) => (
                 <option key={at.value} value={at.value}>
@@ -148,11 +150,11 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="currency">Devise</Label>
+              <Label htmlFor="currency">{t('common.currency')}</Label>
               <select
                 id="currency"
                 {...register('currency')}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus:border-ring"
+                className={selectControlClassName}
               >
                 {currencyOptions.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -172,11 +174,11 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
           {selectedType !== 'REAL_ESTATE' && selectedType !== 'LOAN' && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="provider">Provider</Label>
+                <Label htmlFor="provider">{t('accounts.provider')}</Label>
                 <Input id="provider" {...register('provider')} placeholder="Boursorama" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ticker">Ticker</Label>
+                <Label htmlFor="ticker">{t('accounts.ticker')}</Label>
                 <Input id="ticker" {...register('ticker')} placeholder="BTC" />
               </div>
             </div>
@@ -263,13 +265,13 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
           )}
 
           <div className="space-y-2">
-            <Label>Couleur</Label>
+            <Label>{t('accounts.color')}</Label>
             <ColorPicker value={selectedColor} onChange={(c) => setValue('color', c)} />
           </div>
 
           {selectedType !== 'REAL_ESTATE' && selectedType !== 'LOAN' && (
-            <div className="flex items-center gap-2">
-              <input id="isManual" type="checkbox" {...register('isManual')} className="h-4 w-4 rounded" />
+            <div className="flex min-h-10 items-center gap-2">
+              <input id="isManual" type="checkbox" {...register('isManual')} className="h-5 w-5 rounded accent-primary" />
               <Label htmlFor="isManual">{t('accounts.manual')}</Label>
             </div>
           )}

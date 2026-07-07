@@ -1,6 +1,7 @@
 {
   "common": {
     "loading": "Chargement...",
+    "add": "Ajouter",
     "save": "Enregistrer",
     "cancel": "Annuler",
     "delete": "Supprimer",
@@ -8,6 +9,7 @@
     "create": "Créer",
     "confirm": "Confirmer",
     "confirmTypePrompt": "Tapez {{phrase}} pour confirmer.",
+    "optional": "optionnel",
     "error": "Une erreur est survenue. Veuillez réessayer.",
     "errors": {
       "unauthorized": "Votre session a expiré. Veuillez vous reconnecter.",
@@ -30,7 +32,7 @@
   },
   "nav": {
     "dashboard": "Tableau de bord",
-    "dashboard.desc": "Vue d'ensemble & patrimoine",
+    "dashboard.desc": "Vue d'ensemble",
     "accounts": "Comptes",
     "accounts.desc": "Soldes & transactions",
     "goals": "Objectifs",
@@ -38,18 +40,31 @@
     "sync": "Synchronisation",
     "settings": "Paramètres",
     "settings.desc": "Préférences & compte",
+    "family": "Famille",
+    "family.desc": "Vue partagée",
     "account": "Mon compte",
+    "managedProfile": "Profil géré",
+    "switchProfile": "Changer de profil",
+    "unknownProfile": "Profil inconnu",
     "logout": "Déconnexion",
     "admin": "Administration",
     "admin.desc": "Réglages de l'instance"
   },
   "auth": {
     "login": "Connexion",
+    "loginTagline": "Picsou",
     "username": "Nom d'utilisateur",
+    "usernameTooShort": "3 caractères minimum.",
+    "usernameInvalidChars": "Utilisez uniquement lettres, chiffres, points, tirets et underscores.",
+    "usernameTaken": "Ce nom d'utilisateur est déjà pris.",
     "password": "Mot de passe",
     "loginButton": "Se connecter",
     "loggingIn": "Connexion...",
     "error": "Identifiants invalides",
+    "networkError": "Impossible de contacter le serveur. Vérifiez la connexion, puis réessayez.",
+    "loginGenericError": "Impossible de se connecter. Veuillez réessayer.",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe",
     "demoMode": "Mode démo",
     "demoModeDesc": "Données fictives pour démonstration",
     "rememberMe": "Se souvenir de moi",
@@ -66,7 +81,15 @@
     "mfaVerifying": "Vérification...",
     "mfaInvalidCode": "Code incorrect",
     "mfaTooManyAttempts": "Trop de tentatives, réessaie dans quelques minutes",
-    "mfaSessionExpired": "Session de vérification expirée, reconnecte-toi"
+    "mfaSessionExpired": "Session de vérification expirée, reconnecte-toi",
+    "mfaGenericError": "Impossible de vérifier le code. Veuillez réessayer.",
+    "validation": {
+      "usernameTooShort": "Le nom d'utilisateur doit contenir au moins 3 caractères.",
+      "usernameTooLong": "Le nom d'utilisateur doit contenir 50 caractères maximum.",
+      "usernameFormat": "Utilisez uniquement des lettres, des chiffres, des points, des tirets bas ou des tirets.",
+      "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères.",
+      "passwordTooLong": "Le mot de passe doit contenir 128 caractères maximum."
+    }
   },
   "dashboard": {
     "title": "Tableau de bord",
@@ -75,7 +98,7 @@
     "financialWorth": "Patrimoine financier",
     "syncAccounts": "Synchroniser",
     "invested": "Capital investi",
-    "netWorthChange": "gain / perte",
+    "netWorthChange": "Gain / perte",
     "marketsClosed": "Marchés fermés — aucune donnée intraday disponible",
     "distribution": "Répartition",
     "ranges": {
@@ -118,11 +141,28 @@
     "neverSynced": "Jamais synchronisé",
     "holdings": "Positions",
     "transactions": "Transactions",
+    "addTransaction": "Ajouter une transaction",
+    "editTransaction": "Modifier la transaction",
+    "transactionDate": "Date",
+    "buy": "Achat",
+    "sell": "Vente",
+    "deposit": "Dépôt",
+    "withdrawal": "Retrait",
+    "description": "Description",
+    "amount": "Montant",
+    "tickerOrIsin": "Ticker ou ISIN",
+    "tickerOrIsinPlaceholder": "IWDA.AS, IE00B4L5Y983, BTC...",
+    "assetNamePlaceholder": "Ex. : iShares Core MSCI World",
     "history": "Historique",
     "priceLive": "Prix en direct",
     "priceStale": "Prix datant de {{time}}",
     "manual": "Manuel",
     "allTypes": "Tous les types",
+    "accountName": "Nom du compte",
+    "accountType": "Type de compte",
+    "provider": "Établissement",
+    "ticker": "Ticker",
+    "color": "Couleur",
     "total": "Total",
     "currentBalance": "Solde actuel",
     "snapshots": "Relevés mensuels",
@@ -216,8 +256,11 @@
   },
   "holdings": {
     "totalValue": "Valeur totale",
+    "ticker": "Ticker",
+    "name": "Nom",
     "unitPrice": "Prix unitaire",
     "pnl": "Plus-value / Moins-value",
+    "pnlPercent": "Plus-value / Moins-value %",
     "quantity": "Quantité",
     "account": "Compte",
     "lastUpdated": "Dernière mise à jour",
@@ -227,6 +270,7 @@
     "evolution": "Évolution",
     "capitalInvested": "Capital investi",
     "avgBuyIn": "Prix moyen d'achat",
+    "editTitle": "Modifier {{ticker}}",
     "perShare": "/ part",
     "insight": {
       "title": "Insight",
@@ -340,6 +384,7 @@
       "title": "Banques",
       "search": "Rechercher une banque",
       "searchPlaceholder": "Ex: BNP Paribas...",
+      "searchError": "Impossible de rechercher les banques pour le moment.",
       "connected": "Connexions actives",
       "noConnections": "Aucune connexion bancaire",
       "connect": "Connecter",
@@ -356,7 +401,7 @@
       "title": "Trade Republic",
       "phone": "Numéro de téléphone",
       "pin": "Code PIN",
-      "tan": "Code TAN",
+      "tan": "Code de vérification",
       "connect": "Connecter",
       "sync": "Synchroniser",
       "importCsv": "Importer un CSV",
@@ -368,7 +413,9 @@
         "tooManyAttempts": "Trop de tentatives. Réessayez dans quelques minutes.",
         "invalidPhoneNumber": "Numéro de téléphone invalide.",
         "invalidPin": "Code PIN incorrect.",
+        "invalidTan": "Code de vérification incorrect ou expiré. Utilisez le dernier code reçu, ou relancez l'étape pour en recevoir un nouveau.",
         "authenticationFailed": "Échec de l'authentification Trade Republic.",
+        "serviceUnavailable": "Le service Trade Republic local n'est pas disponible. Relancez les serveurs puis réessayez.",
         "serverError": "Erreur serveur Trade Republic. Réessayez.",
         "phoneNumberRequired": "Numéro de téléphone requis.",
         "pinRequired": "Code PIN requis.",
@@ -441,6 +488,7 @@
       "deleteConnection": "Déconnecter",
       "deleteConnectionConfirm": "Supprimer les identifiants Finary stockés ? Les comptes déjà importés seront conservés.",
       "newAccounts": "Nouveaux comptes détectés",
+      "accountsSyncedToast": "Comptes synchronisés : {{count}}",
       "allAccountsMapped": "Tous les comptes déjà mappés, synchronisation..."
     },
     "all": {
@@ -498,10 +546,14 @@
     "logoutError": "La déconnexion a échoué. Veuillez réessayer.",
     "about": "À propos",
     "aboutDescription": "Informations sur l'application",
+    "application": "Application",
     "version": "Version",
     "adminSection": "Administration",
     "adminDescription": "Gérer les réglages de l'instance Picsou",
     "adminButton": "Ouvrir l'administration",
+    "family": "Famille",
+    "familyDescription": "Gérer les membres et les paramètres de partage",
+    "familyManage": "Gérer les membres et les partages",
     "security": "Sécurité",
     "securityDescription": "Authentification à deux facteurs et appareils de confiance",
     "mfaStatus": "Authentification à deux facteurs",
@@ -713,6 +765,38 @@
     "crashDesc": "Une erreur inattendue s'est produite. Veuillez recharger la page.",
     "reload": "Recharger la page"
   },
+  "family": {
+    "dashboard": {
+      "title": "Famille",
+      "sharedNetWorth": "Patrimoine partagé",
+      "sharedAccounts": "Comptes partagés",
+      "noSharedAccounts": "Aucun compte partagé pour l'instant.",
+      "sharedGoals": "Objectifs partagés",
+      "noSharedGoals": "Aucun objectif partagé pour l'instant.",
+      "contributions": "Contributions"
+    },
+    "settings": {
+      "title": "Famille",
+      "members": "Membres de la famille",
+      "membersDesc": "Ajoutez et gérez les membres et les profils gérés.",
+      "you": "vous",
+      "memberIndependent": "Compte indépendant",
+      "memberPending": "Activation en attente",
+      "memberManaged": "Profil géré",
+      "memberAdmin": "Administrateur",
+      "createLogin": "Créer l'accès",
+      "regenerateLink": "Régénérer le lien",
+      "activationLink": "Lien d'activation à copier et partager :",
+      "memberName": "Nom du membre",
+      "deleteMemberTitle": "Supprimer le membre",
+      "deleteMemberWarning": "Cela supprime définitivement {{name}}, son accès et toutes ses données (comptes, objectifs, synchronisations). Cette action est irréversible.",
+      "shareAccounts": "Partager des comptes",
+      "shareGoals": "Partager des objectifs",
+      "shareNone": "Privé",
+      "shareAll": "Tout partager",
+      "shareManual": "Sélectionner"
+    }
+  },
   "setup": {
     "a11y": {
       "skipToContent": "Aller au contenu principal"
@@ -743,7 +827,6 @@
       "안녕하세요"
     ],
     "intro": {
-      "surtitle": "BIENVENUE",
       "title": "Bienvenue sur Picsou.",
       "subtitle": "On vous installe ça en 2 minutes.",
       "cta": "C'est parti",
@@ -752,28 +835,29 @@
       "skipAria": "Passer l'animation d'accueil"
     },
     "admin": {
-      "surtitle": "VOTRE COMPTE",
       "title": "Créez votre compte administrateur",
       "subtitle": "C'est le premier — et seul obligatoire — compte sur Picsou. Vous pourrez inviter d'autres personnes depuis les Réglages.",
       "username": "Nom d'utilisateur",
-      "usernameHint": "Lettres, chiffres, point, tiret bas, tiret.",
+      "usernameHint": "Choisissez un nom d'utilisateur d'au moins 3 caractères.",
       "password": "Mot de passe",
-      "passwordHint": "Au moins 8 caractères.",
+      "passwordHint": "Choisissez un mot de passe d'au moins 8 caractères.",
       "displayName": "Nom affiché",
-      "displayNameHint": "Comment votre prénom apparaîtra dans l'application.",
+      "displayNameHint": "Ce nom sera affiché dans l'application.",
       "avatarColor": "Couleur d'avatar",
       "avatarColorInvalid": "Choisissez l'une des couleurs proposées.",
       "cta": "Créer le compte",
       "creating": "Création...",
+      "submitError": "Impossible de créer le compte. Réessayez.",
+      "showPassword": "Afficher le mot de passe",
+      "hidePassword": "Masquer le mot de passe",
       "strength": {
-        "weak": "Faible",
-        "fair": "Correct",
-        "good": "Bon",
-        "strong": "Solide"
+        "weak": "La sécurité du mot de passe est faible.",
+        "fair": "La sécurité du mot de passe est correcte.",
+        "good": "La sécurité du mot de passe est bonne.",
+        "strong": "La sécurité du mot de passe est solide."
       }
     },
     "security": {
-      "surtitle": "SÉCURITÉ",
       "title": "Paramètres de sécurité",
       "subtitle": "Nous avons pré-rempli tout ça à partir de votre connexion actuelle. Vous pourrez ajuster depuis les Réglages plus tard.",
       "originsLabel": "Origines autorisées",
@@ -785,10 +869,10 @@
       "secureCookiesLabel": "Cookies sécurisés",
       "secureCookiesHint": "Laissez activé si Picsou est servi en HTTPS.",
       "cta": "Continuer",
-      "saving": "Enregistrement..."
+      "saving": "Enregistrement...",
+      "submitError": "Impossible d'enregistrer les paramètres de sécurité. Réessayez."
     },
     "integrations": {
-      "surtitle": "INTÉGRATIONS",
       "title": "Choisissez vos intégrations",
       "subtitle": "Activez ce qui vous intéresse maintenant. Vous pourrez changer depuis Réglages → Intégrations.",
       "continue": "Continuer",
@@ -822,7 +906,6 @@
       }
     },
     "enablebanking": {
-      "surtitle": "ENABLE BANKING",
       "substep": "Étape {{current}} sur {{total}} — Enable Banking",
       "skip": "Ignorer cette intégration",
       "back": "Retour",
@@ -897,7 +980,6 @@
       }
     },
     "bourso": {
-      "surtitle": "SIDECAR BOURSOBANK",
       "title": "Vérification du sidecar",
       "body": "Picsou est livré avec un conteneur bourso-auth qui synchronise vos comptes BoursoBank. On va juste vérifier qu'il répond.",
       "pinging": "Vérification du sidecar...",
@@ -911,7 +993,6 @@
       "skip": "Ignorer pour l'instant"
     },
     "tr": {
-      "surtitle": "TRADE REPUBLIC",
       "title": "Trade Republic est prêt.",
       "body": "Rien à configurer ici — vous vous connecterez avec vos identifiants Trade Republic au moment d'ajouter le compte dans Picsou.",
       "tip": "Une fois l'installation finie, allez dans Comptes → Ajouter un compte → Trade Republic.",
@@ -919,7 +1000,6 @@
       "skip": "Ne pas activer Trade Republic"
     },
     "finary": {
-      "surtitle": "FINARY",
       "title": "Finary est prêt.",
       "body": "Rien à configurer maintenant — vous vous connecterez avec votre compte Finary au moment de l'ajouter dans Picsou. Le TOTP est géré à l'ajout si votre compte en requiert un.",
       "tip": "Une fois l'installation finie, allez dans Comptes → Ajouter un compte → Finary.",
@@ -927,17 +1007,16 @@
       "skip": "Ne pas activer Finary"
     },
     "crypto": {
-      "surtitle": "ÉCHANGES CRYPTO",
       "title": "Chiffrez vos clés API d'exchange",
       "body": "Vos clés API Binance / Kraken / Coinbase sont chiffrées au repos. Picsou peut générer la clé de chiffrement pour vous — elle reste sur votre disque et n'est jamais transmise.",
       "generateCta": "Générer une clé pour moi",
       "generating": "Génération...",
-      "existed": "Votre clé de chiffrement existe déjà sur le disque — rien à faire.",
+      "existed": "Votre clé de chiffrement est déjà configurée — rien à faire.",
       "created": "Clé de chiffrement générée.",
-      "pathLabel": "Stockée à",
+      "pathLabel": "Source",
       "continue": "Continuer",
-      "skip": "Ignorer pour l'instant",
-      "error": "Impossible d'écrire la clé de chiffrement. Regardez les logs du conteneur."
+      "skip": "Ne pas activer les clés d'échange",
+      "error": "Impossible de préparer la clé de chiffrement. Regardez les logs du serveur."
     },
     "complete": {
       "title": "Picsou est prêt.",

@@ -35,14 +35,14 @@ export function HoldingsTable({ holdings, onEdit, onDelete }: HoldingsTableProps
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Ticker</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Avg Buy</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="text-right">Value</TableHead>
-              <TableHead className="text-right">PnL</TableHead>
-              <TableHead className="text-right">PnL %</TableHead>
+              <TableHead>{t('holdings.ticker')}</TableHead>
+              <TableHead>{t('holdings.name')}</TableHead>
+              <TableHead className="text-right">{t('holdings.quantity')}</TableHead>
+              <TableHead className="text-right">{t('holdings.avgBuyIn')}</TableHead>
+              <TableHead className="text-right">{t('holdings.assetPrice')}</TableHead>
+              <TableHead className="text-right">{t('portfolio.value')}</TableHead>
+              <TableHead className="text-right">{t('holdings.pnl')}</TableHead>
+              <TableHead className="text-right">{t('holdings.pnlPercent')}</TableHead>
               {(onEdit || onDelete) && <TableHead />}
             </TableRow>
           </TableHeader>
@@ -77,20 +77,20 @@ export function HoldingsTable({ holdings, onEdit, onDelete }: HoldingsTableProps
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground hover:text-foreground"
                           onClick={() => onEdit(h)}
                         >
-                          <Pencil size={13} />
+                          <Pencil className="size-4" />
                         </Button>
                       )}
                       {onDelete && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          className="text-muted-foreground hover:text-destructive"
                           onClick={() => onDelete(h)}
                         >
-                          <Trash2 size={13} />
+                          <Trash2 className="size-4" />
                         </Button>
                       )}
                     </div>

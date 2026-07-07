@@ -125,7 +125,7 @@ function NetWorthTooltip({ active, payload, labels, is24H }: {
       {hasInvested && gainLoss !== null && (
         <>
           <div className="my-1.5 border-t border-border" />
-          <div className="flex items-center justify-between py-0.5">
+          <div className="flex items-center justify-between gap-3 py-0.5">
             <span className={`font-mono font-medium tabular-nums ${gainLoss >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
               {gainLoss >= 0 ? '+' : ''}{formatCurrency(gainLoss, labels.currency, labels.locale)}
             </span>

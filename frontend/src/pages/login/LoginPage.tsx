@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useLoginWithRememberMe } from '@/features/mfa/hooks'
 import { useAppStore } from '@/stores/app-store'
 import { safeRedirect } from '@/lib/utils'
-import { getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { formatApiError, getErrorStatus } from '@/lib/errors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,30 +47,32 @@ export function LoginPage() {
       const status = getErrorStatus(err)
       const ax = err as { response?: unknown; message?: string }
       if (!ax.response) {
-        setError(`Impossible de contacter le serveur (${ax.message ?? 'Network Error'})`)
-      } else if (status === 429) {
-        setError('Trop de tentatives, réessayez dans quelques minutes')
+        setError(t('auth.networkError'))
       } else if (status === 401) {
         setError(t('auth.error'))
       } else {
-        setError(`Erreur ${status} — ${getErrorDetail(err) ?? ax.message}`)
+        setError(formatApiError(err, t, 'auth.loginGenericError'))
       }
     }
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="max-w-sm w-full mx-4 flex flex-col gap-4">
-        <Card>
-          <CardHeader className="items-center text-center">
-            <CardTitle className="text-xl">{t('auth.login')}</CardTitle>
-            <CardDescription className="mt-0.5">{t('auth.loginTagline', 'Picsou')}</CardDescription>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+        <Card className="py-8 sm:py-10">
+          <CardHeader className="items-center gap-2 px-6 text-center sm:px-10">
+            <CardTitle className="text-3xl font-semibold sm:text-4xl">{t('auth.login')}</CardTitle>
+            <CardDescription className="mt-1 text-base leading-6">
+              {t('auth.loginTagline')}
+            </CardDescription>
           </CardHeader>
 
-          <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="username">{t('auth.username')}</Label>
+          <CardContent className="px-6 sm:px-10">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-base font-semibold">
+                  {t('auth.username')}
+                </Label>
                 <Input
                   id="username"
                   type="text"
@@ -79,11 +81,14 @@ export function LoginPage() {
                   autoComplete="username"
                   required
                   placeholder="admin"
+                  className="h-12 rounded-xl px-4 text-base md:text-base"
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password">{t('auth.password')}</Label>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-base font-semibold">
+                  {t('auth.password')}
+                </Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -93,42 +98,53 @@ export function LoginPage() {
                     autoComplete="current-password"
                     required
                     placeholder="••••••••"
-                    className="pr-9"
+                    className="h-12 rounded-xl px-4 pr-14 text-base md:text-base"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPw(v => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showPw ? t('auth.hidePassword', 'Hide password') : t('auth.showPassword', 'Show password')}
+                    className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
+                    aria-pressed={showPw}
                   >
-                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPw ? (
+                      <EyeOff className="size-5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="size-5" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-3 rounded-xl py-1">
                 <input
                   id="rememberMe"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={e => setRememberMe(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded"
+                  className="mt-1 h-5 w-5 shrink-0 rounded-md accent-primary"
                 />
                 <div className="flex flex-col">
-                  <Label htmlFor="rememberMe" className="text-sm cursor-pointer">
+                  <Label htmlFor="rememberMe" className="cursor-pointer text-base font-semibold">
                     {t('auth.rememberMe')}
                   </Label>
-                  <p className="text-xs text-muted-foreground">{t('auth.rememberMeDesc')}</p>
+                  <p className="text-sm text-muted-foreground">{t('auth.rememberMeDesc')}</p>
                 </div>
               </div>
 
               {error && (
-                <p className="text-sm font-medium text-destructive">{error}</p>
+                <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                  {error}
+                </p>
               )}
 
-              <Button type="submit" disabled={loginMutation.isPending} className="w-full mt-1">
+              <Button
+                type="submit"
+                disabled={loginMutation.isPending}
+                className="mt-2 h-12 w-full rounded-full px-8 text-base transition-transform active:scale-[0.96]"
+              >
                 {loginMutation.isPending && (
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 className="size-5 animate-spin" />
                 )}
                 {loginMutation.isPending ? t('auth.loggingIn') : t('auth.loginButton')}
               </Button>
@@ -138,9 +154,9 @@ export function LoginPage() {
 
         {demoMode && (
           <Card className="border-muted bg-muted/40">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-sm font-medium text-foreground">{t('auth.demoMode')}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{t('auth.demoModeDesc')}</p>
+            <CardContent className="px-6 py-5 sm:px-10">
+              <p className="text-base font-semibold text-foreground">{t('auth.demoMode')}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t('auth.demoModeDesc')}</p>
             </CardContent>
           </Card>
         )}

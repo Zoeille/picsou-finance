@@ -29,6 +29,7 @@ import {
   Pencil,
   Shield,
   KeyRound,
+  ExternalLink,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api-client'
@@ -54,15 +55,15 @@ function ToggleGroup({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="inline-flex items-center rounded-lg bg-muted p-1">
+    <div className="inline-flex items-center rounded-2xl bg-muted p-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`inline-flex h-10 min-w-24 items-center justify-center rounded-xl px-8 text-sm font-medium transition-[background-color,color] ${
             value === opt.value
-              ? 'bg-primary text-primary-foreground shadow-sm'
+              ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -89,7 +90,7 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <Card className="rounded-4xl bg-card shadow-md">
+    <Card className="rounded-4xl bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           {React.createElement(icon, { className: "size-5 text-muted-foreground" })}
@@ -134,8 +135,8 @@ export function SettingsPage() {
   async function saveUsername() {
     const trimmed = newUsername.trim()
     if (!trimmed || trimmed === user?.username) { setEditingUsername(false); return }
-    if (trimmed.length < 3) { setUsernameError('3 caractères minimum'); return }
-    if (!/^[a-zA-Z0-9._-]+$/.test(trimmed)) { setUsernameError('Lettres, chiffres, . _ - uniquement'); return }
+    if (trimmed.length < 3) { setUsernameError(t('settings.usernameTooShort')); return }
+    if (!/^[a-zA-Z0-9._-]+$/.test(trimmed)) { setUsernameError(t('settings.usernameInvalidChars')); return }
     setUsernameSaving(true)
     setUsernameError(null)
     try {
@@ -143,7 +144,7 @@ export function SettingsPage() {
       setUsername(trimmed)
       setEditingUsername(false)
     } catch (err: unknown) {
-      setUsernameError(getErrorStatus(err) === 409 ? 'Nom d\'utilisateur déjà pris' : 'Erreur, réessayez')
+      setUsernameError(getErrorStatus(err) === 409 ? t('settings.usernameTaken') : t('common.error'))
     } finally {
       setUsernameSaving(false)
     }
@@ -193,7 +194,7 @@ export function SettingsPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <PageHeader title={t('settings.title')} />
 
       {/* Appearance ------------------------------------------------------- */}
@@ -248,29 +249,29 @@ export function SettingsPage() {
             </Label>
             {editingUsername ? (
               <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
                   <Input
                     value={newUsername}
                     onChange={e => setNewUsername(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') saveUsername(); if (e.key === 'Escape') cancelEditUsername() }}
-                    className="w-44"
+                    className="w-72"
                     autoFocus
                     disabled={usernameSaving}
                   />
-                  <Button size="icon-sm" variant="ghost" onClick={saveUsername} disabled={usernameSaving}>
-                    <Check className="size-4 text-green-600" />
+                  <Button size="icon" variant="outline" onClick={saveUsername} disabled={usernameSaving}>
+                    <Check className="size-4 text-emerald-600" />
                   </Button>
-                  <Button size="icon-sm" variant="ghost" onClick={cancelEditUsername} disabled={usernameSaving}>
+                  <Button size="icon" variant="outline" onClick={cancelEditUsername} disabled={usernameSaving}>
                     <X className="size-4" />
                   </Button>
                 </div>
-                {usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
+                {usernameError && <p className="text-sm text-destructive">{usernameError}</p>}
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{user?.username}</span>
-                <Button size="icon-sm" variant="ghost" onClick={startEditUsername}>
-                  <Pencil className="size-3.5" />
+                <Button size="icon" variant="outline" onClick={startEditUsername}>
+                  <Pencil className="size-4" />
                 </Button>
               </div>
             )}
@@ -305,15 +306,15 @@ export function SettingsPage() {
       {/* Family ----------------------------------------------------------- */}
       <SectionCard
         icon={Users}
-        title={t('settings.family', 'Family')}
-        description={t('settings.familyDescription', 'Manage members and sharing settings')}
+        title={t('settings.family')}
+        description={t('settings.familyDescription')}
       >
         <button
           type="button"
           onClick={() => navigate('/settings/family')}
-          className="flex w-full items-center justify-between rounded-lg p-2 text-sm font-medium transition-colors hover:bg-muted"
+          className="flex min-h-10 w-full items-center justify-between rounded-xl bg-muted/70 px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
         >
-          <span>{t('settings.familyManage', 'Manage family members & sharing')}</span>
+          <span>{t('settings.familyManage')}</span>
           <ChevronRight className="size-4 text-muted-foreground" />
         </button>
       </SectionCard>
@@ -328,7 +329,7 @@ export function SettingsPage() {
           <button
             type="button"
             onClick={() => navigate('/admin')}
-            className="flex w-full items-center justify-between rounded-lg p-2 text-sm font-medium transition-colors hover:bg-muted"
+            className="flex min-h-10 w-full items-center justify-between rounded-xl bg-muted/70 px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
           >
             <span>{t('settings.adminButton')}</span>
             <ChevronRight className="size-4 text-muted-foreground" />
@@ -342,19 +343,28 @@ export function SettingsPage() {
         title={t('settings.about')}
         description={t('settings.aboutDescription')}
       >
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Picsou</span>
+        <div className="grid gap-5 text-sm sm:grid-cols-3 sm:items-start">
+          <div className="space-y-1">
+            <p className="text-muted-foreground">{t('settings.application')}</p>
+            <p className="font-medium text-foreground">Picsou</p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">
+          <div className="space-y-1">
+            <p className="text-muted-foreground">
               {t('settings.version')}
-            </span>
-            <span className="font-medium">1.0.8</span>
+            </p>
+            <p className="font-medium text-foreground">1.0.8</p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">GitHub</span>
-            <span className="font-medium">github.com/zoeille/picsou</span>
+          <div className="space-y-1 sm:justify-self-end sm:text-right">
+            <p className="text-muted-foreground">GitHub</p>
+            <a
+              href="https://github.com/zoeille/picsou"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-xl font-medium text-foreground transition-colors hover:text-muted-foreground"
+            >
+              <span className="truncate">github.com/zoeille/picsou</span>
+              <ExternalLink className="size-4 text-muted-foreground" />
+            </a>
           </div>
         </div>
       </SectionCard>
