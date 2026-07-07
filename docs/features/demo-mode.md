@@ -49,10 +49,10 @@ VITE_DEMO_MODE=true
 ## Gotchas / Pitfalls
 
 - **`/login` redirects to `/` in demo mode** — `PublicOnly` redirects immediately. To see the login page, disable `VITE_DEMO_MODE`.
-- **Mock handlers are keyed by exact route** — the key is `METHOD /path` with no query string or trailing slash. Any new API route needs a handler added in `demo/index.ts`, otherwise the call returns `{}` silently.
+- **Mock handlers are keyed by exact route** — the key is `METHOD /path` with no query string or trailing slash. Any new API route needs a handler added in `demo/index.ts`, otherwise the call returns `{}` silently — and components that `.map()`/`.filter()` the payload crash the page. This bit the dashboard (`GET /history`), `GET /history/pnl`, intraday, access keys, MFA status, sessions, and family members until handlers were added (2026-07-07). Query params (e.g. `?split=true` on `/history`) are read from `config.params` inside the handler.
 - **Artificial delay of 200–600 ms** — intentional, to simulate network latency. Do not remove it for visual testing.
 - **`demoMode` is not persisted** — intentional. Do not add it to `partialize` without understanding the implications (see above).
 
 ## Tests
 
-No dedicated unit tests. Manual verification via `bun run dev` with `VITE_DEMO_MODE=true`.
+The Playwright suite (`frontend/e2e/*.spec.ts`, `bun run test:e2e`) runs entirely against demo mode — it is the de-facto regression net for the handler table. Not run in CI; run it locally against a dev server started with `VITE_DEMO_MODE=true`.

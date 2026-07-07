@@ -159,6 +159,66 @@ handlers.set(key('GET', '/accounts/6/history'), () => generateHistory(
 handlers.set(key('GET', '/accounts/7/history'), () => generateHistory(
   [4200, 4320, 4440, 4560, 4620, 4740, 4800, 4920, 4980, 5040, 5080, 5120]))
 
+// Aggregate net-worth history (dashboard chart, accounts page with split=true).
+// Mirrors backend NetWorthPoint: { date, total, invested, pnl, accounts? }.
+function generateNetWorthHistory(months: number, accountIds: number[], split: boolean) {
+  const now = new Date()
+  const weights = accountIds.map((id) => mockAccounts.find((a) => a.id === id)?.currentBalanceEur ?? 1000)
+  const weightSum = weights.reduce((s, w) => s + w, 0) || 1
+
+  return Array.from({ length: months }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1)
+    const progress = months > 1 ? i / (months - 1) : 1
+    const total = Math.round((58_000 + progress * 14_000 + Math.sin(i * 1.7) * 1_200) * 100) / 100
+    const invested = Math.round(total * 0.55 * 100) / 100
+    const pnl = Math.round((total * 0.06 + progress * 1_500) * 100) / 100
+    const point: {
+      date: string; total: number; invested: number; pnl: number
+      accounts?: Record<string, { total: number; invested: number; pnl: number }>
+    } = { date: d.toISOString().split('T')[0], total, invested, pnl }
+    if (split) {
+      point.accounts = Object.fromEntries(accountIds.map((id, idx) => {
+        const share = weights[idx] / weightSum
+        return [String(id), {
+          total: Math.round(total * share * 100) / 100,
+          invested: Math.round(invested * share * 100) / 100,
+          pnl: Math.round(pnl * share * 100) / 100,
+        }]
+      }))
+    }
+    return point
+  })
+}
+
+handlers.set(key('GET', '/history'), (config) => {
+  const params = (config.params ?? {}) as { accountIds?: string; months?: number | string; split?: boolean | string }
+  const months = Number(params.months) || 12
+  const ids = String(params.accountIds ?? '').split(',').filter(Boolean).map(Number)
+  const split = params.split === true || params.split === 'true'
+  return generateNetWorthHistory(months, ids.length ? ids : mockAccounts.map((a) => a.id), split)
+})
+
+// PnL summary (dashboard header + account detail)
+handlers.set(key('GET', '/history/pnl'), () => ({
+  total: 72_000,
+  invested: 39_600,
+  pnl: 5_820,
+  pnlPercent: 14.7,
+  valueAtFrom: 66_500,
+  rangePnl: 5_500,
+  rangePnlPercent: 8.3,
+}))
+
+// Intraday net worth (24H dashboard range): one point per hour, mild noise.
+handlers.set(key('GET', '/history/net-worth/intraday'), () => {
+  const now = Date.now()
+  return Array.from({ length: 24 }, (_, i) => ({
+    timestamp: new Date(now - (23 - i) * 3_600_000).toISOString(),
+    total: Math.round((71_400 + i * 25 + Math.sin(i / 2.5) * 180) * 100) / 100,
+    invested: 39_600,
+  }))
+})
+
 // Goals
 handlers.set(key('GET', '/goals'), () => mockGoals)
 for (let i = 1; i <= 3; i++) {
@@ -273,6 +333,60 @@ handlers.set(key('POST', '/crypto/wallet/1/sync'), () => [])
 handlers.set(key('DELETE', '/crypto/wallet/1'), () => null)
 
 // Finary - configured
+// Settings — security (2FA off in demo, one active session)
+handlers.set(key('GET', '/auth/mfa/status'), () => ({
+  enabled: false,
+  enrolledAt: null,
+  remainingRecoveryCodes: 0,
+}))
+handlers.set(key('GET', '/auth/sessions'), () => ([
+  {
+    id: 1,
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Demo Browser',
+    ipPrefix: '192.168.1.x',
+    createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    lastUsedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 87 * 86_400_000).toISOString(),
+    trustedFor2fa: false,
+    current: true,
+  },
+]))
+
+// Settings — access keys (MCP)
+handlers.set(key('GET', '/access-keys'), () => ([
+  {
+    id: 1,
+    name: 'Demo MCP key',
+    keyPrefix: 'pk_demo_a1b2',
+    scopes: ['accounts_read', 'dashboard_read'],
+    lastUsedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    expiresAt: null,
+    revokedAt: null,
+    createdAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+  },
+]))
+handlers.set(key('POST', '/access-keys'), (config) => {
+  const body = JSON.parse(config.data ?? '{}') as { name?: string; scopes?: string[]; expiresAt?: string | null }
+  return {
+    secret: 'pk_demo_secret_shown_once_0000000000000000',
+    key: {
+      id: 2,
+      name: body.name ?? 'Demo key',
+      keyPrefix: 'pk_demo_c3d4',
+      scopes: body.scopes ?? [],
+      lastUsedAt: null,
+      expiresAt: body.expiresAt ?? null,
+      revokedAt: null,
+      createdAt: new Date().toISOString(),
+    },
+  }
+})
+handlers.set(key('DELETE', '/access-keys/1'), () => null)
+handlers.set(key('DELETE', '/access-keys/2'), () => null)
+
+// Family (solo demo profile: no managed members)
+handlers.set(key('GET', '/family/members'), () => [])
+
 handlers.set(key('GET', '/finary/configured'), () => true)
 
 // Finary - preview file

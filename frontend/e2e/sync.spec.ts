@@ -4,7 +4,8 @@ import { login } from './helpers'
 test.describe('Sync page tabs', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
-    await page.getByRole('link', { name: 'Synchronisation' }).click()
+    // Sync is no longer a sidebar entry — navigate to the route directly.
+    await page.goto('/sync')
     await page.waitForURL('**/sync')
   })
 
@@ -13,26 +14,30 @@ test.describe('Sync page tabs', () => {
     await expect(tabs).toHaveCount(5)
   })
 
+  // Switching tabs no longer rewrites the URL (?tab= is only read as the
+  // initial tab), so assert on the revealed content instead of waitForURL.
   test('should switch to Exchanges tab', async ({ page }) => {
     await page.getByRole('tab', { name: 'Exchanges' }).click()
-    await page.waitForURL('**/sync?tab=exchanges')
     // Exchanges content should be visible
     await expect(page.getByText('Ajouter un exchange')).toBeVisible()
   })
 
   test('should switch to Wallets tab', async ({ page }) => {
     await page.getByRole('tab', { name: 'Wallets' }).click()
-    await page.waitForURL('**/sync?tab=wallets')
     // Wallets content should be visible
     await expect(page.getByText('Ajouter un wallet')).toBeVisible()
   })
 
-  test('should switch to Finary tab and show wizard step 1', async ({ page }) => {
+  test('should switch to Finary tab and show login + file import', async ({ page }) => {
     await page.getByRole('tab', { name: 'Finary' }).click()
-    await page.waitForURL('**/sync?tab=finary')
-    // Finary wizard step indicator should be visible
-    await expect(page.getByText('Fichier', { exact: true })).toBeVisible()
+    // API-login form should be visible
+    await expect(page.getByText('Se connecter à Finary')).toBeVisible()
     // Upload area should be visible
     await expect(page.getByText('Importer un fichier Finary (.xlsx)').first()).toBeVisible()
+  })
+
+  test('should open a tab directly via the ?tab= query param', async ({ page }) => {
+    await page.goto('/sync?tab=exchanges')
+    await expect(page.getByText('Ajouter un exchange')).toBeVisible()
   })
 })

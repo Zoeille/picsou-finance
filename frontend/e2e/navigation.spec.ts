@@ -18,10 +18,12 @@ test.describe('Sidebar navigation', () => {
     await expect(page.getByText('Objectifs', { exact: true })).toBeVisible()
   })
 
-  test('should navigate to Synchronisation', async ({ page }) => {
-    await page.getByRole('link', { name: 'Synchronisation' }).click()
+  // Sync is no longer a sidebar entry (reached from the dashboard
+  // "Synchroniser" button or by URL) — check the direct route instead.
+  test('should reach Synchronisation via its route', async ({ page }) => {
+    await page.goto('/sync')
     await page.waitForURL('**/sync')
-    await expect(page.getByText('Synchronisation')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Synchronisation' })).toBeVisible()
   })
 
   test('should navigate back to Tableau de bord', async ({ page }) => {
