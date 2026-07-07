@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { HelloGreeting } from './HelloGreeting'
 import { useSetupStatus } from '@/features/setup/hooks'
+import { SUPPORTED_LOCALES, resolveLocale } from '@/i18n/locales'
 
 /**
  * Step 0 of the wizard — the signature moment. After the Hello greeting
  * cycles through 12 locales, the welcome hero fades in with the single
  * "Get started" CTA. A tab-style language toggle in the top-left lets
- * the user switch between FR and EN mid-wizard without losing state
+ * the user switch languages mid-wizard without losing state
  * (i18next re-renders translations in place).
  */
 export function SetupStepIntro() {
@@ -19,9 +20,7 @@ export function SetupStepIntro() {
   const [phase, setPhase] = useState<'greeting' | 'content'>('greeting')
   const { data: setupStatus } = useSetupStatus()
 
-  const switchLang = (lng: 'fr' | 'en') => {
-    i18n.changeLanguage(lng)
-  }
+  const activeLocale = resolveLocale(i18n.language)
 
   return (
     <div className="relative">
@@ -32,21 +31,21 @@ export function SetupStepIntro() {
           aria-label={t('setup.intro.language')}
           className="inline-flex items-center rounded-full border border-border/60 bg-background/80 p-0.5 backdrop-blur-md shadow-sm"
         >
-          {(['fr', 'en'] as const).map((lng) => (
+          {SUPPORTED_LOCALES.map((locale) => (
             <button
-              key={lng}
+              key={locale.code}
               role="tab"
               type="button"
-              aria-selected={i18n.language.startsWith(lng)}
-              onClick={() => switchLang(lng)}
+              aria-selected={activeLocale.code === locale.code}
+              onClick={() => i18n.changeLanguage(locale.code)}
               className={cn(
                 'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                i18n.language.startsWith(lng)
+                activeLocale.code === locale.code
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              {lng.toUpperCase()}
+              {locale.label}
             </button>
           ))}
         </div>

@@ -43,6 +43,7 @@
 
 | Feature | Last updated | Note |
 |---------|-------------|------|
+| Internationalization (FR/EN/DE/ES) | 2026-07-07 | [i18n.md](./features/i18n.md) |
 | MCP server + scoped access-keys | 2026-06-05 | [mcp-server.md](./features/mcp-server.md) |
 | Frontend utilities (lib/utils.ts) | 2026-05-31 | [frontend-utils.md](./features/frontend-utils.md) |
 | Demo mode | 2026-04-08 | [demo-mode.md](./features/demo-mode.md) |

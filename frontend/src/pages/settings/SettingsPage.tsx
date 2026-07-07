@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { type Theme, applyTheme, getStoredTheme } from '@/lib/theme'
 import { useTranslation } from 'react-i18next'
+import { SUPPORTED_LOCALES, resolveLocale } from '@/i18n/locales'
 import { useNavigate } from 'react-router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAppStore, type DateFormat } from '@/stores/app-store'
@@ -159,9 +160,9 @@ export function SettingsPage() {
   // Language --------------------------------------------------------------
   const [locale, setLocale] = useState(i18n.language)
 
+  // i18next persists the choice itself (localStorage key "picsou-locale").
   const handleLocaleChange = (lng: string) => {
     i18n.changeLanguage(lng)
-    localStorage.setItem('locale', lng)
     setLocale(lng)
   }
 
@@ -182,10 +183,10 @@ export function SettingsPage() {
     { value: 'system', label: t('settings.themeSystem') },
   ]
 
-  const localeOptions: ToggleOption[] = [
-    { value: 'fr', label: 'FR' },
-    { value: 'en', label: 'EN' },
-  ]
+  const localeOptions: ToggleOption[] = SUPPORTED_LOCALES.map((l) => ({
+    value: l.code,
+    label: l.label,
+  }))
 
   const dateFormatOptions: ToggleOption[] = [
     { value: 'locale', label: t('settings.dateFormatLocale') },
@@ -218,7 +219,7 @@ export function SettingsPage() {
             <Label className="text-sm font-medium">{t('settings.language')}</Label>
             <ToggleGroup
               options={localeOptions}
-              value={locale.startsWith('fr') ? 'fr' : 'en'}
+              value={resolveLocale(locale).code}
               onChange={handleLocaleChange}
             />
           </div>

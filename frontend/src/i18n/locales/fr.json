@@ -25,8 +25,7 @@
     "yes": "Oui",
     "no": "Non",
     "today": "Aujourd'hui",
-    "currency": "EUR",
-    "locale": "fr-FR"
+    "currency": "EUR"
   },
   "nav": {
     "dashboard": "Tableau de bord",

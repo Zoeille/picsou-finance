@@ -22,7 +22,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Calendar, TrendingUp, TrendingDown } from 'lucide-react'
-import { formatLocalDate, accountTypeLabel } from '@/lib/utils'
+import { formatLocalDate } from '@/lib/utils'
+import { accountTypeLabelKey } from '@/lib/constants'
 import { type TimeRange } from '@/components/shared/TimeRangeSelector'
 import type { HoldingResponse, Transaction } from '@/types/api'
 
@@ -77,7 +78,7 @@ export function AccountDetailPage() {
       <PageHeader
         surtitle={
           account
-            ? `${accountTypeLabel(account.type)}${account.provider ? ` · ${account.provider}` : ''}`
+            ? `${t(accountTypeLabelKey(account.type))}${account.provider ? ` · ${account.provider}` : ''}`
             : undefined
         }
         title={account?.name ?? ''}

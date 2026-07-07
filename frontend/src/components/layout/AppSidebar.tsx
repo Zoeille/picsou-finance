@@ -19,9 +19,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { SUPPORTED_LOCALES, resolveLocale } from '@/i18n/locales'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAppStore } from '@/stores/app-store'
 import { useProfileStore } from '@/stores/profile-store'
@@ -115,10 +121,6 @@ export function AppSidebar() {
   const displayColor = activeManaged?.avatarColor ?? '#6366f1'
   const initial = displayName.charAt(0).toUpperCase()
 
-  function toggleLanguage() {
-    i18n.changeLanguage(i18n.language === 'fr' ? 'en' : 'fr')
-  }
-
   return (
     <nav className="hidden md:flex h-fit max-h-[calc(100vh-2rem)] w-60 shrink-0 flex-col bg-background px-3 py-4 rounded-xl">
       {/* Logo */}
@@ -177,10 +179,24 @@ export function AppSidebar() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={toggleLanguage}>
-            <Languages className="mr-2 size-4" />
-            {t('settings.language')}
-          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Languages className="mr-2 size-4" />
+              {t('settings.language')}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuRadioGroup
+                value={resolveLocale(i18n.language).code}
+                onValueChange={(lng) => i18n.changeLanguage(lng)}
+              >
+                {SUPPORTED_LOCALES.map((locale) => (
+                  <DropdownMenuRadioItem key={locale.code} value={locale.code}>
+                    {locale.nativeName}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           {isAdmin && managedMembers.length > 0 && (
             <>

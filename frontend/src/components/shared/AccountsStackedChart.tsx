@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useIntlLocale } from '@/hooks/use-intl-locale'
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { TimeRangeSelector, type TimeRange } from '@/components/shared/TimeRangeSelector'
@@ -82,7 +83,7 @@ function filterByRange(data: AccountsStackedChartProps['data'], range: TimeRange
 
 export function AccountsStackedChart({ accounts, data }: AccountsStackedChartProps) {
   const { t } = useTranslation()
-  const locale = t('common.locale')
+  const locale = useIntlLocale()
   const [range, setRange] = useState<TimeRange>('1Y')
 
   const filteredData = useMemo(() => filterByRange(data, range), [data, range])
@@ -99,9 +100,9 @@ export function AccountsStackedChart({ accounts, data }: AccountsStackedChartPro
   }, [accounts])
 
   const labels = useMemo(() => ({
-    locale: t('common.locale'),
+    locale,
     currency: t('common.currency'),
-  }), [t])
+  }), [t, locale])
 
   if (data.length === 0) return null
 

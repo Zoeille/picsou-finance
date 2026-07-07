@@ -5,7 +5,7 @@ import { AccountCard } from './AccountCard'
 import type { Account } from '@/types/api'
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'fr' } }),
 }))
 
 /**
@@ -17,11 +17,22 @@ class MockImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
   private _src = ''
+  private listeners: Record<string, Array<() => void>> = {}
+  addEventListener(type: string, cb: () => void) {
+    ;(this.listeners[type] ??= []).push(cb)
+  }
+  removeEventListener(type: string, cb: () => void) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((l) => l !== cb)
+  }
+  private emit(type: 'load' | 'error') {
+    if (type === 'load') this.onload?.()
+    else this.onerror?.()
+    for (const cb of this.listeners[type] ?? []) cb()
+  }
   set src(value: string) {
     this._src = value
     queueMicrotask(() => {
-      if (value.includes('broken')) this.onerror?.()
-      else this.onload?.()
+      this.emit(value.includes('broken') ? 'error' : 'load')
     })
   }
   get src() {

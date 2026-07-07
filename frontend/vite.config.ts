@@ -47,7 +47,9 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 5173,
+    // PORT override lets tooling (preview harnesses, parallel worktrees) pick
+    // a free port; defaults to the documented 5173.
+    port: Number(process.env.PORT) || 5173,
     proxy: {
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://localhost:8080',

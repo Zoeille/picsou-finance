@@ -26,7 +26,7 @@ src/
   lib/              api-client.ts, utils.ts, constants.ts, query-client.ts
   types/            api.ts (mirrors backend DTOs), app.ts (frontend-only)
   demo/             Demo mode interceptor + mock data
-  i18n/             react-i18next (FR/EN)
+  i18n/             react-i18next (FR/EN/DE/ES) — SUPPORTED_LOCALES registry in locales.ts
 ```
 
 ## Key patterns

@@ -197,11 +197,13 @@ Use icons from `lucide-react` as direct JSX components (e.g., `<Pencil className
 
 ## Internationalization
 
-- react-i18next with FR/EN languages.
-- Translation files: `public/locales/{fr,en}/translation.json`.
+- react-i18next with FR (default), EN, DE, ES.
+- Translation files: `src/i18n/locales/{fr,en,de,es}.json` — identical key sets; when adding a key, add it to all four files.
+- Supported languages live in the `SUPPORTED_LOCALES` registry (`src/i18n/locales.ts`); selectors and `Intl` formatting derive from it — never hardcode language lists in components. Normalize raw tags with `resolveLocale()`.
 - Flat keys with feature-based grouping.
-- All user-visible text must use `useTranslation()` — no hardcoded English strings.
-- Currency formatting via `Intl.NumberFormat`.
+- All user-visible text must use `useTranslation()` — no hardcoded strings in any language.
+- Currency/date/number formatting via `Intl.*` through the `lib/utils.ts` helpers (`formatCurrency`, `formatDate`…), which resolve the active locale via `getLocale()`.
+- Full details: [`docs/features/i18n.md`](../features/i18n.md).
 
 ## Types
 

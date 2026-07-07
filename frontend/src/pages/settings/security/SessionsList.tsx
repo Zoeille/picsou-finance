@@ -7,6 +7,7 @@ import {
   useRevokeAllSessionsExceptCurrent,
 } from '@/features/mfa/hooks'
 import type { SessionItem } from '@/features/mfa/api'
+import { resolveLocale } from '@/i18n/locales'
 
 export function SessionsList() {
   const { t, i18n } = useTranslation()
@@ -37,7 +38,7 @@ export function SessionsList() {
           <SessionRow
             key={s.id}
             session={s}
-            locale={i18n.language}
+            locale={resolveLocale(i18n.language).intlLocale}
             onRevoke={() => revoke.mutate(s.id)}
             disabled={revoke.isPending && revoke.variables === s.id}
           />

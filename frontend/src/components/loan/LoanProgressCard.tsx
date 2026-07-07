@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { useIntlLocale } from '@/hooks/use-intl-locale'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import type { LoanSummary } from '@/types/api'
@@ -9,7 +10,7 @@ interface LoanProgressCardProps {
 
 export function LoanProgressCard({ summary }: LoanProgressCardProps) {
   const { t } = useTranslation()
-  const locale = t('common.locale')
+  const locale = useIntlLocale()
 
   const endLabel = summary.endDate
     ? new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' })

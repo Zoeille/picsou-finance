@@ -12,6 +12,11 @@ export const ACCOUNT_TYPES: { value: AccountType; labelKey: string }[] = [
   { value: 'OTHER', labelKey: 'accountTypes.other' },
 ]
 
+/** Translation key for an account type's display label. */
+export function accountTypeLabelKey(type: AccountType): string {
+  return ACCOUNT_TYPES.find((t) => t.value === type)?.labelKey ?? 'accountTypes.other'
+}
+
 /**
  * Curated list of valid ISO 4217 codes offered in the account form's currency
  * dropdown (EUR first). Labels are rendered live via `Intl.DisplayNames`, so this
