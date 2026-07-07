@@ -83,16 +83,14 @@ export function EBStep1Explain({ onNext }: Props) {
           <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
             <Button
               variant="outline"
-              size="lg"
               onClick={handleCreateAccount}
-              className="h-10 w-full rounded-full px-8 text-sm"
+              className="w-full rounded-full"
             >
               {t('setup.enablebanking.explain.needAccount')}
             </Button>
             <Button
-              size="lg"
               onClick={handleHaveAccount}
-              className="h-10 w-full rounded-full px-8 text-sm"
+              className="w-full rounded-full"
             >
               {t('setup.enablebanking.explain.haveAccount')}
             </Button>
@@ -103,9 +101,8 @@ export function EBStep1Explain({ onNext }: Props) {
               {t('setup.enablebanking.explain.signupOpened')}
             </p>
             <Button
-              size="lg"
               onClick={onNext}
-              className="h-10 w-full rounded-full px-8 text-sm"
+              className="w-full rounded-full"
             >
               {t('setup.enablebanking.explain.continueAfterSignup')}
             </Button>

@@ -122,25 +122,23 @@ export function SetupStepCrypto() {
           type="button"
           variant="outline"
           onClick={skip}
-          className="h-10 w-full rounded-full px-8 text-sm"
+          className="w-full rounded-full"
         >
           {t('setup.crypto.skip')}
         </Button>
         {phase === 'error' ? (
           <Button
-            size="lg"
             onClick={run}
             disabled={gen.isPending}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {t('setup.crypto.generateCta')}
           </Button>
         ) : (
           <Button
-            size="lg"
             onClick={proceed}
             disabled={phase === 'running'}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {t('setup.crypto.continue')}
           </Button>

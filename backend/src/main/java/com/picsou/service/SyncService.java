@@ -252,6 +252,15 @@ public class SyncService {
     ) {
         if (!accountDataList.isEmpty()) return false;
 
+        // An already-LINKED session that suddenly returns no accounts is more likely a
+        // transient provider gap than a broken link. Demoting it would make the status
+        // flap LINKED → FAILED on every scheduled resync — keep it LINKED and just skip.
+        if (requisition.getStatus() == RequisitionStatus.LINKED) {
+            log.warn("Enable Banking session {} returned no accounts during {} — keeping LINKED, skipping update",
+                requisition.getRequisitionId(), operation);
+            return true;
+        }
+
         requisition.setStatus(RequisitionStatus.FAILED);
         requisitionRepository.save(requisition);
         log.info("Enable Banking session {} returned no accounts during {} — marking retryable",

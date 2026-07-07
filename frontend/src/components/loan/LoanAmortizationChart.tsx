@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, localeFromLanguage } from '@/lib/utils'
 import type { LoanInstallment } from '@/types/api'
 
 interface LoanAmortizationChartProps {
@@ -56,7 +56,7 @@ function AmortizationTooltip({ active, payload, labels }: {
 }
 
 export function LoanAmortizationChart({ schedule }: LoanAmortizationChartProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const points = useMemo(() => buildPoints(schedule), [schedule])
   const todayMarker = useMemo(() => findTodayMarker(points), [points])
@@ -85,9 +85,9 @@ export function LoanAmortizationChart({ schedule }: LoanAmortizationChartProps) 
 
   const labels = useMemo(() => ({
     remaining: t('debt.remainingBalance'),
-    locale: t('common.locale'),
-    currency: t('common.currency'),
-  }), [t])
+    locale: localeFromLanguage(i18n.resolvedLanguage ?? i18n.language),
+    currency: 'EUR',
+  }), [t, i18n.resolvedLanguage, i18n.language])
 
   const xAxisFormatter = (value: string) =>
     new Date(value).toLocaleDateString(labels.locale, { month: 'short', year: '2-digit' })

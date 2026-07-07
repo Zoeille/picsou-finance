@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { TimeRangeSelector, type TimeRange } from '@/components/shared/TimeRangeSelector'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, localeFromLanguage } from '@/lib/utils'
 import type { Account } from '@/types/api'
 
 interface AccountsStackedChartProps {
@@ -81,8 +81,8 @@ function filterByRange(data: AccountsStackedChartProps['data'], range: TimeRange
 }
 
 export function AccountsStackedChart({ accounts, data }: AccountsStackedChartProps) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const [range, setRange] = useState<TimeRange>('1Y')
 
   const filteredData = useMemo(() => filterByRange(data, range), [data, range])
@@ -99,9 +99,9 @@ export function AccountsStackedChart({ accounts, data }: AccountsStackedChartPro
   }, [accounts])
 
   const labels = useMemo(() => ({
-    locale: t('common.locale'),
-    currency: t('common.currency'),
-  }), [t])
+    locale,
+    currency: 'EUR',
+  }), [locale])
 
   if (data.length === 0) return null
 

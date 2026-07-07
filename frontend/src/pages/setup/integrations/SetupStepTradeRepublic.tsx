@@ -50,15 +50,14 @@ export function SetupStepTradeRepublic() {
           type="button"
           variant="outline"
           onClick={skip}
-          className="h-10 w-full rounded-full px-8 text-sm"
+          className="w-full rounded-full"
         >
           {t('setup.tr.skip')}
         </Button>
         <Button
-          size="lg"
           onClick={proceed}
           disabled={ack.isPending}
-          className="h-10 w-full rounded-full px-8 text-sm"
+          className="w-full rounded-full"
         >
           {t('setup.tr.cta')}
         </Button>

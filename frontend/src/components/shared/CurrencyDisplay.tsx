@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, localeFromLanguage } from '@/lib/utils'
 
 interface CurrencyDisplayProps {
   value: number
@@ -9,9 +9,9 @@ interface CurrencyDisplayProps {
 }
 
 export function CurrencyDisplay({ value, currency, className, showSign = false }: CurrencyDisplayProps) {
-  const { t } = useTranslation()
-  const cur = currency || t('common.currency')
-  const locale = t('common.locale')
+  const { i18n } = useTranslation()
+  const cur = currency || 'EUR'
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
 
   const formatted = formatCurrency(Math.abs(value), cur, locale)
   const sign = showSign && value >= 0 ? '+' : value < 0 ? '-' : ''

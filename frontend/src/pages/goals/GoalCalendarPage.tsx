@@ -142,7 +142,7 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
 }) {
   const { t, i18n } = useTranslation()
   const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
-  const currency = t('common.currency')
+  const currency = 'EUR'
   const years = useMemo(() => groupByYear((months ?? []).filter(e => isPastOrCurrent(e.yearMonth))), [months])
   const earliestYear = years[0]?.year
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Area, AreaChart, CartesianGrid, Legend, Line, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { TimeRangeSelector, type TimeRange } from '@/components/shared/TimeRangeSelector'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, localeFromLanguage } from '@/lib/utils'
 import { EmptyChartState } from '@/components/shared/EmptyChartState'
 import type { IntradayPoint } from '@/features/dashboard/api'
 
@@ -176,8 +176,8 @@ function getXAxisFormatter(range: TimeRange, locale: string, spanMs: number) {
 }
 
 export function NetWorthChart({ data, intraday = [], range, onRangeChange, showInvested = true, target, projection, todayMs, todayLabel }: NetWorthChartProps) {
-  const { t } = useTranslation()
-  const locale = t('common.locale')
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const is24H = range === '24H'
   const showDots = range === '24H' || range === '7D'
 
@@ -320,9 +320,9 @@ export function NetWorthChart({ data, intraday = [], range, onRangeChange, showI
     target: target?.label ?? '',
     projection: projection?.label ?? '',
     gainLoss: t('dashboard.gainLoss'),
-    locale: t('common.locale'),
-    currency: t('common.currency'),
-  }), [t, target?.label, projection?.label])
+    locale,
+    currency: 'EUR',
+  }), [t, locale, target?.label, projection?.label])
 
   const xAxisFormatter = useMemo(() => {
     const spanMs = xDomain ? xDomain[1] - xDomain[0] : 0

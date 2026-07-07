@@ -120,19 +120,17 @@ export function SetupStepBoursoBank() {
         </Button>
         {phase === 'ko' ? (
           <Button
-            size="lg"
             onClick={run}
             disabled={health.isPending}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {t('setup.bourso.retry')}
           </Button>
         ) : (
           <Button
-            size="lg"
             onClick={proceed}
             disabled={phase === 'checking'}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {t('setup.bourso.continue')}
           </Button>

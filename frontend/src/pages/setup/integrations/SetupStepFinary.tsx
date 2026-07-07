@@ -50,15 +50,14 @@ export function SetupStepFinary() {
           type="button"
           variant="outline"
           onClick={skip}
-          className="h-10 w-full rounded-full px-8 text-sm"
+          className="w-full rounded-full"
         >
           {t('setup.finary.skip')}
         </Button>
         <Button
-          size="lg"
           onClick={proceed}
           disabled={ack.isPending}
-          className="h-10 w-full rounded-full px-8 text-sm"
+          className="w-full rounded-full"
         >
           {t('setup.finary.cta')}
         </Button>

@@ -253,10 +253,11 @@ class SyncServiceTest {
         syncService.resyncAll(memberId);
 
         // The failed logo lookup is swallowed inside ensureLogoUrl. The empty
-        // balance response is still not a successful sync, so the connection
-        // remains retryable.
+        // balance response is not a successful sync, but an already-LINKED
+        // session must not flap to FAILED on a transient provider gap.
         assertThat(requisition.getLogoUrl()).isNull();
-        assertThat(requisition.getStatus()).isEqualTo(RequisitionStatus.FAILED);
-        verify(requisitionRepository).save(requisition);
+        assertThat(requisition.getStatus()).isEqualTo(RequisitionStatus.LINKED);
+        assertThat(requisition.getLastSyncedAt()).isNull();
+        verify(requisitionRepository, never()).save(requisition);
     }
 }

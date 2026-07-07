@@ -224,9 +224,8 @@ export function SetupStepAdmin() {
         <div className="pt-2">
           <Button
             type="submit"
-            size="lg"
             disabled={submitAdmin.isPending || !formState.isValid}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {submitAdmin.isPending ? t('setup.admin.creating') : t('setup.admin.cta')}
           </Button>

@@ -254,7 +254,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
                 )}
 
                 <Button
-                  className="h-10 w-full rounded-full px-8 text-sm"
+                  className="w-full rounded-full"
                   disabled={!privatePem.trim() || importKey.isPending}
                   onClick={handleImport}
                 >
@@ -289,10 +289,9 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
             {t('setup.enablebanking.back')}
           </Button>
           <Button
-            size="lg"
             onClick={onNext}
             disabled={!pem}
-            className="h-10 w-full rounded-full px-8 text-sm sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
           >
             {t('setup.enablebanking.keypair.uploadedCta')}
           </Button>

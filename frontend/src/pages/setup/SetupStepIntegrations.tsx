@@ -94,17 +94,15 @@ export function SetupStepIntegrations() {
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
         {count === 0 ? (
           <Button
-            size="lg"
             onClick={handleContinue}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {t('setup.integrations.skipAll')}
           </Button>
         ) : (
           <Button
-            size="lg"
             onClick={handleContinue}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {t('setup.integrations.continue')}
           </Button>

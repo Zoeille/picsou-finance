@@ -598,22 +598,25 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
         String baseName = nameForWrapper(wrapper);
         JsonNode cashAccounts = wrapperNode.path("cash");
 
-        int index = 0;
+        int position = 0;
         for (JsonNode acc : secAccounts) {
             String accountNumber = acc.asText(null);
             if (accountNumber == null || accountNumber.isBlank()) continue;
-            String cashAccountNumber = cashAccounts.isArray() && cashAccounts.size() > index
-                ? cashAccounts.get(index).asText(null)
+            String cashAccountNumber = cashAccounts.isArray() && cashAccounts.size() > position
+                ? cashAccounts.get(position).asText(null)
                 : null;
 
-            String externalId = index == 0 ? baseExternalId : baseExternalId + "_" + (index + 1);
+            // The dedup suffix counter is deliberately separate from `position`:
+            // bumping it on an external-id collision must not shift cash-account pairing.
+            int suffix = position;
+            String externalId = suffix == 0 ? baseExternalId : baseExternalId + "_" + (suffix + 1);
             while (!usedExternalIds.add(externalId)) {
-                index++;
-                externalId = baseExternalId + "_" + (index + 1);
+                suffix++;
+                externalId = baseExternalId + "_" + (suffix + 1);
             }
-            String name = index == 0 ? baseName : baseName + " " + (index + 1);
+            String name = suffix == 0 ? baseName : baseName + " " + (suffix + 1);
             result.add(new SecAccount(wrapper, accountNumber, cashAccountNumber, externalId, name, type));
-            index++;
+            position++;
         }
     }
 

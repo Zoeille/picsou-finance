@@ -94,9 +94,8 @@ export function EBStep5Test({ onBack }: Props) {
             </div>
             <div className="flex justify-center">
               <Button
-                size="lg"
                 onClick={run}
-                className="h-10 w-full rounded-full px-8 text-sm"
+                className="w-full rounded-full"
               >
                 {t('setup.enablebanking.test.run')}
               </Button>
@@ -116,9 +115,8 @@ export function EBStep5Test({ onBack }: Props) {
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
             <p className="text-lg font-medium">{t('setup.enablebanking.test.success')}</p>
             <Button
-              size="lg"
               onClick={proceed}
-              className="h-10 w-full rounded-full px-8 text-sm"
+              className="w-full rounded-full"
             >
               {t('setup.enablebanking.continue')}
             </Button>
@@ -146,7 +144,7 @@ export function EBStep5Test({ onBack }: Props) {
               <Button
                 type="button"
                 onClick={run}
-                className="h-10 w-full rounded-full px-8 text-sm sm:w-auto"
+                className="w-full rounded-full sm:w-auto"
               >
                 {t('setup.enablebanking.test.retry')}
               </Button>

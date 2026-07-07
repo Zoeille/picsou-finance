@@ -113,9 +113,8 @@ export function SetupStepSecurity() {
             <Button
               type="button"
               variant="outline"
-              size="lg"
               onClick={() => append('')}
-              className="h-10 rounded-xl px-4 text-sm"
+              className="rounded-xl px-4"
             >
               <PlusCircle className="mr-2 size-4" />
               {t('setup.security.originAdd')}
@@ -155,9 +154,8 @@ export function SetupStepSecurity() {
         <div className="pt-2">
           <Button
             type="submit"
-            size="lg"
             disabled={submit.isPending}
-            className="h-10 w-full rounded-full px-8 text-sm"
+            className="w-full rounded-full"
           >
             {submit.isPending ? t('setup.security.saving') : t('setup.security.cta')}
           </Button>

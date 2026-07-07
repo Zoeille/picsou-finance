@@ -156,9 +156,8 @@ export function EBStep2Credentials({ onNext, onBack }: Props) {
           </Button>
           <Button
             type="submit"
-            size="lg"
             disabled={writeConfig.isPending || !formState.isValid || !prodAcknowledged}
-            className="h-10 w-full rounded-full px-8 text-sm sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
           >
             {t('setup.enablebanking.continue')}
           </Button>
