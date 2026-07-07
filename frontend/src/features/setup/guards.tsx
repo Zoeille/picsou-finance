@@ -1,6 +1,5 @@
 import { Navigate } from 'react-router-dom'
 import { useSetupStatus } from './hooks'
-import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { useAppStore } from '@/stores/app-store'
 
 /**
@@ -17,7 +16,7 @@ export function RequireSetup({ children }: { children: React.ReactNode }) {
   const { data, isLoading, error } = useSetupStatus()
 
   if (demoMode) return <>{children}</>
-  if (isLoading) return <LoadingSkeleton />
+  if (isLoading) return null
 
   // If the status endpoint itself fails (e.g. backend down), let the error
   // boundaries / connectivity banner handle it — don't loop to /setup.
@@ -39,7 +38,7 @@ export function SetupOnly({ children }: { children: React.ReactNode }) {
   const { data, isLoading } = useSetupStatus()
 
   if (demoMode) return <Navigate to="/" replace />
-  if (isLoading) return <LoadingSkeleton />
+  if (isLoading) return null
   if (data && !data.needsSetup) return <Navigate to="/" replace />
 
   return <>{children}</>

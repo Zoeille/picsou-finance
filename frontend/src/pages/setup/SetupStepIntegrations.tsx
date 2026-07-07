@@ -63,9 +63,6 @@ export function SetupStepIntegrations() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.integrations.surtitle')}
-        </p>
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
           {t('setup.integrations.title')}
         </h1>
@@ -99,7 +96,7 @@ export function SetupStepIntegrations() {
           <Button
             size="lg"
             onClick={handleContinue}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="h-10 w-full rounded-full px-8 text-sm"
           >
             {t('setup.integrations.skipAll')}
           </Button>
@@ -107,7 +104,7 @@ export function SetupStepIntegrations() {
           <Button
             size="lg"
             onClick={handleContinue}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="h-10 w-full rounded-full px-8 text-sm"
           >
             {t('setup.integrations.continue')}
           </Button>

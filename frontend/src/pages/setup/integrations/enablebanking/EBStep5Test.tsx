@@ -96,7 +96,7 @@ export function EBStep5Test({ onBack }: Props) {
               <Button
                 size="lg"
                 onClick={run}
-                className="rounded-full px-8 transition-transform hover:scale-[1.02]"
+                className="h-10 w-full rounded-full px-8 text-sm"
               >
                 {t('setup.enablebanking.test.run')}
               </Button>
@@ -118,7 +118,7 @@ export function EBStep5Test({ onBack }: Props) {
             <Button
               size="lg"
               onClick={proceed}
-              className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+              className="h-10 w-full rounded-full px-8 text-sm"
             >
               {t('setup.enablebanking.continue')}
             </Button>
@@ -146,7 +146,7 @@ export function EBStep5Test({ onBack }: Props) {
               <Button
                 type="button"
                 onClick={run}
-                className="w-full rounded-full sm:w-auto"
+                className="h-10 w-full rounded-full px-8 text-sm"
               >
                 {t('setup.enablebanking.test.retry')}
               </Button>

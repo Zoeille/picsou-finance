@@ -28,9 +28,6 @@ export function SetupStepTradeRepublic() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.tr.surtitle')}
-        </p>
         <div className="flex justify-center">
           <span className="rounded-xl bg-primary/10 p-3 text-primary">
             <LineChart className="h-6 w-6" />
@@ -48,12 +45,12 @@ export function SetupStepTradeRepublic() {
         {t('setup.tr.tip')}
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={skip}
-          className="w-full sm:w-auto"
+          className="h-10 w-full rounded-full px-8 text-sm"
         >
           {t('setup.tr.skip')}
         </Button>
@@ -61,7 +58,7 @@ export function SetupStepTradeRepublic() {
           size="lg"
           onClick={proceed}
           disabled={ack.isPending}
-          className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+          className="h-10 w-full rounded-full px-8 text-sm"
         >
           {t('setup.tr.cta')}
         </Button>

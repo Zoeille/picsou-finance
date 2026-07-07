@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { EBStep1Explain } from './enablebanking/EBStep1Explain'
 import { EBStep2Credentials } from './enablebanking/EBStep2Credentials'
@@ -18,7 +17,6 @@ type SubstepIdx = 1 | 2 | 3 | 4 | 5
  * behaviour: the store already remembers the credentials/public-key draft.
  */
 export function SetupStepEnableBanking() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   const selected = useSetupFlowStore((s) => s.selectedIntegrations)
 
@@ -38,12 +36,6 @@ export function SetupStepEnableBanking() {
 
   return (
     <div className="space-y-8">
-      <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.enablebanking.surtitle')}
-        </p>
-      </div>
-
       {substep === 1 && <EBStep1Explain onNext={goNext} />}
       {substep === 2 && <EBStep4Redirect onNext={goNext} onBack={goBack} />}
       {substep === 3 && <EBStep2Credentials onNext={goNext} onBack={goBack} />}

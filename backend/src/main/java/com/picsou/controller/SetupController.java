@@ -211,9 +211,10 @@ public class SetupController {
      * Idempotent. In the normal Docker flow the entrypoint has already created
      * the key file before Spring booted (otherwise {@code CryptoEncryption}
      * would have failed its constructor check), so this hits the
-     * {@code existed=true} branch. For bare-metal installs without the init
-     * script, the first call creates the file and the operator restarts the
-     * app to pick it up — the wizard's Done screen explains this.
+     * {@code existed=true} branch. Bare-metal installs usually provide
+     * {@code CRYPTO_ENCRYPTION_KEY} directly through {@code .env.local}; that
+     * is also treated as an existing encryption key and does not touch
+     * Docker's {@code /data} path.
      */
     @PostMapping("/integrations/crypto/generate-key")
     public ResponseEntity<CryptoKeyGenerateResponse> generateCryptoKey(HttpServletRequest httpRequest) {
@@ -233,7 +234,7 @@ public class SetupController {
         );
         return ResponseEntity.ok(new CryptoKeyGenerateResponse(
             existedBefore,
-            cryptoKeyService.keyPath().toString()
+            cryptoKeyService.keyLocation()
         ));
     }
 

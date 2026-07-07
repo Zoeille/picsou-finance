@@ -157,7 +157,7 @@ export function SetupStepComplete() {
             <Button
               size="lg"
               onClick={goToDashboard}
-              className="w-full rounded-full px-8 transition-transform hover:scale-[1.02] sm:w-auto"
+              className="h-10 w-full rounded-full px-8 text-sm"
             >
               {t('setup.complete.cta')}
             </Button>
@@ -165,7 +165,7 @@ export function SetupStepComplete() {
             <Button
               size="lg"
               onClick={goToLogin}
-              className="w-full rounded-full px-8 transition-transform hover:scale-[1.02] sm:w-auto"
+              className="h-10 w-full rounded-full px-8 text-sm"
             >
               {t('setup.complete.loginFallback')}
             </Button>

@@ -246,7 +246,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
                   value={privatePem}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrivatePem(e.target.value)}
                   placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
-                  className="w-full rounded-xl border border-border/60 bg-muted/40 p-3 font-mono text-[11px] leading-snug min-h-[140px] resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-xl border border-border/60 bg-muted/40 p-3 font-mono text-[11px] leading-snug min-h-[140px] resize-none"
                 />
 
                 {importError && (
@@ -254,7 +254,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
                 )}
 
                 <Button
-                  className="w-full rounded-full"
+                  className="h-10 w-full rounded-full px-8 text-sm"
                   disabled={!privatePem.trim() || importKey.isPending}
                   onClick={handleImport}
                 >
@@ -292,7 +292,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
             size="lg"
             onClick={onNext}
             disabled={!pem}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="h-10 w-full rounded-full px-8 text-sm"
           >
             {t('setup.enablebanking.keypair.uploadedCta')}
           </Button>

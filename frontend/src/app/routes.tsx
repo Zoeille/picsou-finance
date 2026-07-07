@@ -77,22 +77,22 @@ export const router = createBrowserRouter([
     path: '/setup',
     element: (
       <SetupOnly>
-        <SuspensePage>
+        <SuspensePage fallback={null}>
           <SetupLayout />
         </SuspensePage>
       </SetupOnly>
     ),
     children: [
-      { index: true, element: <SuspensePage><SetupStepIntro /></SuspensePage> },
-      { path: 'admin', element: <SuspensePage><SetupStepAdmin /></SuspensePage> },
-      { path: 'security', element: <SuspensePage><SetupStepSecurity /></SuspensePage> },
-      { path: 'integrations', element: <SuspensePage><SetupStepIntegrations /></SuspensePage> },
-      { path: 'integrations/enablebanking', element: <SuspensePage><SetupStepEnableBanking /></SuspensePage> },
-      { path: 'integrations/boursobank', element: <SuspensePage><SetupStepBoursoBank /></SuspensePage> },
-      { path: 'integrations/traderepublic', element: <SuspensePage><SetupStepTradeRepublic /></SuspensePage> },
-      { path: 'integrations/finary', element: <SuspensePage><SetupStepFinary /></SuspensePage> },
-      { path: 'integrations/crypto', element: <SuspensePage><SetupStepCrypto /></SuspensePage> },
-      { path: 'done', element: <SuspensePage><SetupStepComplete /></SuspensePage> },
+      { index: true, element: <SuspensePage fallback={null}><SetupStepIntro /></SuspensePage> },
+      { path: 'admin', element: <SuspensePage fallback={null}><SetupStepAdmin /></SuspensePage> },
+      { path: 'security', element: <SuspensePage fallback={null}><SetupStepSecurity /></SuspensePage> },
+      { path: 'integrations', element: <SuspensePage fallback={null}><SetupStepIntegrations /></SuspensePage> },
+      { path: 'integrations/enablebanking', element: <SuspensePage fallback={null}><SetupStepEnableBanking /></SuspensePage> },
+      { path: 'integrations/boursobank', element: <SuspensePage fallback={null}><SetupStepBoursoBank /></SuspensePage> },
+      { path: 'integrations/traderepublic', element: <SuspensePage fallback={null}><SetupStepTradeRepublic /></SuspensePage> },
+      { path: 'integrations/finary', element: <SuspensePage fallback={null}><SetupStepFinary /></SuspensePage> },
+      { path: 'integrations/crypto', element: <SuspensePage fallback={null}><SetupStepCrypto /></SuspensePage> },
+      { path: 'done', element: <SuspensePage fallback={null}><SetupStepComplete /></SuspensePage> },
     ],
   },
   {

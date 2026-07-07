@@ -65,9 +65,6 @@ export function SetupStepBoursoBank() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.bourso.surtitle')}
-        </p>
         <div className="flex justify-center">
           <span className="rounded-xl bg-primary/10 p-3 text-primary">
             <Boxes className="h-6 w-6" />
@@ -126,7 +123,7 @@ export function SetupStepBoursoBank() {
             size="lg"
             onClick={run}
             disabled={health.isPending}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="h-10 w-full rounded-full px-8 text-sm"
           >
             {t('setup.bourso.retry')}
           </Button>
@@ -135,7 +132,7 @@ export function SetupStepBoursoBank() {
             size="lg"
             onClick={proceed}
             disabled={phase === 'checking'}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="h-10 w-full rounded-full px-8 text-sm"
           >
             {t('setup.bourso.continue')}
           </Button>
