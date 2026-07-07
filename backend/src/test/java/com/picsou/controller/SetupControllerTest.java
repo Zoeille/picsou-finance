@@ -214,7 +214,7 @@ class SetupControllerTest {
     @Test
     void generateCryptoKey_flagsExistingKeyAndEnablesIntegration() {
         when(cryptoKeyService.exists()).thenReturn(true);
-        when(cryptoKeyService.keyPath()).thenReturn(java.nio.file.Path.of("/data/.secrets/crypto_key"));
+        when(cryptoKeyService.keyLocation()).thenReturn("CRYPTO_ENCRYPTION_KEY");
 
         ResponseEntity<CryptoKeyGenerateResponse> response =
             controller.generateCryptoKey(request("10.0.0.1"));
@@ -222,7 +222,7 @@ class SetupControllerTest {
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         CryptoKeyGenerateResponse body = response.getBody();
         assertThat(body.existed()).isTrue();
-        assertThat(body.path()).isEqualTo("/data/.secrets/crypto_key");
+        assertThat(body.path()).isEqualTo("CRYPTO_ENCRYPTION_KEY");
         verify(cryptoKeyService).ensureKey();
         verify(integrationsService).enable("crypto");
     }
@@ -230,7 +230,7 @@ class SetupControllerTest {
     @Test
     void generateCryptoKey_reportsFreshlyGeneratedKey() {
         when(cryptoKeyService.exists()).thenReturn(false);
-        when(cryptoKeyService.keyPath()).thenReturn(java.nio.file.Path.of("/data/.secrets/crypto_key"));
+        when(cryptoKeyService.keyLocation()).thenReturn("/data/.secrets/crypto_key");
 
         ResponseEntity<CryptoKeyGenerateResponse> response =
             controller.generateCryptoKey(request("10.0.0.1"));

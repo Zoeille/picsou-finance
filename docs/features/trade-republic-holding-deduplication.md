@@ -54,13 +54,17 @@ Modified `TradeRepublicSyncService.upsertAccount()` (and `BoursoSyncService` whi
 - **ISIN → Ticker conversion is not 1:1**: Multiple ISINs can map to the same ticker (e.g., different listings of the same security)
 - **`HashMap` iteration order is not deterministic**: A merge lambda that picks `prev` (or `next`) for a field implicitly depends on insertion-order hashing, which can flip between syncs and JVMs. The VWAP merge is symmetric and therefore order-independent — see `HoldingDedupTest#vwapMerge_isOrderIndependent`.
 - **Null averages treated as zero**: When one of the merged aggregates has a null `averageBuyIn`, the VWAP uses zero for that side. Acceptable because callers populate it from the provider's reported buy-in; null typically means "unknown / cash-equivalent".
-- **Edge case**: If positions are empty for an account, no holdings are deleted or saved, preserving any manually-entered holdings
+- **Edge case**: WebSocket sync treats positions as authoritative. If TR returns an
+  empty position list for a portfolio, existing holdings for that account are deleted
+  so a full sale is reflected immediately. CSV imports still preserve holdings because
+  they contain balances only, not position details.
 
 ## Tests
 
 - `HoldingDedupTest` — VWAP math, null handling, order independence, zero-quantity guard, name/currentPrice fallback
 - `TradeRepublicSyncServiceTest#sync_mergesDuplicateTickersWithVwap` — integration wiring: two distinct ISINs → same ticker → saved `AccountHolding.averageBuyIn` is the VWAP, not whichever position appeared first
-- No regression in existing sync flow (178 backend tests pass)
+- `TradeRepublicSyncServiceTest#sync_deletesOldHoldingsWhenPortfolioReturnsEmpty` — empty authoritative TR portfolio clears stale holdings
+- No regression in existing sync flow when the backend suite is run.
 
 ## Related
 

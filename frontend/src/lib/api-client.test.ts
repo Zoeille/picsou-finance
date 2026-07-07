@@ -17,9 +17,30 @@ function memoryStorage(): Storage {
 vi.stubGlobal('localStorage', memoryStorage())
 vi.stubGlobal('sessionStorage', memoryStorage())
 
-const { api } = await import('./api-client')
+const { api, isSetupRequiredResponse } = await import('./api-client')
 const { useAuthStore } = await import('@/stores/auth-store')
 const { useProfileStore } = await import('@/stores/profile-store')
+
+describe('isSetupRequiredResponse', () => {
+  it('detects setup-required ProblemDetail code responses', () => {
+    expect(isSetupRequiredResponse(503, {
+      code: 'setup_required',
+      detail: 'Picsou is not configured yet.',
+    })).toBe(true)
+  })
+
+  it('keeps compatibility with setup-required detail responses', () => {
+    expect(isSetupRequiredResponse(503, { detail: 'setup_required' })).toBe(true)
+  })
+
+  it('ignores generic 503 responses', () => {
+    expect(isSetupRequiredResponse(503, { detail: 'Connector unavailable' })).toBe(false)
+  })
+
+  it('requires a 503 status', () => {
+    expect(isSetupRequiredResponse(502, { code: 'setup_required' })).toBe(false)
+  })
+})
 
 /**
  * The request interceptor must only attach `?memberId=` for admins (the backend
@@ -74,5 +95,19 @@ describe('api-client memberId interceptor', () => {
     useProfileStore.getState().reset()
     await api.get('/dashboard')
     expect(captured?.memberId).toBeUndefined()
+  })
+
+  it('does not redirect global 5xx errors when a GET opts out', async () => {
+    const href = window.location.href
+    api.defaults.adapter = async (config) => Promise.reject({
+      config,
+      response: { status: 502, data: { detail: 'Connector unavailable' } },
+    })
+
+    await expect(
+      api.get('/sync/institutions', { params: { query: 'boursobank' }, skipGlobalErrorRedirect: true }),
+    ).rejects.toMatchObject({ response: { status: 502 } })
+
+    expect(window.location.href).toBe(href)
   })
 })

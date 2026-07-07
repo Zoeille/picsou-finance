@@ -4,7 +4,7 @@
 
 ## Context
 
-Shared formatting functions used across the frontend. Centralised in one file to ensure consistent number/date formatting and avoid ad-hoc `Intl` calls scattered across components. The locale now defaults to the browser's language (`document.documentElement.lang`) instead of hardcoded `fr-FR`.
+Shared formatting functions used across the frontend. Centralised in one file to ensure consistent number/date formatting and avoid ad-hoc `Intl` calls scattered across components. The locale now defaults to the active app language through `document.documentElement.lang`, which the i18n bootstrap keeps in sync, instead of hardcoded `fr-FR`.
 
 ## How it works
 
@@ -19,7 +19,8 @@ Shared formatting functions used across the frontend. Centralised in one file to
 |----------|-----------|---------------|
 | `cn` | `(...inputs: ClassValue[]) => string` | Merges Tailwind classes via clsx + tailwind-merge |
 | `getLocale` | `() => string` | `'fr-FR'` or `'en-US'` based on `document.documentElement.lang` |
-| `formatCurrency` | `(value, currency='EUR', locale=getLocale())` | `"1 234,50 €"` |
+| `localeFromLanguage` | `(language) => string` | Maps i18n/browser language codes to `'fr-FR'` / `'en-US'` |
+| `formatCurrency` | `(value, currency='EUR', locale=getLocale())` | `"1 234,50 €"`; falls back to decimal + code for invalid currency values |
 | `formatDate` | `(dateStr, locale=getLocale(), format?)` | `"08/04/2026"` (locale) or `"08-04-2026"` (iso) |
 | `parseDate` | `(input, locale=getLocale(), format=store.dateFormat) => string \| null` | `"08/04/2026"` → `"2026-04-08"` (inverse of `formatDate`); `null` if unparseable |
 | `formatDateTime` | `(dateStr, locale=getLocale(), format?)` | `"08/04/2026 14:30"` (locale) or `"08-04-2026 14:30"` (iso) |
@@ -28,7 +29,7 @@ Shared formatting functions used across the frontend. Centralised in one file to
 | `formatLocalDate` | `(dateStr, locale=getLocale())` | `"8 avril 2026"` (long month) |
 | `formatPercent` | `(value, locale=getLocale())` | `"50,0 %"` — value is a ratio (0.5 → 50%) |
 | `formatTimeAgo` | `(dateStr, locale=getLocale())` | `"il y a 3 heures"` via `Intl.RelativeTimeFormat` |
-| `todayLabel` | `(locale=getLocale())` | `"mardi 8 avril 2026"` (weekday + full date) |
+| `todayLabel` | `(locale=getLocale(), date=new Date())` | `"Mardi 8 avril 2026"` (weekday + full date, sentence-cased) |
 | `accountTypeLabel` | `(type: string)` | `"Compte courant"`, `"PEA"`, etc. |
 | `safeRedirect` | `(redirect, fallback='/')` | Returns the path only if it starts with `/`, else fallback |
 
@@ -50,6 +51,18 @@ Shared formatting functions used across the frontend. Centralised in one file to
 - **react-hook-form** — `register(name, { setValueAs: v => parseAmount(v) })` (RHF also reads the sanitized `e.target.value`). Relies on React 19 treating `ref` as a regular prop, so no `forwardRef` is needed.
 
 All numeric inputs across Picsou (account balances & loan fields, goal target, month override/manual contribution, transaction qty/price/amount, holding qty/buy-in, month-end balances) use `NumericInput` + `parseAmount`.
+
+### Page header date
+
+`frontend/src/components/shared/PageHeader.tsx` uses `todayLabel(locale, headerDate)` as its default surtitle so top-level pages keep the same dated header rhythm. The header stores the date once at mount, then formats it from the active i18n language (`fr-FR` / `en-US`) so changing the app language updates the visible weekday and month names without needing a page reload. Pass an explicit `surtitle` only when a page needs a different label.
+
+`frontend/src/i18n/index.ts` also synchronizes `<html lang>` after init and on
+every language change, so lower-level helpers and charts that call `getLocale()`
+inherit the same language as the visible app.
+
+`todayLabel` sentence-cases the first character after `Intl.DateTimeFormat`
+returns the localized string, so French headers show `Lundi 6 juillet 2026`
+rather than `lundi 6 juillet 2026`.
 
 ### Date input — `DateInput` (hybrid native/desktop)
 
@@ -80,7 +93,8 @@ Wired into the four date fields: `AddTransactionModal` (transaction date),
 
 ## Gotchas / Pitfalls
 
-- **`getLocale()` reads `document.documentElement.lang`** — this is set by the `<html lang>` attribute. It's updated by `i18next-browser-languagedetector` on init, not on every language change. In practice, this is fine because locale changes require a page reload.
+- **`getLocale()` reads `document.documentElement.lang`** — this is set by the `<html lang>` attribute. For UI that must react immediately to language changes, pass the active i18n language explicitly instead of relying on the document fallback.
+- **`formatCurrency()` validates its locale before calling `Intl.NumberFormat`** — invalid translation/mocking values must not crash the UI. Invalid currency codes fall back to a decimal number followed by the raw code.
 - **`formatDate` vs `formatLocalDate`**: `formatDate` outputs `dd/mm/yyyy` (compact, for tables) or `DD-MM-YYYY` if the user selected the ISO format in settings; `formatLocalDate` outputs long-month form (for readable labels). Don't swap them.
 - **`formatDate` format resolution**: reads `useAppStore.getState().dateFormat` at call time (`'locale'` or `'iso'`). The optional `format` parameter overrides the store value — used by callers that need a specific format regardless of user preference.
 - **Store import in `utils.ts`**: `formatDate` imports `useAppStore` directly — safe because `app-store.ts` has no dependency on `utils.ts` (no circular dependency).
@@ -93,4 +107,4 @@ Wired into the four date fields: `AddTransactionModal` (transaction date),
 
 ## Tests
 
-- `frontend/src/lib/utils.test.ts` — covers `cn`, `formatCurrency`, `formatDate`, `formatPercent`, and `parseDate` (dd/mm vs mm/dd ordering, iso mode, mixed separators, 2-digit years, impossible-date rejection, malformed input, and the `formatDate`∘`parseDate` round-trip across both formats × both locales).
+- `frontend/src/lib/utils.test.ts` — covers `cn`, `formatCurrency` including invalid currency/locale fallback, `formatDate`, `formatPercent`, and `parseDate` (dd/mm vs mm/dd ordering, iso mode, mixed separators, 2-digit years, impossible-date rejection, malformed input, and the `formatDate`∘`parseDate` round-trip across both formats × both locales).

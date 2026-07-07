@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,6 +101,47 @@ class TradeRepublicSyncServiceTest {
         assertThat(saved.getQuantity()).isEqualByComparingTo("5");
         // VWAP: (2*10 + 3*20) / 5 = 16  -- scale-8 representation 16.00000000
         assertThat(saved.getAverageBuyIn()).isEqualByComparingTo("16.00000000");
+    }
+
+    @Test
+    void sync_deletesOldHoldingsWhenPortfolioReturnsEmpty() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession storedSession = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .expiresAt(java.time.Instant.now().plusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(storedSession));
+        when(encryption.decrypt("enc-session")).thenReturn("plain-session");
+
+        TrAccountData accountData = new TrAccountData(
+            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("0"), List.of());
+        when(trPort.fetchAccounts("plain-session")).thenReturn(List.of(accountData));
+
+        Account existingAccount = Account.builder()
+            .id(42L)
+            .member(member)
+            .name("TR Titres")
+            .type(AccountType.COMPTE_TITRES)
+            .provider("Trade Republic")
+            .currency("EUR")
+            .currentBalance(bd("1000"))
+            .externalAccountId("tr_cto")
+            .isManual(false)
+            .build();
+        when(accountRepository.findByExternalAccountIdAndMemberId("tr_cto", memberId))
+            .thenReturn(Optional.of(existingAccount));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(accountService.toResponse(any(Account.class)))
+            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("0")));
+
+        service.sync(memberId);
+
+        verify(holdingRepository).deleteByAccountId(42L);
+        verify(holdingRepository).flush();
+        verify(holdingRepository, never()).save(any(AccountHolding.class));
     }
 
     private static BigDecimal bd(String v) { return new BigDecimal(v); }

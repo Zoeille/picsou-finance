@@ -16,12 +16,36 @@ vi.mock('react-i18next', () => ({
 class MockImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
+  complete = false
+  naturalWidth = 0
+  private listeners = new Map<string, Set<() => void>>()
   private _src = ''
+
+  addEventListener(type: string, listener: () => void) {
+    const listeners = this.listeners.get(type) ?? new Set()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  removeEventListener(type: string, listener: () => void) {
+    this.listeners.get(type)?.delete(listener)
+  }
+
   set src(value: string) {
     this._src = value
+    this.complete = false
+    this.naturalWidth = 0
     queueMicrotask(() => {
-      if (value.includes('broken')) this.onerror?.()
-      else this.onload?.()
+      this.complete = true
+      if (value.includes('broken')) {
+        this.naturalWidth = 0
+        this.onerror?.()
+        this.listeners.get('error')?.forEach(listener => listener())
+      } else {
+        this.naturalWidth = 1
+        this.onload?.()
+        this.listeners.get('load')?.forEach(listener => listener())
+      }
     })
   }
   get src() {

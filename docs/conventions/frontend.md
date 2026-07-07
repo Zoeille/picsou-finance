@@ -174,7 +174,46 @@ const DashboardPage = lazy(() =>
 
 ### shadcn/ui
 
-Components in `components/ui/` are **generated** — never edit them directly. Customize via the shadcn CLI or Tailwind theme tokens.
+Components in `components/ui/` are **generated** — avoid one-off product styling inside them. App-wide primitive standards such as button or tab sizing may live there when the change deliberately applies across the whole application; document those standards in this file.
+
+#### Controls — input, button, menu, and segment sizing
+
+Text inputs, text buttons, tabs, dropdown menus, segmented controls, and pill filters should use the same readable CTA rhythm as the setup wizard:
+
+- Height: `h-10`
+- Horizontal padding: `px-8` for normal buttons, `px-4` for inputs/selects, `px-6` for dense segmented controls
+- Font size: `text-sm`
+- Shape: `rounded-full` for standalone buttons and filters, `rounded-xl` for inputs/menu items and inside a `rounded-2xl p-1` segmented container
+
+Avoid local `h-6`, `h-7`, `h-8`, `h-9`, `text-xs`, `rounded-md`, or narrow `px-2` overrides for text controls. OTP slots should follow the same readable `h-10` control rhythm unless a dense, space-constrained surface has a documented reason to shrink them. Reserve smaller sizing for pure icon buttons, badges, dense table data, chart labels, and non-interactive metadata.
+
+`Label` and `CardDescription` are app-wide readable primitives (`text-sm`). Do not shrink form labels or section descriptions locally unless the element is truly dense metadata rather than an input label.
+
+Color swatches should use a stable visible size and selection ring. Avoid
+`scale-*` transforms on selected or hovered swatches because cards and dialogs
+often clip overflow, which makes round swatches look cut off.
+
+Code-copy rows and settings navigation rows follow the same readable scale:
+their visible value container should be at least `min-h-10`, use `rounded-xl`
+and `px-4`, and the associated action button should be full-width on mobile
+then at least `min-w-36` on desktop. Avoid local `p-2`, `px-2 py-1.5`, and
+`text-xs` on these rows.
+
+Transitions must name the animated properties explicitly. Do not use
+`transition-all`; prefer bounded values such as
+`transition-[border-color,background-color,color]`, `transition-[width]`, or
+`transition-transform`.
+
+#### Focus styling
+
+Picsou uses a centralized `:focus-visible` ring in `index.css` for keyboard focus
+on interactive elements. Avoid one-off `focus:*`, `focus-visible:*`,
+`group-focus:*`, or `focus-within:*` Tailwind classes on normal controls unless a
+component needs to become visible only when focused, such as a skip link.
+
+#### Page layout
+
+Top-level app pages should start flush with the main content column, not centered inside `mx-auto` wrappers. Use `PageHeader` so every page title carries the same date surtitle and action alignment as the dashboard. Empty pages that are the primary page state should center their `EmptyState` in the remaining viewport height; nested empty states inside cards or modals should stay compact.
 
 #### Color tokens — always semantic, never raw palette
 

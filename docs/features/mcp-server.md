@@ -58,6 +58,15 @@ Three security properties are guaranteed structurally (not by per-call checks):
 - `pages/settings/sections/AccessKeysSection.tsx` — the Settings UI (list, create dialog, one-time secret reveal, connect-your-client block, revoke).
 - `i18n/locales/{en,fr}.json` — the `accessKeys.*` namespace.
 
+The create access-key dialog is intentionally wider than the default dialog
+primitive (`42rem` on desktop) because scope cards render in two columns. The
+dialog itself stays inside `100dvh - 2rem`; only the form body scrolls, while the
+title and action buttons remain visible.
+
+The "Connect your MCP client" block uses full-width code-copy rows: endpoint and
+snippet containers are `min-h-10`, rounded, and padded like app inputs, with copy
+buttons that become full-width on mobile and keep a stable desktop width.
+
 ### Flow
 
 ```
