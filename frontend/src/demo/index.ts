@@ -120,7 +120,8 @@ function generateHistory(startBalances: number[]) {
   const months = startBalances.length
 
   for (let i = 0; i < months; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1)
+    // UTC for the same reason as generateNetWorthHistory: keep the ISO date on the 1st.
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - (months - 1 - i), 1))
     points.push({
       id: 100 + i,
       date: d.toISOString().split('T')[0],
@@ -167,7 +168,9 @@ function generateNetWorthHistory(months: number, accountIds: number[], split: bo
   const weightSum = weights.reduce((s, w) => s + w, 0) || 1
 
   return Array.from({ length: months }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1)
+    // Build in UTC: a local-midnight Date run through toISOString() shifts to
+    // the previous day in any timezone ahead of UTC.
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - (months - 1 - i), 1))
     const progress = months > 1 ? i / (months - 1) : 1
     const total = Math.round((58_000 + progress * 14_000 + Math.sin(i * 1.7) * 1_200) * 100) / 100
     const invested = Math.round(total * 0.55 * 100) / 100
@@ -352,8 +355,19 @@ handlers.set(key('GET', '/auth/sessions'), () => ([
   },
 ]))
 
-// Settings — access keys (MCP)
-handlers.set(key('GET', '/access-keys'), () => ([
+// Settings — access keys (MCP). One mutable array backs list/create/revoke so
+// the UI's refetch after a mutation actually reflects it (in-memory only,
+// resets on reload — fine for the demo).
+const demoAccessKeys: {
+  id: number
+  name: string
+  keyPrefix: string
+  scopes: string[]
+  lastUsedAt: string | null
+  expiresAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}[] = [
   {
     id: 1,
     name: 'Demo MCP key',
@@ -364,25 +378,32 @@ handlers.set(key('GET', '/access-keys'), () => ([
     revokedAt: null,
     createdAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
   },
-]))
+]
+handlers.set(key('GET', '/access-keys'), () => [...demoAccessKeys])
 handlers.set(key('POST', '/access-keys'), (config) => {
   const body = JSON.parse(config.data ?? '{}') as { name?: string; scopes?: string[]; expiresAt?: string | null }
-  return {
-    secret: 'pk_demo_secret_shown_once_0000000000000000',
-    key: {
-      id: 2,
-      name: body.name ?? 'Demo key',
-      keyPrefix: 'pk_demo_c3d4',
-      scopes: body.scopes ?? [],
-      lastUsedAt: null,
-      expiresAt: body.expiresAt ?? null,
-      revokedAt: null,
-      createdAt: new Date().toISOString(),
-    },
+  const newKey = {
+    id: Math.max(0, ...demoAccessKeys.map((k) => k.id)) + 1,
+    name: body.name ?? 'Demo key',
+    keyPrefix: 'pk_demo_c3d4',
+    scopes: body.scopes ?? [],
+    lastUsedAt: null,
+    expiresAt: body.expiresAt ?? null,
+    revokedAt: null,
+    createdAt: new Date().toISOString(),
   }
+  demoAccessKeys.push(newKey)
+  return { secret: 'pk_demo_secret_shown_once_0000000000000000', key: newKey }
 })
-handlers.set(key('DELETE', '/access-keys/1'), () => null)
-handlers.set(key('DELETE', '/access-keys/2'), () => null)
+// Routes are exact-match (no dynamic segments), so revocation is wired for the
+// first few ids — enough for a demo session.
+for (const id of [1, 2, 3, 4, 5]) {
+  handlers.set(key('DELETE', `/access-keys/${id}`), () => {
+    const k = demoAccessKeys.find((x) => x.id === id)
+    if (k) k.revokedAt = new Date().toISOString()
+    return null
+  })
+}
 
 // Family (solo demo profile: no managed members, a small shared view)
 handlers.set(key('GET', '/family/members'), () => [])
