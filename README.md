@@ -151,9 +151,11 @@ Upload `enablebanking_public.pem` to your Enable Banking dashboard.
 
 ```bash
 cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev   # Requires PostgreSQL on :5432
-mvn test                                              # Run tests
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn spring-boot:run -Dspring-boot.run.profiles=dev   # Requires PostgreSQL on :5432
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test                                              # Run tests
 ```
+
+Backend Maven runs enforce Java 21 during `validate`; set `JAVA_HOME` to a JDK 21 installation before running backend commands locally.
 
 ### Frontend
 

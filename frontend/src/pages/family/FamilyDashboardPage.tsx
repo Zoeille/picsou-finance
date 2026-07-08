@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { useFamilyDashboard } from '@/features/family/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Wallet, Target, Users } from 'lucide-react'
@@ -10,15 +12,15 @@ export function FamilyDashboardPage() {
   const { data, isLoading } = useFamilyDashboard()
 
   if (isLoading) {
-    return <div className="p-6">{t('common.loading')}</div>
+    return <LoadingSkeleton />
   }
 
   const dashboard = data!
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       <PageHeader
-        title={t('family.dashboard.title', 'Family Dashboard')}
+        title={t('family.dashboard.title')}
       />
 
       {/* Total shared net worth */}
@@ -29,7 +31,7 @@ export function FamilyDashboardPage() {
           </div>
           <div>
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t('family.dashboard.sharedNetWorth', 'Shared Net Worth')}
+              {t('family.dashboard.sharedNetWorth')}
             </CardTitle>
             <p className="text-2xl font-bold">
               {formatCurrency(dashboard.totalSharedNetWorth)}
@@ -42,12 +44,18 @@ export function FamilyDashboardPage() {
       <div>
         <h2 className="mb-3 text-lg font-semibold flex items-center gap-2">
           <Wallet className="size-5" />
-          {t('family.dashboard.sharedAccounts', 'Shared Accounts')}
+          {t('family.dashboard.sharedAccounts')}
         </h2>
         {dashboard.sharedAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {t('family.dashboard.noSharedAccounts', 'No shared accounts yet.')}
-          </p>
+          <Card>
+            <CardContent>
+              <EmptyState
+                className="py-8"
+                icon={<Wallet className="size-10" />}
+                title={t('family.dashboard.noSharedAccounts')}
+              />
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {dashboard.sharedAccounts.map((account) => (
@@ -79,12 +87,18 @@ export function FamilyDashboardPage() {
       <div>
         <h2 className="mb-3 text-lg font-semibold flex items-center gap-2">
           <Target className="size-5" />
-          {t('family.dashboard.sharedGoals', 'Shared Goals')}
+          {t('family.dashboard.sharedGoals')}
         </h2>
         {dashboard.sharedGoals.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {t('family.dashboard.noSharedGoals', 'No shared goals yet.')}
-          </p>
+          <Card>
+            <CardContent>
+              <EmptyState
+                className="py-8"
+                icon={<Target className="size-10" />}
+                title={t('family.dashboard.noSharedGoals')}
+              />
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {dashboard.sharedGoals.map((goal) => {
@@ -108,7 +122,7 @@ export function FamilyDashboardPage() {
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-primary transition-all"
+                          className="h-full rounded-full bg-primary transition-[width]"
                           style={{ width: `${progress}%` }}
                         />
                       </div>
@@ -117,7 +131,9 @@ export function FamilyDashboardPage() {
                     {/* Per-member contributions */}
                     {goal.contributions.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">Contributions</p>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {t('family.dashboard.contributions')}
+                        </p>
                         {goal.contributions.map((c) => (
                           <div key={c.memberName} className="flex justify-between text-xs">
                             <span>{c.memberName}</span>

@@ -294,15 +294,15 @@ export function AccountsPage() {
 
       {accounts && accounts.length > 0 && (
         <>
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-2">
             {FILTER_KEYS.map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={cn(
-                  'inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  'inline-flex h-10 min-w-32 items-center justify-center rounded-full px-6 text-sm font-medium transition-[background-color,color]',
                   filter === f
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
@@ -361,6 +361,7 @@ export function AccountsPage() {
         </div>
       ) : filteredAccounts.length === 0 ? (
         <EmptyState
+          className="min-h-[calc(100vh-14rem)]"
           icon={<Wallet className="size-12" />}
           title={t('accounts.noAccounts')}
           action={{ label: t('accounts.addAccount'), onClick: handleOpenCreate }}
@@ -377,24 +378,23 @@ export function AccountsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleOpenEdit(account)
                   }}
                 >
-                  <Pencil className="size-3.5" />
+                  <Pencil className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7 text-destructive hover:text-destructive"
+                  className="text-destructive hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteId(account.id)
                   }}
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash2 className="size-4" />
                 </Button>
               </div>
             </div>

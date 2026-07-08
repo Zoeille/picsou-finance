@@ -170,7 +170,7 @@ export function GoalDetailModal({ goalId, onClose }: GoalDetailModalProps) {
               {/* Linked accounts */}
               {goal.accounts.length > 0 && (
                 <div className="pt-4 border-t">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                  <p className="mb-2 text-sm font-medium text-muted-foreground">
                     {t('goals.linkedAccounts')}
                   </p>
                   <div className="flex flex-wrap gap-2">

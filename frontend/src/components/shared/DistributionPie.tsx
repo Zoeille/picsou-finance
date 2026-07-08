@@ -142,31 +142,29 @@ function AllocationTreemap({ data }: { data: DistributionItem[] }) {
   const hoveredRect = hoveredId !== null ? rects.find(r => r.item.accountId === hoveredId) : null
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ height: 310 }}
+    <div className="relative h-full min-h-0 w-full overflow-hidden"
       onMouseLeave={() => setHoveredId(null)}
     >
       {rects.map(({ x, y, w, h, item }) => {
         const isSmall = w < 12 || h < 18
         const isHovered = hoveredId === item.accountId
-        const isDimmed = hoveredId !== null && !isHovered
         return (
           <div
             key={item.accountId}
-            className={`absolute flex flex-col items-center justify-center rounded-md cursor-default transition-all duration-300 ${isHovered ? 'z-10' : ''}`}
+            className={`absolute flex flex-col items-center justify-center rounded-md cursor-default ${isHovered ? 'z-10' : ''}`}
             style={{
               left: `calc(${x}% + 2px)`,
               top: `calc(${y}% + 2px)`,
               width: `calc(${w}% - 4px)`,
               height: `calc(${h}% - 4px)`,
               backgroundColor: item.color,
-              filter: isDimmed ? 'brightness(0.5) blur(2px)' : undefined,
             }}
             onMouseEnter={() => setHoveredId(item.accountId)}
           >
             {/* Invisible larger hitbox to prevent flickering in gaps */}
             <div className="absolute -inset-1 z-20" onMouseEnter={() => setHoveredId(item.accountId)} />
-            <div className={`absolute inset-0 rounded-md transition-all duration-300 pointer-events-none ${isHovered ? 'bg-black/30 backdrop-blur-[1px] ring-1 ring-white/20' : ''}`} />
-            {!isSmall && !isDimmed && (
+            <div className={`pointer-events-none absolute inset-0 rounded-md transition-[box-shadow] duration-150 ${isHovered ? 'ring-2 ring-white/40' : ''}`} />
+            {!isSmall && (
               <div className="relative z-10 flex flex-col items-center pointer-events-none">
                 <span className="truncate text-white font-semibold text-sm px-1 text-center leading-tight">
                   {item.name}
@@ -192,77 +190,79 @@ export function DistributionPie({ data }: DistributionPieProps) {
   const { t } = useTranslation()
 
   return (
-    <Card>
-      <Tabs defaultValue="distribution" className="w-full">
-        <CardHeader>
+    <Card className="h-[420px]">
+      <Tabs defaultValue="distribution" className="h-full w-full gap-0">
+        <CardHeader className="shrink-0">
           <TabsList>
             <TabsTrigger value="distribution">{t('dashboard.distribution')}</TabsTrigger>
             <TabsTrigger value="allocation">{t('dashboard.allocation')}</TabsTrigger>
           </TabsList>
         </CardHeader>
-        <CardContent>
-          <TabsContent value="distribution">
-            <ChartContainer config={chartConfig} className="mx-auto h-[250px] w-full">
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                <Pie
-                  data={data}
-                  dataKey="balanceEur"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  strokeWidth={0}
-                >
-                  {data.map((entry) => (
-                    <Cell key={entry.accountId} fill={entry.color} />
-                  ))}
-                  <Label
-                    content={({ viewBox }) => {
-                      if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                        return (
-                          <text
-                            x={viewBox.cx}
-                            y={viewBox.cy}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                          >
-                            <tspan
+        <CardContent className="min-h-0 flex-1 pt-3">
+          <TabsContent value="distribution" className="h-full">
+            <div className="flex h-full min-h-0 flex-col">
+              <ChartContainer config={chartConfig} className="mx-auto h-[250px] w-full shrink-0">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                  <Pie
+                    data={data}
+                    dataKey="balanceEur"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={2}
+                    strokeWidth={0}
+                  >
+                    {data.map((entry) => (
+                      <Cell key={entry.accountId} fill={entry.color} />
+                    ))}
+                    <Label
+                      content={({ viewBox }) => {
+                        if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
+                          return (
+                            <text
                               x={viewBox.cx}
                               y={viewBox.cy}
-                              className="fill-foreground text-2xl font-bold"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
                             >
-                              {data.length}
-                            </tspan>
-                            <tspan
-                              x={viewBox.cx}
-                              y={(viewBox.cy || 0) + 20}
-                              className="fill-muted-foreground text-xs"
-                            >
-                              comptes
-                            </tspan>
-                          </text>
-                        )
-                      }
-                    }}
-                  />
-                </Pie>
-              </PieChart>
-            </ChartContainer>
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-              {data.map(item => (
-                <div key={item.accountId} className="flex items-center gap-2 text-sm">
-                  <div className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="truncate">{item.name}</span>
-                  <span className="ml-auto text-muted-foreground">{item.percentage}%</span>
-                </div>
-              ))}
+                              <tspan
+                                x={viewBox.cx}
+                                y={viewBox.cy}
+                                className="fill-foreground text-2xl font-bold"
+                              >
+                                {data.length}
+                              </tspan>
+                              <tspan
+                                x={viewBox.cx}
+                                y={(viewBox.cy || 0) + 20}
+                                className="fill-muted-foreground text-xs"
+                              >
+                                {t('dashboard.accountsLabel')}
+                              </tspan>
+                            </text>
+                          )
+                        }
+                      }}
+                    />
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="mt-2 grid min-h-0 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto">
+                {data.map(item => (
+                  <div key={item.accountId} className="flex items-center gap-2 text-sm">
+                    <div className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="truncate">{item.name}</span>
+                    <span className="ml-auto text-muted-foreground">{item.percentage}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="allocation">
+          <TabsContent value="allocation" className="h-full">
             <AllocationTreemap data={data} />
           </TabsContent>
         </CardContent>

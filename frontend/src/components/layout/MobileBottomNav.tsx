@@ -43,7 +43,7 @@ function MobileNavItem({
         isActive && 'ring-1 ring-border bg-muted text-foreground',
       )}
     >
-      <Icon className="size-5" fill={isActive ? 'currentColor' : 'none'} />
+      <Icon className="size-5" aria-hidden="true" />
     </NavLink>
   )
 }
@@ -53,7 +53,7 @@ export function MobileBottomNav() {
 
   return (
     <nav className="fixed bottom-4 inset-x-4 z-50 md:hidden">
-      <div className="flex items-center justify-between rounded-xl bg-background px-3 py-3 shadow-md">
+      <div className="flex items-center justify-between rounded-xl bg-background px-3 py-3 ring-1 ring-border">
         {/* Left items */}
         <div className="flex gap-2">
           {NAV_ITEMS.slice(0, 2).map((item) => (

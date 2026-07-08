@@ -1,10 +1,18 @@
 package com.picsou.service;
 
+import com.picsou.dto.SharingSettingsRequest;
+import com.picsou.model.Account;
+import com.picsou.model.AccountType;
 import com.picsou.model.AppUser;
 import com.picsou.model.FamilyMember;
+import com.picsou.model.Goal;
+import com.picsou.model.SharedResource;
+import com.picsou.model.SharingLevel;
 import com.picsou.model.UserRole;
+import com.picsou.repository.AccountRepository;
 import com.picsou.repository.AppUserRepository;
 import com.picsou.repository.FamilyMemberRepository;
+import com.picsou.repository.GoalRepository;
 import com.picsou.repository.SharedResourceRepository;
 import com.picsou.repository.SharingSettingsRepository;
 import com.picsou.repository.UserMfaRepository;
@@ -17,6 +25,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +47,8 @@ class FamilyServiceTest {
     @Mock UserMfaRepository userMfaRepository;
     @Mock SharingSettingsRepository sharingSettingsRepository;
     @Mock SharedResourceRepository sharedResourceRepository;
+    @Mock AccountRepository accountRepository;
+    @Mock GoalRepository goalRepository;
     @Mock PasswordEncoder passwordEncoder;
 
     @InjectMocks FamilyService familyService;
@@ -188,5 +201,107 @@ class FamilyServiceTest {
 
         verify(userRepository, never()).delete(any());
         verify(memberRepository).delete(target);
+    }
+
+    // ─── manual sharing ownership ─────────────────────────────────────────
+
+    @Test
+    void updateSharingSettings_manualAccount_rejectsForeignResourceId() {
+        SharingSettingsRequest req = new SharingSettingsRequest(
+            "ACCOUNT", SharingLevel.MANUAL, List.of(10L, 20L));
+        Account owned = Account.builder()
+            .id(10L)
+            .name("LEP")
+            .type(AccountType.LEP)
+            .currency("EUR")
+            .currentBalance(BigDecimal.ZERO)
+            .build();
+        when(accountRepository.findByIdInAndMemberId(List.of(10L, 20L), 3L))
+            .thenReturn(List.of(owned));
+
+        assertThatThrownBy(() -> familyService.updateSharingSettings(3L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("One or more shared resource IDs not found");
+
+        verify(sharingSettingsRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).deleteAllByOwnerMemberIdAndResourceType(any(), any());
+        verify(sharedResourceRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void updateSharingSettings_manualGoal_rejectsForeignResourceId() {
+        SharingSettingsRequest req = new SharingSettingsRequest(
+            "GOAL", SharingLevel.MANUAL, List.of(10L, 20L));
+        Goal owned = Goal.builder()
+            .id(10L)
+            .name("Trip")
+            .targetAmount(new BigDecimal("1200"))
+            .deadline(LocalDate.now().plusMonths(6))
+            .accounts(List.of())
+            .build();
+        when(goalRepository.findByIdInAndMemberId(List.of(10L, 20L), 3L))
+            .thenReturn(List.of(owned));
+
+        assertThatThrownBy(() -> familyService.updateSharingSettings(3L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("One or more shared resource IDs not found");
+
+        verify(sharingSettingsRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).deleteAllByOwnerMemberIdAndResourceType(any(), any());
+        verify(sharedResourceRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void updateSharingSettings_manualAccount_savesOnlyValidatedIds() {
+        FamilyMember owner = member("Alice");
+        SharingSettingsRequest req = new SharingSettingsRequest(
+            "ACCOUNT", SharingLevel.MANUAL, List.of(10L, 20L, 10L));
+        Account first = Account.builder()
+            .id(10L)
+            .name("Checking")
+            .type(AccountType.CHECKING)
+            .currency("EUR")
+            .currentBalance(BigDecimal.ZERO)
+            .build();
+        Account second = Account.builder()
+            .id(20L)
+            .name("Savings")
+            .type(AccountType.SAVINGS)
+            .currency("EUR")
+            .currentBalance(BigDecimal.ZERO)
+            .build();
+        when(accountRepository.findByIdInAndMemberId(List.of(10L, 20L), 3L))
+            .thenReturn(List.of(first, second));
+        when(sharingSettingsRepository.findByMemberIdAndResourceType(3L, "ACCOUNT"))
+            .thenReturn(Optional.empty());
+        when(memberRepository.findById(3L)).thenReturn(Optional.of(owner));
+
+        familyService.updateSharingSettings(3L, req);
+
+        verify(sharingSettingsRepository).save(any());
+        verify(sharedResourceRepository).deleteAllByOwnerMemberIdAndResourceType(3L, "ACCOUNT");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SharedResource>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sharedResourceRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+            .extracting(SharedResource::getResourceId)
+            .containsExactly(10L, 20L);
+    }
+
+    @Test
+    void updateSharingSettings_rejectsUnsupportedResourceType() {
+        SharingSettingsRequest req = new SharingSettingsRequest(
+            "TRANSACTION", SharingLevel.MANUAL, List.of(10L));
+
+        assertThatThrownBy(() -> familyService.updateSharingSettings(3L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported resource type");
+
+        verify(sharingSettingsRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).deleteAllByOwnerMemberIdAndResourceType(any(), any());
+        verify(sharedResourceRepository, never()).save(any());
+        verify(sharedResourceRepository, never()).saveAll(any());
     }
 }

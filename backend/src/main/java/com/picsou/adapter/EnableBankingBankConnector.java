@@ -162,10 +162,10 @@ public class EnableBankingBankConnector implements BankConnectorPort {
      * <p>Total worst-case wall time is bounded to ~4.5 s (3 attempts × 1.5 s)
      * so the request stays well under any reverse-proxy {@code proxy_read_timeout}.
      * If the session still hasn't been populated by then, we return an empty
-     * list rather than throw: the caller marks the requisition LINKED so the
-     * user (and the scheduler) can retry from the UI without losing the
-     * session id. Throwing here turned the legitimate "still linking" case
-     * into a 502 in production.
+     * list rather than throw: the caller keeps the requisition retryable so the
+     * user (and the scheduler) can retry from the UI without losing the session
+     * id. Throwing here turned the legitimate "still linking" case into a 502
+     * in production.
      */
     private List<String> fetchSessionAccountsWithRetry(String sessionId) {
         int maxAttempts = 3;

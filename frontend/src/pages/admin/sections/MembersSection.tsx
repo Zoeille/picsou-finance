@@ -94,7 +94,6 @@ export function MembersSection() {
         <CardDescription>{t('admin.members.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Create a new user (managed profile + login + activation link) */}
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={newName}
@@ -145,12 +144,12 @@ export function MembersSection() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium truncate">{m.displayName}</p>
                         {isSelf && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {t('admin.members.you')}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-sm text-muted-foreground truncate">
                         <span className="font-mono">
                           {m.loginName ?? t('admin.members.noLogin')}
                         </span>
@@ -240,9 +239,9 @@ export function MembersSection() {
 
         {link && (
           <div className="rounded-lg border bg-muted p-3 space-y-2">
-            <p className="text-xs font-medium">{t('admin.members.linkLabel')}</p>
+            <p className="text-sm font-medium">{t('admin.members.linkLabel')}</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="flex-1 text-xs break-all rounded bg-background px-2 py-1.5">
+              <code className="flex-1 break-all rounded-xl bg-background px-3 py-2 text-sm">
                 {link.url}
               </code>
               <Button size="sm" variant="outline" onClick={handleCopy}>

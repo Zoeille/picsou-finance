@@ -1,5 +1,7 @@
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { useTranslation } from 'react-i18next'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { formatCurrency, localeFromLanguage } from '@/lib/utils'
 
 interface BalanceHistoryChartProps {
   data: { date: string; balance: number }[]
@@ -13,8 +15,10 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function BalanceHistoryChart({ data }: BalanceHistoryChartProps) {
-  if (data.length === 0) return null
+  const { i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
 
+  if (data.length === 0) return null
   return (
     <ChartContainer config={chartConfig} className="h-[200px] w-full">
       <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -30,7 +34,7 @@ export function BalanceHistoryChart({ data }: BalanceHistoryChartProps) {
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          tickFormatter={(value) => new Date(value).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}
+          tickFormatter={(value) => new Date(value).toLocaleDateString(locale, { month: 'short', day: 'numeric' })}
         />
         <YAxis
           tickLine={false}
@@ -40,7 +44,7 @@ export function BalanceHistoryChart({ data }: BalanceHistoryChartProps) {
           width={45}
         />
         <ChartTooltip
-          content={<ChartTooltipContent formatter={(value) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(value as number)} />}
+          content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number, 'EUR', locale)} />}
         />
         <Area dataKey="balance" type="monotone" fill="url(#fillBalance)" stroke="var(--color-balance)" strokeWidth={2} />
       </AreaChart>

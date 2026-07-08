@@ -38,7 +38,7 @@ export function EBSubstepShell({ current, total, children, onSkip }: EBSubstepSh
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs font-semibold tracking-[0.18em] text-muted-foreground">
+        <p className="text-sm font-medium text-muted-foreground">
           {t('setup.enablebanking.substep', { current, total })}
         </p>
         <button

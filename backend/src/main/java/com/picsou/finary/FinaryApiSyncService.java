@@ -2,6 +2,7 @@ package com.picsou.finary;
 
 import com.picsou.config.CryptoEncryption;
 import com.picsou.dto.*;
+import com.picsou.exception.FinaryServiceUnavailableException;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.exception.SyncException;
 import com.picsou.exception.TotpRequiredException;
@@ -263,7 +264,7 @@ public class FinaryApiSyncService {
             log.info("Preview ready: {} accounts, {} total transactions, autoMapped={}", allAccounts.size(), totalTx, allAutoMapped);
             return new FinaryPreviewResponse(previews, existing, totalTx, syncToken, allAutoMapped, suggestedMappings);
 
-        } catch (SyncException | TotpRequiredException e) {
+        } catch (SyncException | TotpRequiredException | FinaryServiceUnavailableException e) {
             throw e;
         } catch (Exception e) {
             log.error("Finary API preview failed: {}", e.getMessage(), e);
@@ -436,6 +437,9 @@ public class FinaryApiSyncService {
             existingSession.setStatus("TOTP_REQUIRED");
             finarySessionRepository.save(existingSession);
             return new FinaryAutoSyncResponse("TOTP_REQUIRED", 0, 0);
+        } catch (FinaryServiceUnavailableException e) {
+            log.error("Finary service unavailable for member {}: {}", memberId, e.getMessage());
+            throw e;
         } catch (SyncException e) {
             log.error("Finary auto-sync failed for member {}: {}", memberId, e.getMessage(), e);
             throw e;

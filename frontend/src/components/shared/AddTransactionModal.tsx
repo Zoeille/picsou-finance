@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/shared/NumericInput'
 import { DateInput } from '@/components/shared/DateInput'
 import { Label } from '@/components/ui/label'
-import { parseAmount } from '@/lib/utils'
+import { formatCurrency, localeFromLanguage, parseAmount } from '@/lib/utils'
+import { extractErrorMessage } from '@/lib/errors'
 import { Loader2 } from 'lucide-react'
 import type { AccountType, TransactionRequest } from '@/types/api'
 import { accountsApi } from '@/features/accounts/api'
@@ -29,11 +31,13 @@ interface AddTransactionModalProps {
 }
 
 export function AddTransactionModal({ open, onOpenChange, initialValues, ...rest }: AddTransactionModalProps) {
+  const { t } = useTranslation()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{initialValues ? 'Modifier la transaction' : 'Ajouter une transaction'}</DialogTitle>
+          <DialogTitle>{initialValues ? t('accounts.editTransaction') : t('accounts.addTransaction')}</DialogTitle>
         </DialogHeader>
         {/* Remount a fresh form each time the dialog opens (key changes per
             edited transaction) so initial state derives straight from
@@ -61,6 +65,8 @@ interface TransactionFormProps {
 }
 
 function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoading, initialValues }: TransactionFormProps) {
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const isInvestment = INVESTMENT_TYPES.includes(accountType)
   const isInvestmentTx = initialValues?.txType === 'BUY' || initialValues?.txType === 'SELL'
 
@@ -102,8 +108,8 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
   }
 
   const total = quantity && pricePerUnit
-    ? (parseAmount(quantity) * parseAmount(pricePerUnit)).toFixed(2)
-    : '—'
+    ? parseAmount(quantity) * parseAmount(pricePerUnit)
+    : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -138,8 +144,8 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
     try {
       await onSubmit(data)
       onOpenChange(false)
-    } catch {
-      setError('Une erreur est survenue. Veuillez réessayer.')
+    } catch (err) {
+      setError(extractErrorMessage(err, t('common.error')))
     }
   }
 
@@ -147,7 +153,7 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Date */}
       <div className="space-y-1">
-        <Label>Date</Label>
+        <Label>{t('accounts.transactionDate')}</Label>
         <DateInput value={date} onChange={setDate} required />
       </div>
 
@@ -163,27 +169,29 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
                 size="sm"
                 onClick={() => setInvestType(type)}
               >
-                {type === 'BUY' ? 'Achat' : 'Vente'}
+                {type === 'BUY' ? t('accounts.buy') : t('accounts.sell')}
               </Button>
             ))}
           </div>
           <div className="space-y-1">
-            <Label>Ticker ou ISIN</Label>
-            <Input placeholder="IWDA.AS, IE00B4L5Y983, BTC…" value={ticker} onChange={e => handleTickerChange(e.target.value)} required />
+            <Label>{t('accounts.tickerOrIsin')}</Label>
+            <Input placeholder={t('accounts.tickerOrIsinPlaceholder')} value={ticker} onChange={e => handleTickerChange(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label>Nom <span className="text-muted-foreground text-xs">(optionnel)</span></Label>
-            <Input placeholder="Ex : iShares Core MSCI World" value={name} onChange={e => setName(e.target.value)} />
+            <Label>{t('holdings.name')} <span className="text-muted-foreground text-xs">({t('common.optional')})</span></Label>
+            <Input placeholder={t('accounts.assetNamePlaceholder')} value={name} onChange={e => setName(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Quantité</Label>
+            <Label>{t('holdings.quantity')}</Label>
             <NumericInput value={quantity} onChange={e => setQuantity(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label>Prix unitaire (€)</Label>
+            <Label>{t('holdings.unitPrice')}</Label>
             <NumericInput value={pricePerUnit} onChange={e => setPricePerUnit(e.target.value)} required />
           </div>
-          <p className="text-sm text-muted-foreground">Total : {total} €</p>
+          <p className="text-sm text-muted-foreground">
+            {t('accounts.total')}: {total != null && Number.isFinite(total) ? formatCurrency(total, 'EUR', locale) : '—'}
+          </p>
         </>
       ) : (
         <>
@@ -195,7 +203,7 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
               size="sm"
               onClick={() => setTxDirection('deposit')}
             >
-              + Dépôt
+              + {t('accounts.deposit')}
             </Button>
             <Button
               type="button"
@@ -203,15 +211,15 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
               size="sm"
               onClick={() => setTxDirection('withdrawal')}
             >
-              − Retrait
+              − {t('accounts.withdrawal')}
             </Button>
           </div>
           <div className="space-y-1">
-            <Label>Description</Label>
+            <Label>{t('accounts.description')}</Label>
             <Input value={description} onChange={e => setDescription(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label>Montant (€)</Label>
+            <Label>{t('accounts.amount')}</Label>
             <NumericInput value={cashAmount} onChange={e => setCashAmount(e.target.value)} required />
           </div>
         </>
@@ -220,10 +228,10 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
         <Button type="submit" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {initialValues ? 'Enregistrer' : 'Ajouter'}
+          {initialValues ? t('common.save') : t('common.create')}
         </Button>
       </DialogFooter>
     </form>

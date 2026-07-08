@@ -46,7 +46,7 @@ function PortfolioItem({ line }: { line: PortfolioLine }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{line.name}</p>
         {line.ticker && (
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {line.accountName}
           </p>
         )}
@@ -61,7 +61,7 @@ function PortfolioItem({ line }: { line: PortfolioLine }) {
         {/* PnL */}
         {line.pnlEur != null && (
           <div className="flex flex-col items-end gap-0.5">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">{t('portfolio.pnl')}</span>
+            <span className="text-sm text-muted-foreground">{t('portfolio.pnl')}</span>
             <span className={cn('text-sm font-medium tabular-nums', isPositive ? 'text-emerald-500' : 'text-red-500')}>
               {isPositive ? '+' : ''}{line.pnlPercent?.toFixed(1)}%
             </span>
@@ -70,7 +70,7 @@ function PortfolioItem({ line }: { line: PortfolioLine }) {
 
         {/* Value */}
         <div className="flex flex-col items-end gap-0.5">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t('portfolio.value')}
           </span>
           <div className="inline-flex items-center gap-1.5">
@@ -173,15 +173,15 @@ export function PortfolioView() {
               className="pl-9"
             />
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-2">
             {SORT_OPTIONS.map(opt => (
               <button
                 key={opt.value}
                 onClick={() => setSortBy(opt.value)}
                 className={cn(
-                  'inline-flex items-center justify-center whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+                  'inline-flex h-10 min-w-32 items-center justify-center whitespace-nowrap rounded-full border px-6 text-sm font-medium transition-[background-color,color,border-color]',
                   sortBy === opt.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-background hover:bg-muted',
                 )}
               >

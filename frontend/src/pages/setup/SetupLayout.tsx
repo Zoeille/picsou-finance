@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import { SUPPORTED_LOCALES, resolveLocale } from '@/i18n/locales'
 
 /**
  * Shell for every setup route. Intentionally minimal — Apple's setup
- * assistants let the content breathe: one top progress strip, one
- * "Step N of M" pill, and everything else is negative space.
+ * assistants let the content breathe: one top progress strip, a compact
+ * language switcher, one "Step N of M" pill, and negative space.
  *
  * The step counter comes from URL path, not a nav state, so a browser
  * refresh keeps the right index visible.
@@ -22,7 +23,7 @@ const MAIN_STEPS: { path: string; i18nKey: string }[] = [
 ]
 
 export function SetupLayout() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const location = useLocation()
 
   const { index, total, label } = useMemo(() => {
@@ -51,6 +52,10 @@ export function SetupLayout() {
   }, [])
 
   const progressPct = Math.round((index / total) * 100)
+  const activeLanguage = resolveLocale(i18n.language).code
+  const switchLang = (lng: string) => {
+    i18n.changeLanguage(lng)
+  }
 
   return (
     <div className="relative min-h-dvh bg-background setup-gradient">
@@ -60,16 +65,42 @@ export function SetupLayout() {
         className="fixed inset-x-0 top-0 z-50 h-1 rounded-none"
       />
 
-      <header className="fixed right-4 top-4 z-40 sm:right-6 sm:top-6">
+      <header className="fixed left-4 right-4 top-4 z-40 flex items-center justify-between gap-3 sm:left-6 sm:right-6 sm:top-6">
+        <div
+          role="radiogroup"
+          aria-label={t('setup.intro.language')}
+          className="inline-flex min-h-12 shrink-0 items-center rounded-2xl border border-border/60 bg-background/80 p-1 backdrop-blur-md"
+        >
+          {SUPPORTED_LOCALES.map((locale) => (
+            <button
+              key={locale.code}
+              role="radio"
+              type="button"
+              aria-checked={activeLanguage === locale.code}
+              onClick={() => switchLang(locale.code)}
+              className={cn(
+                'inline-flex h-10 min-w-12 items-center justify-center rounded-xl px-4 text-sm font-medium transition-[background-color,color] sm:min-w-14 sm:px-5',
+                activeLanguage === locale.code
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {locale.label}
+            </button>
+          ))}
+        </div>
+
         <span
           className={cn(
-            'inline-flex items-center rounded-full border border-border/60',
-            'bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground',
-            'backdrop-blur-md shadow-sm'
+            'inline-flex h-10 min-w-0 items-center rounded-full border border-border/60',
+            'bg-background/80 px-4 text-xs font-medium text-muted-foreground',
+            'backdrop-blur-md'
           )}
           aria-live="polite"
         >
-          {t('setup.progress.label', { current: index, total })} — {label}
+          <span className="truncate">
+            {t('setup.progress.label', { current: index, total })} — {label}
+          </span>
         </span>
       </header>
 
@@ -79,7 +110,7 @@ export function SetupLayout() {
       >
         <a
           href="#setup-main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[60] focus:inline-flex focus:h-10 focus:items-center focus:rounded-full focus:bg-primary focus:px-6 focus:text-sm focus:font-medium focus:text-primary-foreground"
         >
           {t('setup.a11y.skipToContent')}
         </a>

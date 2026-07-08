@@ -64,7 +64,8 @@ Backend:
 
 Frontend:
 - `frontend/src/pages/admin/AdminPage.tsx` — page shell, single
-  `useAdminSettings()` query, three sections.
+  `useAdminSettings()` query, sections aligned with the main app column rather
+  than centered in a narrow wrapper.
 - `frontend/src/pages/admin/sections/SecuritySection.tsx` — RHF +
   `useFieldArray` for CORS origins, `Controller` + `Switch` for the secure-cookie
   flag, Zod schema requires at least one origin.

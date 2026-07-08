@@ -1,6 +1,6 @@
 # Feature: Add Account Modal
 
-> Last updated: 2026-06-02
+> Last updated: 2026-07-07
 
 ## Context
 
@@ -18,7 +18,7 @@ The `AddAccountModal` is a state-machine dialog with two levels:
 - `frontend/src/components/shared/AddAccountModal.tsx` — main component (contains all sub-wizards)
 - `frontend/src/pages/accounts/AccountsPage.tsx` — wires `AddAccountModal` for create, keeps `AccountForm` for edit
 - `frontend/src/features/sync/hooks.ts` — all sync mutation hooks reused by the wizards
-- `frontend/src/components/ui/input-otp.tsx` — shadcn InputOTP component (installed for TR PIN/TAN)
+- `frontend/src/components/ui/input-otp.tsx` — shadcn InputOTP component (installed for TR PIN and verification code)
 
 ### Flow
 
@@ -32,7 +32,7 @@ AccountsPage → "Add account" button
        ├─ Wallets → WalletWizard
        │    └─ pick chain → address + label → add → success
        ├─ Trade Republic → TradeRepublicWizard
-       │    └─ phone + PIN (InputOTP 4-digit) → TAN (InputOTP 6-digit) → success
+       │    └─ phone + PIN (InputOTP 4-digit) → verification code (InputOTP 4-digit) → success
        ├─ Finary → FinaryWizard (3-step)
        │    └─ login/upload → account mapping → results
        └─ Manual → AccountForm (separate dialog)
@@ -41,6 +41,16 @@ AccountsPage → "Add account" button
 ### Error handling
 
 Each wizard owns its error state as a local `useState<string | null>`. On mutation failure, the backend `detail` field is extracted (falling back to `err.message`, then a translated i18n key). Errors are shown in a dismissible red banner inside the wizard, and cleared on the next attempt.
+
+The Trade Republic wizard follows the same state rules as the dedicated Sync
+page: initiation errors keep the phone/PIN form visible and clear any stale
+process id; verification-code errors keep the code form visible, clear the typed
+code, and retain the current process id for retry.
+
+Bank institution search is also handled inline. The `/sync/institutions` GET is
+marked with `skipGlobalErrorRedirect` so connector failures such as Enable
+Banking misconfiguration stay in the modal instead of sending the whole app to
+`/error/500?code=502`.
 
 **Previously**, a global `isPending` overlay in the parent replaced all wizard content with a spinner during mutations. This caused a React unmounting bug: when the mutation completed with an error, `setError(...)` was called on the unmounted (old) wizard instance → no-op → error silently swallowed. That mechanism was removed. Each wizard's button is now disabled via `mutation.isPending` instead.
 
@@ -73,7 +83,7 @@ This closed issue #9: a free-text code like `AMAT` used to throw a `RangeError` 
 | Choice | Why | Rejected alternative |
 |--------|-----|----------------------|
 | Single file with sub-components | All wizards share the same imports, hooks, and patterns | Separate file per wizard |
-| `InputOTP` for TR PIN/TAN | shadcn component, consistent UX for digit-only inputs | Regular password input |
+| `InputOTP` for TR PIN and verification code | shadcn component, consistent UX for digit-only inputs | Regular password input |
 | `AccountForm` reused for manual | Already existed, handles validation and color picking | Inline form in the modal |
 | Per-wizard error state (no global overlay) | Global `isPending` unmounts the wizard, losing error state (React no-op on unmounted setter) | Global `onPending` callback |
 | `mutation.isPending` on buttons for loading | Keeps the wizard mounted throughout; spinner is inline on the submit button | Parent-level overlay |
@@ -82,7 +92,11 @@ This closed issue #9: a free-text code like `AMAT` used to throw a `RangeError` 
 
 - **Never replace wizard content with a parent-level overlay during mutations.** When the wizard unmounts and remounts after an error, any `setError(...)` called on the old instance is silently ignored by React 18. Each wizard must stay mounted while its mutation is in flight.
 - **`input-otp` package must be in root `node_modules`** — Vite resolves from the project root. If installed only in `frontend/`, it fails at runtime with "error loading dynamically imported module".
-- **Trade Republic PIN is 4 digits, TAN is 6 digits** — `maxLength` on `InputOTP` controls this.
+- **Trade Republic PIN and verification code are 4 digits** — `maxLength` on `InputOTP` controls this.
+- **Trade Republic initiation errors stay on credentials** — never move the
+  wizard to the verification-code step unless `/tr/auth/initiate` returned a
+  process id. TAN completion errors are the only errors that keep the code step
+  visible for retry.
 - **Bank OAuth is fire-and-forget** — `window.location.href = data.authLink` redirects the entire page. The modal does not reach a success state; the redirect carries the user away. Error handling (e.g. `REDIRECT_URI_NOT_ALLOWED`) surfaces as a banner before the redirect happens.
 - **`ENABLEBANKING_REDIRECT_URI` must match the EB portal** — see [bank-sync.md](./bank-sync.md).
 - **Finary wizard is the only multi-step wizard** (3 steps: login/upload → mapping → results). All others are single-step.
@@ -92,6 +106,7 @@ This closed issue #9: a free-text code like `AMAT` used to throw a `RangeError` 
 
 - `frontend/src/lib/utils.test.ts` — `formatCurrency` regression case: an invalid code does not throw
   and the raw code appears in the output (issue #9).
+- `frontend/src/components/shared/AddAccountModal.test.tsx` — Trade Republic wizard regression cases for initiation failure staying on credentials and TAN completion failure staying on the code step.
 - `backend/src/test/java/com/picsou/validation/CurrencyValidatorTest.java` — accepts valid ISO 4217
   codes, rejects unknown ones, leaves null/blank to `@NotBlank`.
 

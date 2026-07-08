@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.picsou.config.FinaryProperties;
 import com.picsou.finary.dto.*;
+import com.picsou.exception.FinaryServiceUnavailableException;
 import com.picsou.exception.SyncException;
 import com.picsou.exception.TotpRequiredException;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +39,13 @@ public class FinaryApiClient {
     private static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
+    private static final int MAX_RETRIES = 3;
+
     private final ObjectMapper objectMapper;
     private final FinaryProperties finaryProperties;
+    private final HttpClient finaryHttpClient = HttpClient.newBuilder()
+        .connectTimeout(TIMEOUT)
+        .build();
 
     public FinaryApiClient(ObjectMapper objectMapper, FinaryProperties finaryProperties) {
         this.objectMapper = objectMapper;
@@ -138,6 +144,9 @@ public class FinaryApiClient {
         } catch (SyncException e) {
             throw e;
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Finary auth check failed: " + e.getMessage(), e);
         }
     }
@@ -192,6 +201,9 @@ public class FinaryApiClient {
         } catch (SyncException e) {
             throw e;
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Finary TOTP authentication failed: " + e.getMessage(), e);
         }
     }
@@ -274,9 +286,12 @@ public class FinaryApiClient {
             log.info("Clerk authentication successful");
             return tokenResp.jwt;
 
-        } catch (SyncException e) {
+        } catch (SyncException | TotpRequiredException e) {
             throw e;
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Clerk authentication failed: " + e.getMessage(), e);
         }
     }
@@ -312,6 +327,9 @@ public class FinaryApiClient {
         } catch (SyncException e) {
             throw e;
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Failed to fetch organization context: " + e.getMessage(), e);
         }
     }
@@ -333,6 +351,9 @@ public class FinaryApiClient {
             return envelope.result() != null ? envelope.result() : List.of();
 
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Failed to fetch accounts for category " + category + ": " + e.getMessage(), e);
         }
     }
@@ -356,6 +377,9 @@ public class FinaryApiClient {
             return envelope.result() != null ? envelope.result() : List.of();
 
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Failed to fetch loans: " + e.getMessage(), e);
         }
     }
@@ -377,6 +401,9 @@ public class FinaryApiClient {
             return envelope.result() != null ? envelope.result() : List.of();
 
         } catch (IOException e) {
+            if (isNetworkError(e)) {
+                throw new FinaryServiceUnavailableException("Unable to reach Finary. Please check your connection and try again.", e);
+            }
             throw new SyncException("Failed to fetch transactions for category " + category + ": " + e.getMessage(), e);
         }
     }
@@ -396,15 +423,14 @@ public class FinaryApiClient {
             .GET()
             .build();
 
-        try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400) {
-                throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
-            }
-            return response.body();
-        } catch (InterruptedException e) {
-            throw new IOException("Clerk GET request interrupted", e);
+        HttpResponse<String> response = sendWithRetry(client, request);
+        if (response.statusCode() == 401) {
+            throw new SyncException("Invalid Finary credentials. Please check your email and password.");
         }
+        if (response.statusCode() >= 400) {
+            throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+        }
+        return response.body();
     }
 
     /**
@@ -423,15 +449,14 @@ public class FinaryApiClient {
             .POST(HttpRequest.BodyPublishers.ofString(formBody))
             .build();
 
-        try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400) {
-                throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
-            }
-            return response.body();
-        } catch (InterruptedException e) {
-            throw new IOException("Clerk POST request interrupted", e);
+        HttpResponse<String> response = sendWithRetry(client, request);
+        if (response.statusCode() == 401) {
+            throw new SyncException("Invalid Finary credentials. Please check your email and password.");
         }
+        if (response.statusCode() >= 400) {
+            throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+        }
+        return response.body();
     }
 
     /**
@@ -452,15 +477,54 @@ public class FinaryApiClient {
             .GET()
             .build();
 
-        try {
-            HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400) {
-                log.error("Finary API error {}: {}", response.statusCode(), response.body());
-                throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
-            }
-            return response.body();
-        } catch (InterruptedException e) {
-            throw new IOException("Finary GET request interrupted", e);
+        HttpResponse<String> response = sendWithRetry(finaryHttpClient, request);
+        if (response.statusCode() >= 400) {
+            log.error("Finary API error {}: {}", response.statusCode(), response.body());
+            throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
         }
+        return response.body();
+    }
+
+    private HttpResponse<String> sendWithRetry(HttpClient client, HttpRequest request) throws IOException {
+        IOException lastException = null;
+        for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() >= 500) {
+                    log.warn("Finary/Clerk returned HTTP {} (attempt {}/{})", response.statusCode(), attempt + 1, MAX_RETRIES);
+                    if (attempt < MAX_RETRIES - 1) {
+                        Thread.sleep((long) Math.pow(2, attempt) * 1000);
+                        continue;
+                    }
+                    throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+                }
+                return response;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Request interrupted", e);
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < MAX_RETRIES - 1) {
+                    log.warn("Request failed (attempt {}/{}): {}", attempt + 1, MAX_RETRIES, e.getMessage());
+                    try {
+                        Thread.sleep((long) Math.pow(2, attempt) * 1000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Retry sleep interrupted", ie);
+                    }
+                }
+            }
+        }
+        throw lastException;
+    }
+
+    private boolean isNetworkError(IOException e) {
+        String msg = e.getMessage();
+        if (msg == null) return false;
+        String lower = msg.toLowerCase();
+        return lower.contains("timed out") || lower.contains("connection refused")
+            || lower.contains("unreachable") || lower.contains("connect failed")
+            || lower.contains("connection reset") || lower.contains("ssl")
+            || lower.contains("unknownhost") || lower.contains("no route to host");
     }
 }

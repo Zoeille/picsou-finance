@@ -59,11 +59,22 @@ The preferred helper for components. Status-first, then safe-message, then key:
    administrator"* survive and aren't flattened to a generic string).
 3. Else `403 → common.errors.forbidden`, anything else → `t(fallbackKey)`.
 
+### `skipGlobalErrorRedirect` on Axios requests
+
+The shared Axios client still redirects ordinary GET 5xx failures to the global
+`/error/500` page. A query may opt out with `skipGlobalErrorRedirect: true` only
+when it is scoped to a self-contained UI surface that can display the error
+inline. The first use is bank institution search inside `AddAccountModal`: an
+Enable Banking connector failure is actionable in the modal and should not tear
+down the Accounts page.
+
 ### Key files
 
 - `frontend/src/lib/errors.ts` — `safeBackendMessage`, `extractErrorMessage`,
   `formatApiError`, plus private `tryParseJson` / `isSafeMessage` / `LEAK_PATTERN`.
   No external deps.
+- `frontend/src/lib/api-client.ts` — global 403 / setup-required / 5xx / 401
+  interceptors, plus `skipGlobalErrorRedirect` for inline-handled GET failures.
 - `frontend/src/lib/errors.test.ts` — 18 Vitest cases: the 8 original
   `extractErrorMessage` branches, 5 leak-guard cases on `safeBackendMessage`
   (rejects exception classes, `.java`/package strings, axios boilerplate, stack

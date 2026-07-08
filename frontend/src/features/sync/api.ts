@@ -22,7 +22,7 @@ export const bankSyncApi = {
     api
       .get<{ id: string; name: string; bic: string | null; logoUrl?: string | null; country: string }[]>(
         '/sync/institutions',
-        { params: { query } },
+        { params: { query }, skipGlobalErrorRedirect: true },
       )
       .then(r => r.data),
 

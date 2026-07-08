@@ -14,8 +14,8 @@ import { Label } from '@/components/ui/label'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { AccountForm } from '@/components/shared/AccountForm'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
-import { ACCOUNT_COLORS } from '@/lib/constants'
-import { getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { ACCOUNT_COLORS, TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
+import { extractErrorMessage, formatTrAuthError, getErrorStatus, getErrorDetail } from '@/lib/errors'
 import { useCreateAccount, useUpdateDebtMetadata } from '@/features/accounts/hooks'
 import {
   useSearchInstitutions,
@@ -78,7 +78,7 @@ function MaskedOTPSlot({ index }: { index: number }) {
   return (
     <div
       data-active={isActive}
-      className="relative flex size-7 items-center justify-center border-y border-r border-input bg-input/20 text-xs/relaxed transition-all outline-none first:rounded-l-md first:border-l last:rounded-r-md aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-2 data-[active=true]:ring-ring/30 dark:bg-input/30"
+      className="relative flex size-10 items-center justify-center border-y border-r border-input bg-input/20 text-sm transition-[border-color,box-shadow,background-color] outline-none first:rounded-l-xl first:border-l last:rounded-r-xl aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-2 data-[active=true]:ring-ring/30 dark:bg-input/30"
     >
       {hasChar ? '•' : null}
       {hasFakeCaret && (
@@ -278,7 +278,12 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const { data: institutions, isLoading: searchLoading } = useSearchInstitutions(searchQuery.trim())
+  const {
+    data: institutions,
+    isError: searchFailed,
+    isLoading: searchLoading,
+    error: searchError,
+  } = useSearchInstitutions(searchQuery.trim())
   const initiateMutation = useInitiateBankSync()
 
   const searchEnabled = searchQuery.trim().length >= 2
@@ -326,17 +331,29 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
           </div>
         )}
 
-        {searchEnabled && institutions && institutions.length > 0 && (
+        {searchEnabled && searchFailed && !searchLoading && (
+          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <span className="flex-1">
+              {extractErrorMessage(searchError, t('sync.banks.searchError'))}
+            </span>
+          </div>
+        )}
+
+        {searchEnabled && !searchFailed && institutions && institutions.length > 0 && (
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {institutions.map((inst) => (
-              <div key={inst.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
-                <div className="flex items-center gap-2">
+              <div
+                key={inst.id}
+                className="grid grid-cols-[minmax(0,1fr)_2.5rem_auto] items-center gap-4 rounded-lg border px-3 py-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
                   <InstitutionLogo logoUrl={inst.logoUrl} />
-                  <span className="text-sm font-medium">{inst.name}</span>
-                  <span className="text-xs text-muted-foreground">{inst.country}</span>
+                  <span className="min-w-0 text-sm font-medium leading-5">{inst.name}</span>
                 </div>
+                <span className="justify-self-center text-xs text-muted-foreground">{inst.country}</span>
                 <Button
                   size="sm"
+                  className="justify-self-end"
                   onClick={() => handleConnect(inst.id, inst.name)}
                   disabled={initiateMutation.isPending}
                 >
@@ -347,7 +364,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
           </div>
         )}
 
-        {searchEnabled && institutions && institutions.length === 0 && !searchLoading && (
+        {searchEnabled && !searchFailed && institutions && institutions.length === 0 && !searchLoading && (
           <p className="text-sm text-muted-foreground">{t('sync.banks.noConnections')}</p>
         )}
       </div>
@@ -563,27 +580,6 @@ function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
 
 type TrState = 'IDLE' | 'AWAITING_TAN' | 'CONNECTED' | 'ERROR'
 
-function formatTrAuthError(error: unknown, t: (key: string) => string): string {
-  const status = getErrorStatus(error)
-  if (status === 429) return t('sync.tr.errors.tooManyAttempts')
-  if (status === 502) {
-    const detail = getErrorDetail(error) || ''
-    if (detail.includes('NUMBER_INVALID')) return t('sync.tr.errors.invalidPhoneNumber')
-    if (detail.includes('PIN_INVALID')) return t('sync.tr.errors.invalidPin')
-    if (detail.includes('AUTHENTICATION_ERROR')) return t('sync.tr.errors.authenticationFailed')
-    return t('sync.tr.errors.serverError')
-  }
-  if (status === 422) {
-    const errors =
-      (error as { response?: { data?: { errors?: Record<string, unknown> } } })?.response?.data
-        ?.errors ?? {}
-    if (errors.phoneNumber) return t('sync.tr.errors.phoneNumberRequired')
-    if (errors.pin) return t('sync.tr.errors.pinRequired')
-    return t('sync.tr.errors.validationFailed')
-  }
-  return (error as { message?: string })?.message || t('sync.tr.errors.unknownError')
-}
-
 function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
   const { t } = useTranslation()
   const [authState, setAuthState] = useState<TrState>('IDLE')
@@ -604,12 +600,15 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
       {
         onSuccess: (data) => {
           setProcessId(data.processId)
+          setTan('')
           setAuthState('AWAITING_TAN')
           setErrorMsg(null)
         },
         onError: (err: unknown) => {
           setErrorMsg(formatTrAuthError(err, t))
-          setAuthState('ERROR')
+          setProcessId(null)
+          setTan('')
+          setAuthState('IDLE')
         },
       },
     )
@@ -617,7 +616,7 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
 
   function handleTan(e: React.FormEvent) {
     e.preventDefault()
-    if (!processId || tan.length === 0) return
+    if (!processId || tan.length !== TR_VERIFICATION_CODE_LENGTH) return
     completeMutation.mutate(
       { processId, tan },
       {
@@ -631,10 +630,18 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
         },
         onError: (err: unknown) => {
           setErrorMsg(formatTrAuthError(err, t))
-          setAuthState('ERROR')
+          setTan('')
+          setAuthState('AWAITING_TAN')
         },
       },
     )
+  }
+
+  // Only dismiss the banner: the mutations' onError handlers already reset
+  // authState/processId appropriately per failure type. Resetting to IDLE here
+  // would throw away a still-valid TAN session after a completion failure.
+  function handleRetry() {
+    setErrorMsg(null)
   }
 
   if (authState === 'CONNECTED') {
@@ -651,9 +658,14 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
       <BackButton onClick={onBack} />
       <div className="space-y-4">
         {errorMsg && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <span className="flex-1">{errorMsg}</span>
-            <Button variant="ghost" size="sm" onClick={() => { setErrorMsg(null); setAuthState('IDLE'); setProcessId(null) }}>
+          <div className="flex flex-col gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <span className="leading-6">{errorMsg}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-end px-4 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={handleRetry}
+            >
               {t('sync.banks.retry')}
             </Button>
           </div>
@@ -695,15 +707,21 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
                 <ShieldCheck className="size-4 inline-block mr-1" />
                 {t('sync.tr.tan')}
               </Label>
-              <InputOTP maxLength={6} value={tan} onChange={setTan} autoFocus>
+              <InputOTP
+                id="tr-tan"
+                maxLength={TR_VERIFICATION_CODE_LENGTH}
+                value={tan}
+                onChange={(value) => setTan(value.replace(/\D/g, '').slice(0, TR_VERIFICATION_CODE_LENGTH))}
+                autoFocus
+              >
                 <InputOTPGroup>
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                  {[0, 1, 2, 3].map((i) => (
                     <InputOTPSlot key={i} index={i} />
                   ))}
                 </InputOTPGroup>
               </InputOTP>
             </div>
-            <Button type="submit" disabled={completeMutation.isPending} className="w-full">
+            <Button type="submit" disabled={completeMutation.isPending || tan.length !== TR_VERIFICATION_CODE_LENGTH} className="w-full">
               {completeMutation.isPending && <Loader2 className="size-4 animate-spin" />}
               {t('sync.tr.connect')}
             </Button>
@@ -982,7 +1000,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
             /* Login form */
             <form onSubmit={handleLogin} className="space-y-3">
               <div className="space-y-1">
-                <Label htmlFor="finary-email" className="text-xs">{t('sync.finary.email')}</Label>
+                <Label htmlFor="finary-email">{t('sync.finary.email')}</Label>
                 <Input
                   id="finary-email"
                   type="email"
@@ -991,11 +1009,10 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                   placeholder={t('sync.finary.emailPlaceholder')}
                   required
                   autoFocus
-                  className="h-9"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="finary-password" className="text-xs">{t('sync.finary.password')}</Label>
+                <Label htmlFor="finary-password">{t('sync.finary.password')}</Label>
                 <div className="relative">
                   <Input
                     id="finary-password"
@@ -1003,14 +1020,15 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="h-9 pr-9"
+                    className="pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((p) => !p)}
-                    className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
               </div>
@@ -1038,8 +1056,8 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
               {totpRequired && (
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Label htmlFor="finary-totp" className="text-xs">{t('sync.finary.totp')}</Label>
-                    <Input id="finary-totp" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} placeholder="000000" maxLength={6} className="mt-1 h-9" />
+                    <Label htmlFor="finary-totp">{t('sync.finary.totp')}</Label>
+                    <Input id="finary-totp" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} placeholder="000000" maxLength={6} className="mt-1" />
                   </div>
                   <Button className="mt-4" onClick={handleSync} disabled={totpCode.length !== 6 || loading} size="sm">
                     <ArrowRight className="size-3.5" />
@@ -1122,7 +1140,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
                 {mappings[index]?.action === 'MAP_EXISTING' && (
                   <select
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:border-ring"
+                    className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
                     value={mappings[index].targetAccountId ?? ''}
                     onChange={(e) => {
                       const val = e.target.value
@@ -1141,17 +1159,16 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                 {mappings[index]?.action === 'CREATE_NEW' && mappings[index].newAccount && (
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">{t('accounts.addAccount')}</Label>
+                      <Label>{t('accounts.accountName')}</Label>
                       <Input
-                        className="h-8 text-sm"
                         value={mappings[index].newAccount!.name}
                         onChange={(e) => updateNewAccountField(index, 'name', e.target.value)}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">{t('sync.exchanges.type')}</Label>
+                      <Label>{t('sync.exchanges.type')}</Label>
                       <select
-                        className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:border-ring"
+                        className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
                         value={mappings[index].newAccount!.type}
                         onChange={(e) => updateNewAccountField(index, 'type', e.target.value)}
                       >
@@ -1161,32 +1178,30 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">{t('sync.wallets.label')}</Label>
+                      <Label>{t('accounts.provider')}</Label>
                       <Input
-                        className="h-8 text-sm"
                         value={mappings[index].newAccount!.provider ?? ''}
                         onChange={(e) => updateNewAccountField(index, 'provider', e.target.value)}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">{t('common.currency')}</Label>
+                      <Label>{t('common.currency')}</Label>
                       <Input
-                        className="h-8 text-sm"
                         value={mappings[index].newAccount!.currency}
                         onChange={(e) => updateNewAccountField(index, 'currency', e.target.value)}
                         maxLength={3}
                       />
                     </div>
                     <div className="space-y-1 sm:col-span-2">
-                      <Label className="text-xs">Color</Label>
-                      <div className="flex flex-wrap gap-1.5">
+                      <Label>{t('accounts.color')}</Label>
+                      <div className="flex flex-wrap gap-2">
                         {ACCOUNT_COLORS.map((color) => (
                           <button
                             key={color}
                             type="button"
-                            className={`size-5 rounded-full border-2 transition-transform hover:scale-110 ${
+                            className={`size-8 rounded-full border-2 transition-[border-color,box-shadow] ${
                               mappings[index].newAccount?.color === color
-                                ? 'border-foreground scale-110'
+                                ? 'border-background ring-2 ring-foreground'
                                 : 'border-transparent'
                             }`}
                             style={{ backgroundColor: color }}

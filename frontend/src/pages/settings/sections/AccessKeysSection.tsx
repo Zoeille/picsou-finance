@@ -223,23 +223,22 @@ export function AccessKeysSection() {
       )}
 
       {/* Connect your MCP client -------------------------------------------- */}
-      <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="space-y-4 rounded-2xl border bg-muted/40 p-4">
+        <div className="flex items-center gap-2 text-base font-medium">
           <Server className="size-4 text-muted-foreground" />
           {t('accessKeys.connectTitle')}
         </div>
-        <p className="text-xs text-muted-foreground">{t('accessKeys.connectIntro')}</p>
+        <p className="text-sm text-muted-foreground">{t('accessKeys.connectIntro')}</p>
 
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">{t('accessKeys.connectEndpointLabel')}</Label>
+        <div className="space-y-2">
+          <Label className="text-muted-foreground">{t('accessKeys.connectEndpointLabel')}</Label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <code className="flex-1 break-all rounded bg-background px-2 py-1.5 font-mono text-xs">
+            <code className="flex min-h-10 flex-1 items-center break-all rounded-xl bg-background px-4 py-2 font-mono text-sm">
               {endpoint}
             </code>
             <Button
-              size="sm"
               variant="outline"
-              className="shrink-0"
+              className="w-full shrink-0 sm:w-auto sm:min-w-36"
               onClick={() => handleCopy(endpoint, setEndpointCopied)}
             >
               {endpointCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -248,16 +247,15 @@ export function AccessKeysSection() {
           </div>
         </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">{t('accessKeys.connectSnippetLabel')}</Label>
-          <div className="relative">
-            <pre className="overflow-x-auto rounded bg-background px-2 py-1.5 font-mono text-[11px] leading-relaxed">
+        <div className="space-y-2">
+          <Label className="text-muted-foreground">{t('accessKeys.connectSnippetLabel')}</Label>
+          <div className="relative space-y-2 sm:space-y-0">
+            <pre className="min-h-10 overflow-x-auto rounded-xl bg-background p-4 font-mono text-sm leading-relaxed sm:pr-40">
               {snippet}
             </pre>
             <Button
-              size="sm"
               variant="outline"
-              className="absolute right-1.5 top-1.5"
+              className="w-full sm:absolute sm:right-3 sm:top-3 sm:w-auto sm:min-w-36"
               onClick={() => handleCopy(snippet, setSnippetCopied)}
             >
               {snippetCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -266,7 +264,7 @@ export function AccessKeysSection() {
           </div>
         </div>
 
-        <p className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+        <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
           <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
           {t('accessKeys.connectHttpsWarning')}
         </p>
@@ -274,104 +272,107 @@ export function AccessKeysSection() {
 
       {/* Create / secret dialog --------------------------------------------- */}
       <Dialog open={createOpen} onOpenChange={(o) => { if (!o) setCreateOpen(false) }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex! max-h-[calc(100dvh-2rem)]! w-[calc(100vw-2rem)]! max-w-none! flex-col gap-0 overflow-hidden p-0 text-sm sm:w-[42rem]!">
           {created ? (
             <>
-              <DialogHeader>
+              <DialogHeader className="shrink-0 px-5 pt-5 pr-14">
                 <DialogTitle>{t('accessKeys.secretTitle')}</DialogTitle>
                 <DialogDescription>{t('accessKeys.secretWarning')}</DialogDescription>
               </DialogHeader>
-              <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-50 p-3 dark:bg-amber-950/30">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <code className="flex-1 break-all rounded bg-background px-2 py-1.5 font-mono text-xs">
-                    {created.secret}
-                  </code>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={() => handleCopy(created.secret, setSecretCopied)}
-                  >
-                    {secretCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                    {secretCopied ? t('accessKeys.copied') : t('accessKeys.copy')}
-                  </Button>
+              <div className="min-h-0 overflow-y-auto px-5 py-4">
+                <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-50 p-3 dark:bg-amber-950/30">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <code className="flex min-h-10 flex-1 items-center break-all rounded-xl bg-background px-4 py-2 font-mono text-sm">
+                      {created.secret}
+                    </code>
+                    <Button
+                      variant="outline"
+                      className="w-full shrink-0 sm:w-auto sm:min-w-36"
+                      onClick={() => handleCopy(created.secret, setSecretCopied)}
+                    >
+                      {secretCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      {secretCopied ? t('accessKeys.copied') : t('accessKeys.copy')}
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 px-5 pb-5">
                 <Button onClick={() => setCreateOpen(false)}>{t('accessKeys.done')}</Button>
               </DialogFooter>
             </>
           ) : (
             <>
-              <DialogHeader>
+              <DialogHeader className="shrink-0 px-5 pt-5 pr-14">
                 <DialogTitle>{t('accessKeys.createTitle')}</DialogTitle>
                 <DialogDescription>{t('accessKeys.createDescription')}</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="ak-name">{t('accessKeys.nameLabel')}</Label>
-                  <Input
-                    id="ak-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t('accessKeys.namePlaceholder')}
-                    maxLength={100}
-                    autoFocus
-                  />
-                </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ak-name">{t('accessKeys.nameLabel')}</Label>
+                    <Input
+                      id="ak-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('accessKeys.namePlaceholder')}
+                      maxLength={100}
+                      autoFocus
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>{t('accessKeys.permissionsLabel')}</Label>
-                  <p className="text-xs font-medium text-muted-foreground">{t('accessKeys.groupRead')}</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {READ_SCOPES.map((s) => (
-                      <ScopeToggle
-                        key={s}
-                        scope={s}
-                        checked={selectedScopes.includes(s)}
-                        onToggle={() => toggleScope(s)}
-                      />
-                    ))}
+                  <div className="space-y-2">
+                    <Label>{t('accessKeys.permissionsLabel')}</Label>
+                    <p className="text-xs font-medium text-muted-foreground">{t('accessKeys.groupRead')}</p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {READ_SCOPES.map((s) => (
+                        <ScopeToggle
+                          key={s}
+                          scope={s}
+                          checked={selectedScopes.includes(s)}
+                          onToggle={() => toggleScope(s)}
+                        />
+                      ))}
+                    </div>
+                    <p className="pt-1 text-xs font-medium text-muted-foreground">{t('accessKeys.groupWrite')}</p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {WRITE_SCOPES.map((s) => (
+                        <ScopeToggle
+                          key={s}
+                          scope={s}
+                          checked={selectedScopes.includes(s)}
+                          onToggle={() => toggleScope(s)}
+                        />
+                      ))}
+                    </div>
+                    {selectedScopes.length === 0 && (
+                      <p className="text-xs text-muted-foreground">{t('accessKeys.selectScopeHint')}</p>
+                    )}
                   </div>
-                  <p className="pt-1 text-xs font-medium text-muted-foreground">{t('accessKeys.groupWrite')}</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {WRITE_SCOPES.map((s) => (
-                      <ScopeToggle
-                        key={s}
-                        scope={s}
-                        checked={selectedScopes.includes(s)}
-                        onToggle={() => toggleScope(s)}
-                      />
-                    ))}
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ak-expiry">{t('accessKeys.expiryLabel')}</Label>
+                    <Input
+                      id="ak-expiry"
+                      type="date"
+                      min={minExpiry}
+                      value={expiresAt}
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                      className="w-full sm:w-48"
+                    />
+                    <p className="text-xs text-muted-foreground">{t('accessKeys.expiryHint')}</p>
                   </div>
-                  {selectedScopes.length === 0 && (
-                    <p className="text-xs text-muted-foreground">{t('accessKeys.selectScopeHint')}</p>
+
+                  {createKey.isError && (
+                    <p
+                      role="alert"
+                      className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                    >
+                      {formatApiError(createKey.error, t, 'accessKeys.error')}
+                    </p>
                   )}
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="ak-expiry">{t('accessKeys.expiryLabel')}</Label>
-                  <Input
-                    id="ak-expiry"
-                    type="date"
-                    min={minExpiry}
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
-                    className="w-full sm:w-48"
-                  />
-                  <p className="text-xs text-muted-foreground">{t('accessKeys.expiryHint')}</p>
-                </div>
-
-                {createKey.isError && (
-                  <p
-                    role="alert"
-                    className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                  >
-                    {formatApiError(createKey.error, t, 'accessKeys.error')}
-                  </p>
-                )}
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 px-5 pb-5">
                 <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createKey.isPending}>
                   {t('accessKeys.cancel')}
                 </Button>

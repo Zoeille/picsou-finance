@@ -57,7 +57,7 @@ function HoldingsItem({ line, onClick }: { line: PortfolioLine; onClick: () => v
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{line.name}</ItemTitle>
-        <ItemDescription className="text-xs tracking-wider uppercase">
+        <ItemDescription className="text-sm">
           {line.quantity > 0
             ? `${line.quantity.toLocaleString()} ${t('dashboard.shares')} · ${line.accountName}`
             : line.accountName}
@@ -68,7 +68,7 @@ function HoldingsItem({ line, onClick }: { line: PortfolioLine; onClick: () => v
           {t(ACCOUNT_TYPE_BADGE[line.accountType] ?? line.accountType)}
         </Badge>
         <div className="flex flex-col items-end gap-0.5">
-          <span className="text-xs tracking-wider text-muted-foreground uppercase">
+          <span className="text-sm text-muted-foreground">
             {t('portfolio.value')}
           </span>
           <CurrencyDisplay value={line.valueEur} className="font-medium tabular-nums" />
@@ -157,15 +157,15 @@ export function HoldingsCard() {
               className="pl-9"
             />
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-2">
             {FILTER_TABS.map(tab => (
               <button
                 key={tab.value}
                 onClick={() => setFilter(tab.value)}
                 className={cn(
-                  'inline-flex items-center justify-center whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+                  'inline-flex h-10 min-w-32 items-center justify-center whitespace-nowrap rounded-full border px-6 text-sm font-medium transition-[background-color,color,border-color]',
                   filter === tab.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-background hover:bg-muted',
                 )}
               >

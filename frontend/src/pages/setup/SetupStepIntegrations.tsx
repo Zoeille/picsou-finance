@@ -63,9 +63,6 @@ export function SetupStepIntegrations() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.integrations.surtitle')}
-        </p>
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
           {t('setup.integrations.title')}
         </h1>
@@ -97,17 +94,15 @@ export function SetupStepIntegrations() {
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
         {count === 0 ? (
           <Button
-            size="lg"
             onClick={handleContinue}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="w-full rounded-full"
           >
             {t('setup.integrations.skipAll')}
           </Button>
         ) : (
           <Button
-            size="lg"
             onClick={handleContinue}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="w-full rounded-full"
           >
             {t('setup.integrations.continue')}
           </Button>

@@ -9,6 +9,13 @@ import es from './locales/es.json'
 
 const translations: Record<string, object> = { fr, en, de, es }
 
+// Keep <html lang> in sync with the active language: accessibility, and
+// lib/utils.ts getLocale() reads it to pick the Intl locale for dates/numbers.
+function syncDocumentLanguage(language: string | undefined) {
+  if (typeof document === 'undefined' || !language) return
+  document.documentElement.lang = resolveLocale(language).code
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -29,14 +36,10 @@ i18n
       lookupLocalStorage: 'picsou-locale',
     },
   })
+  .then(() => syncDocumentLanguage(i18n.resolvedLanguage ?? i18n.language))
 
-// Keep <html lang> in sync with the active language: accessibility, and
-// lib/utils.ts getLocale() reads it to pick the Intl locale for dates/numbers.
-i18n.on('languageChanged', (lng) => {
-  document.documentElement.lang = resolveLocale(lng).code
+i18n.on('languageChanged', (language) => {
+  syncDocumentLanguage(language)
 })
-if (i18n.language) {
-  document.documentElement.lang = resolveLocale(i18n.language).code
-}
 
 export default i18n

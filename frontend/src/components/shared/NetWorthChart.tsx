@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useIntlLocale } from '@/hooks/use-intl-locale'
 import { Area, AreaChart, CartesianGrid, Legend, Line, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { TimeRangeSelector, type TimeRange } from '@/components/shared/TimeRangeSelector'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, localeFromLanguage } from '@/lib/utils'
 import { EmptyChartState } from '@/components/shared/EmptyChartState'
 import type { IntradayPoint } from '@/features/dashboard/api'
 
@@ -126,7 +125,7 @@ function NetWorthTooltip({ active, payload, labels, is24H }: {
       {hasInvested && gainLoss !== null && (
         <>
           <div className="my-1.5 border-t border-border" />
-          <div className="flex items-center justify-between py-0.5">
+          <div className="flex items-center justify-between gap-3 py-0.5">
             <span className={`font-mono font-medium tabular-nums ${gainLoss >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
               {gainLoss >= 0 ? '+' : ''}{formatCurrency(gainLoss, labels.currency, labels.locale)}
             </span>
@@ -177,8 +176,8 @@ function getXAxisFormatter(range: TimeRange, locale: string, spanMs: number) {
 }
 
 export function NetWorthChart({ data, intraday = [], range, onRangeChange, showInvested = true, target, projection, todayMs, todayLabel }: NetWorthChartProps) {
-  const { t } = useTranslation()
-  const locale = useIntlLocale()
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const is24H = range === '24H'
   const showDots = range === '24H' || range === '7D'
 
@@ -322,7 +321,7 @@ export function NetWorthChart({ data, intraday = [], range, onRangeChange, showI
     projection: projection?.label ?? '',
     gainLoss: t('dashboard.gainLoss'),
     locale,
-    currency: t('common.currency'),
+    currency: 'EUR',
   }), [t, locale, target?.label, projection?.label])
 
   const xAxisFormatter = useMemo(() => {

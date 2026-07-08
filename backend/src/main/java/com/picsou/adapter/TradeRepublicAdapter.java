@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,6 +55,15 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
     private static final String WS_URL     = "wss://api.traderepublic.com/";
     private static final int    WS_VERSION = 31;
 
+    private record SecAccount(
+        String wrapper,
+        String accountNumber,
+        String cashAccountNumber,
+        String externalId,
+        String name,
+        AccountType type
+    ) {}
+
     private final WebClient    sidecarClient;
     private final ObjectMapper objectMapper;
 
@@ -80,11 +90,15 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
             .retrieve()
             .bodyToMono(JsonNode.class)
             .onErrorResume(WebClientResponseException.class, ex -> {
-                log.error("tr-auth sidecar /initiate failed ({}) : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-                return Mono.error(new SyncException(
+                String body = ex.getResponseBodyAsString();
+                log.error("tr-auth sidecar /initiate failed ({}) : {}", ex.getStatusCode(), body);
+                return Mono.error(mapAuthError(body,
                     "Trade Republic authentication failed. Please check your credentials and try again."));
             })
             .timeout(Duration.ofSeconds(60)) // headless browser takes time
+            .onErrorMap(ex -> !(ex instanceof SyncException), ex -> new SyncException(
+                "Trade Republic authentication service is unavailable. Please make sure tr-auth is running on port 8001.",
+                ex))
             .blockOptional()
             .orElseThrow(() -> new SyncException("No response from the Trade Republic service. Please try again later."));
 
@@ -106,11 +120,15 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
             .retrieve()
             .bodyToMono(JsonNode.class)
             .onErrorResume(WebClientResponseException.class, ex -> {
-                log.error("tr-auth sidecar /complete failed ({}) : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-                return Mono.error(new SyncException(
+                String body = ex.getResponseBodyAsString();
+                log.error("tr-auth sidecar /complete failed ({}) : {}", ex.getStatusCode(), body);
+                return Mono.error(mapAuthError(body,
                     "The verification code is invalid or has expired. Please request a new one."));
             })
             .timeout(Duration.ofSeconds(60))
+            .onErrorMap(ex -> !(ex instanceof SyncException), ex -> new SyncException(
+                "Trade Republic authentication service is unavailable. Please make sure tr-auth is running on port 8001.",
+                ex))
             .blockOptional()
             .orElseThrow(() -> new SyncException("No response from the Trade Republic service. Please try again later."));
 
@@ -155,14 +173,21 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
     public List<TrAccountData> fetchAccounts(String sessionToken) {
         log.info("Fetching TR portfolio via WebSocket (protocol v{})", WS_VERSION);
 
-        List<String> secAccNos = extractSecAccountNumbers(sessionToken);
-        log.info("TR JWT sec accounts: {}", secAccNos);
+        List<SecAccount> secAccounts = extractSecAccounts(sessionToken);
+        log.info("TR JWT sec accounts: {}",
+            secAccounts.stream()
+                .map(acc -> acc.wrapper() + ":" + acc.name())
+                .toList());
 
         AtomicReference<String> cashJson = new AtomicReference<>();
-        ConcurrentHashMap<String, JsonNode> positionsByIsin = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, String> scopedCashJsonByAccount = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, ConcurrentHashMap<String, JsonNode>> positionsByAccount = new ConcurrentHashMap<>();
         ConcurrentHashMap<String, BigDecimal> tickerPrices = new ConcurrentHashMap<>();
         ConcurrentHashMap<Integer, String> tickerSubToIsin = new ConcurrentHashMap<>();
-        ConcurrentHashMap<Integer, String> portfolioSubIds = new ConcurrentHashMap<>();
+        ConcurrentHashMap<Integer, SecAccount> portfolioSubIds = new ConcurrentHashMap<>();
+        ConcurrentHashMap<Integer, SecAccount> scopedCashSubIds = new ConcurrentHashMap<>();
+        Set<String> receivedPortfolioIds = ConcurrentHashMap.newKeySet();
+        Set<Integer> receivedScopedCashSubs = ConcurrentHashMap.newKeySet();
         AtomicBoolean authExpired = new AtomicBoolean(false);
         AtomicInteger subIdCounter = new AtomicInteger(0);
         AtomicInteger expectedTickers = new AtomicInteger(-1);
@@ -173,7 +198,11 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
         // to the averageBuyIn fallback. See GH issue #23 / PR #25 review.
         Set<Integer> answeredTickerSubs = ConcurrentHashMap.newKeySet();
         AtomicInteger receivedPortfolios = new AtomicInteger(0);
-        int totalPortfolioSubs = secAccNos.size();
+        int totalPortfolioSubs = secAccounts.size();
+        int totalScopedCashSubs = (int) secAccounts.stream()
+            .filter(account -> account.type() == AccountType.PEA)
+            .filter(account -> account.cashAccountNumber() != null && !account.cashAccountNumber().isBlank())
+            .count();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Origin", "https://app.traderepublic.com");
@@ -195,15 +224,27 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                                     msgs.add(sub(id1, "availableCash", sessionToken));
                                     log.info("TR WS --> sub {} availableCash", id1);
 
-                                    if (secAccNos.isEmpty()) {
+                                    for (SecAccount account : secAccounts) {
+                                        if (account.type() == AccountType.PEA
+                                                && account.cashAccountNumber() != null
+                                                && !account.cashAccountNumber().isBlank()) {
+                                            int id = subIdCounter.incrementAndGet();
+                                            scopedCashSubIds.put(id, account);
+                                            msgs.add(subAvailableCash(id, account.cashAccountNumber(), sessionToken));
+                                            log.info("TR WS --> sub {} availableCash account={}", id, account.name());
+                                        }
+                                    }
+
+                                    if (secAccounts.isEmpty()) {
                                         log.info("TR WS: no securities account in JWT, skipping portfolio subscription");
                                         expectedTickers.set(0);
                                     } else {
-                                        for (String accNo : secAccNos) {
+                                        for (SecAccount account : secAccounts) {
                                             int id = subIdCounter.incrementAndGet();
-                                            portfolioSubIds.put(id, accNo);
-                                            msgs.add(subCompactPortfolio(id, accNo, sessionToken));
-                                            log.info("TR WS --> sub {} compactPortfolioByType secAccNo={}", id, accNo);
+                                            portfolioSubIds.put(id, account);
+                                            msgs.add(subCompactPortfolio(id, account.accountNumber(), sessionToken));
+                                            log.info("TR WS --> sub {} compactPortfolioByType account={}",
+                                                id, account.name());
                                         }
                                     }
 
@@ -224,10 +265,16 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                                 if (wsId == 1) {
                                     cashJson.set(payload);
 
+                                } else if (scopedCashSubIds.containsKey(wsId)) {
+                                    SecAccount account = scopedCashSubIds.get(wsId);
+                                    receivedScopedCashSubs.add(wsId);
+                                    scopedCashJsonByAccount.put(account.externalId(), payload);
+
                                 } else if (portfolioSubIds.containsKey(wsId)) {
-                                    String accNo = portfolioSubIds.get(wsId);
+                                    SecAccount account = portfolioSubIds.get(wsId);
                                     receivedPortfolios.incrementAndGet();
-                                    log.info("TR compactPortfolioByType [{}] raw: {}", accNo,
+                                    receivedPortfolioIds.add(account.externalId());
+                                    log.info("TR compactPortfolioByType [{}] raw: {}", account.name(),
                                              payload.length() > 2000
                                                      ? payload.substring(0, 2000) + "…" : payload);
                                     try {
@@ -255,7 +302,9 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                                                 String isin = pos.path("isin").asText(
                                                         pos.path("instrumentId").asText(""));
                                                 if (!isin.isEmpty()) {
-                                                    positionsByIsin.put(isin, pos);
+                                                    positionsByAccount
+                                                        .computeIfAbsent(account.externalId(), key -> new ConcurrentHashMap<>())
+                                                        .put(isin, pos);
                                                     int tid = subIdCounter.incrementAndGet();
                                                     tickerSubToIsin.put(tid, isin);
                                                     // compactPortfolioByType positions carry no exchangeId
@@ -278,7 +327,7 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                                             int prev = expectedTickers.get();
                                             expectedTickers.set((prev < 0 ? 0 : prev) + tickerMsgs.size());
                                             log.info("TR compactPortfolioByType [{}]: {} positions, subscribing to {} tickers",
-                                                     accNo, positions.size(), tickerMsgs.size());
+                                                     account.name(), positions.size(), tickerMsgs.size());
 
                                             if (!tickerMsgs.isEmpty()) {
                                                 return session.send(
@@ -288,10 +337,11 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                                             }
                                         } else {
                                             expectedTickers.compareAndSet(-1, 0);
-                                            log.info("TR compactPortfolioByType [{}]: no positions found", accNo);
+                                            log.info("TR compactPortfolioByType [{}]: no positions found", account.name());
                                         }
                                     } catch (Exception ex) {
-                                        log.error("Failed to parse compactPortfolioByType [{}]: {}", accNo, payload, ex);
+                                        log.error("Failed to parse compactPortfolioByType [{}]: {}",
+                                            account.name(), payload, ex);
                                         expectedTickers.compareAndSet(-1, 0);
                                     }
 
@@ -321,7 +371,8 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                             })
                             .takeUntil(text -> {
                                 if (authExpired.get()) return true;
-                                boolean cashDone = cashJson.get() != null;
+                                boolean cashDone = cashJson.get() != null
+                                        && receivedScopedCashSubs.size() >= totalScopedCashSubs;
                                 boolean allPortfoliosIn = receivedPortfolios.get() >= totalPortfolioSubs;
                                 int exp = expectedTickers.get();
                                 boolean tickersDone = allPortfoliosIn
@@ -345,35 +396,39 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
 
         List<TrAccountData> accounts = new ArrayList<>();
 
-        BigDecimal totalPortfolioValue = BigDecimal.ZERO;
-        int priced = 0;
-        for (var entry : positionsByIsin.entrySet()) {
-            String isin = entry.getKey();
-            JsonNode pos = entry.getValue();
-            BigDecimal size = new BigDecimal(pos.path("netSize").asText("0"));
-            BigDecimal price = tickerPrices.get(isin);
+        for (SecAccount secAccount : secAccounts) {
+            Map<String, JsonNode> positionsByIsin = positionsByAccount.getOrDefault(
+                secAccount.externalId(), new ConcurrentHashMap<>());
 
-            if (size.compareTo(BigDecimal.ZERO) <= 0) continue;
+            BigDecimal totalPortfolioValue = secAccount.type() == AccountType.PEA
+                ? parseCashValue(scopedCashJsonByAccount.get(secAccount.externalId()))
+                : BigDecimal.ZERO;
+            int priced = 0;
+            for (var entry : positionsByIsin.entrySet()) {
+                String isin = entry.getKey();
+                JsonNode pos = entry.getValue();
+                BigDecimal size = new BigDecimal(pos.path("netSize").asText("0"));
+                BigDecimal price = tickerPrices.get(isin);
 
-            if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
-                totalPortfolioValue = totalPortfolioValue.add(
-                        price.multiply(size).setScale(2, RoundingMode.HALF_UP));
-                priced++;
-            } else {
-                BigDecimal avgBuyIn = new BigDecimal(pos.path("averageBuyIn").asText("0"));
-                if (avgBuyIn.compareTo(BigDecimal.ZERO) > 0) {
+                if (size.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
                     totalPortfolioValue = totalPortfolioValue.add(
-                            avgBuyIn.multiply(size).setScale(2, RoundingMode.HALF_UP));
-                    log.warn("TR ticker price missing for {}, using averageBuyIn as fallback", isin);
+                            price.multiply(size).setScale(2, RoundingMode.HALF_UP));
+                    priced++;
+                } else {
+                    BigDecimal avgBuyIn = new BigDecimal(pos.path("averageBuyIn").asText("0"));
+                    if (avgBuyIn.compareTo(BigDecimal.ZERO) > 0) {
+                        totalPortfolioValue = totalPortfolioValue.add(
+                                avgBuyIn.multiply(size).setScale(2, RoundingMode.HALF_UP));
+                        log.warn("TR ticker price missing for {}, using averageBuyIn as fallback", isin);
+                    }
                 }
             }
-        }
 
-        log.info("TR portfolio: {} positions, {} with live prices, total value: {}",
-                 positionsByIsin.size(), priced, totalPortfolioValue);
+            log.info("TR portfolio [{}]: {} positions, {} with live prices, total value: {}",
+                     secAccount.name(), positionsByIsin.size(), priced, totalPortfolioValue);
 
-        if (totalPortfolioValue.compareTo(BigDecimal.ZERO) > 0) {
-            // Build list of TrPosition objects from positionsByIsin
             List<TradeRepublicPort.TrPosition> positions = new ArrayList<>();
             for (var entry : positionsByIsin.entrySet()) {
                 String isin = entry.getKey();
@@ -388,8 +443,16 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                 positions.add(new TradeRepublicPort.TrPosition(isin, size, averageBuyIn, currentPrice));
             }
 
-            accounts.add(new TrAccountData(
-                    "tr_securities", "TR Titres", AccountType.COMPTE_TITRES, totalPortfolioValue, positions));
+            if (totalPortfolioValue.compareTo(BigDecimal.ZERO) > 0
+                    || !positions.isEmpty()
+                    || receivedPortfolioIds.contains(secAccount.externalId())) {
+                accounts.add(new TrAccountData(
+                    secAccount.externalId(),
+                    secAccount.name(),
+                    secAccount.type(),
+                    totalPortfolioValue,
+                    positions));
+            }
         }
 
         if (cashJson.get() != null
@@ -407,6 +470,24 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
+
+    private SyncException mapAuthError(String responseBody, String fallback) {
+        if (responseBody != null) {
+            if (responseBody.contains("VALIDATION_CODE_INVALID")) {
+                return new SyncException("VALIDATION_CODE_INVALID");
+            }
+            if (responseBody.contains("NUMBER_INVALID")) {
+                return new SyncException("NUMBER_INVALID");
+            }
+            if (responseBody.contains("PIN_INVALID")) {
+                return new SyncException("PIN_INVALID");
+            }
+            if (responseBody.contains("AUTHENTICATION_ERROR")) {
+                return new SyncException("AUTHENTICATION_ERROR");
+            }
+        }
+        return new SyncException(fallback);
+    }
 
     private boolean isAuthError(String payload) {
         return payload != null && payload.contains("AUTHENTICATION_ERROR");
@@ -445,59 +526,132 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
         }
     }
 
-    private String sub(int id, String type, String token) {
+    private String buildSub(int id, Map<String, Object> payload) {
         try {
-            return "sub " + id + " " + objectMapper.writeValueAsString(
-                    Map.of("type", type, "token", token));
-        } catch (Exception ex) {
-            throw new SyncException("Failed to build subscription message: " + ex.getMessage());
-        }
-    }
-
-    private String subWithId(int id, String type, String idParam, String token) {
-        try {
-            return "sub " + id + " " + objectMapper.writeValueAsString(
-                    Map.of("type", type, "id", idParam, "token", token));
-        } catch (Exception ex) {
-            throw new SyncException("Failed to build subscription message: " + ex.getMessage());
-        }
-    }
-
-    private String subCompactPortfolio(int id, String secAccNo, String token) {
-        try {
-            Map<String, Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("type", "compactPortfolioByType");
-            payload.put("secAccNo", secAccNo);
-            payload.put("token", token);
             return "sub " + id + " " + objectMapper.writeValueAsString(payload);
         } catch (Exception ex) {
             throw new SyncException("Failed to build subscription message: " + ex.getMessage());
         }
     }
 
-    private List<String> extractSecAccountNumbers(String sessionToken) {
+    private String sub(int id, String type, String token) {
+        return buildSub(id, Map.of("type", type, "token", token));
+    }
+
+    private String subWithId(int id, String type, String idParam, String token) {
+        return buildSub(id, Map.of("type", type, "id", idParam, "token", token));
+    }
+
+    private String subCompactPortfolio(int id, String secAccNo, String token) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("type", "compactPortfolioByType");
+        payload.put("secAccNo", secAccNo);
+        payload.put("token", token);
+        return buildSub(id, payload);
+    }
+
+    private String subAvailableCash(int id, String cashAccountNumber, String token) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("type", "availableCash");
+        payload.put("accountNumber", cashAccountNumber);
+        payload.put("token", token);
+        return buildSub(id, payload);
+    }
+
+    private List<SecAccount> extractSecAccounts(String sessionToken) {
         try {
             String[] parts = sessionToken.split("\\.");
             if (parts.length < 2) return List.of();
             String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
             JsonNode root = objectMapper.readTree(payload);
-            JsonNode secAccounts = root.path("act").path("acc").path("owner").path("default").path("sec");
-            if (secAccounts.isArray()) {
-                List<String> result = new ArrayList<>();
-                for (JsonNode acc : secAccounts) {
-                    result.add(acc.asText());
+            JsonNode ownerAccounts = root.path("act").path("acc").path("owner");
+            if (!ownerAccounts.isObject()) return List.of();
+
+            List<SecAccount> result = new ArrayList<>();
+            Set<String> usedExternalIds = new HashSet<>();
+            addSecAccountsFromWrapper(result, usedExternalIds, "default", ownerAccounts.path("default"));
+
+            ownerAccounts.fields().forEachRemaining(entry -> {
+                String wrapper = entry.getKey();
+                if (!"default".equals(wrapper)) {
+                    addSecAccountsFromWrapper(result, usedExternalIds, wrapper, entry.getValue());
                 }
-                return result;
-            }
+            });
+            return result;
         } catch (Exception ex) {
             log.warn("Failed to extract sec account numbers from JWT: {}", ex.getMessage());
         }
         return List.of();
     }
 
+    private void addSecAccountsFromWrapper(
+        List<SecAccount> result,
+        Set<String> usedExternalIds,
+        String wrapper,
+        JsonNode wrapperNode
+    ) {
+        JsonNode secAccounts = wrapperNode.path("sec");
+        if (!secAccounts.isArray()) return;
+
+        AccountType type = accountTypeForWrapper(wrapper);
+        String baseExternalId = externalIdForWrapper(wrapper);
+        String baseName = nameForWrapper(wrapper);
+        JsonNode cashAccounts = wrapperNode.path("cash");
+
+        int position = 0;
+        for (JsonNode acc : secAccounts) {
+            String accountNumber = acc.asText(null);
+            if (accountNumber == null || accountNumber.isBlank()) continue;
+            String cashAccountNumber = cashAccounts.isArray() && cashAccounts.size() > position
+                ? cashAccounts.get(position).asText(null)
+                : null;
+
+            // The dedup suffix counter is deliberately separate from `position`:
+            // bumping it on an external-id collision must not shift cash-account pairing.
+            int suffix = position;
+            String externalId = suffix == 0 ? baseExternalId : baseExternalId + "_" + (suffix + 1);
+            while (!usedExternalIds.add(externalId)) {
+                suffix++;
+                externalId = baseExternalId + "_" + (suffix + 1);
+            }
+            String name = suffix == 0 ? baseName : baseName + " " + (suffix + 1);
+            result.add(new SecAccount(wrapper, accountNumber, cashAccountNumber, externalId, name, type));
+            position++;
+        }
+    }
+
+    private AccountType accountTypeForWrapper(String wrapper) {
+        return "tax_wrapper_fr".equals(wrapper) ? AccountType.PEA : AccountType.COMPTE_TITRES;
+    }
+
+    private String externalIdForWrapper(String wrapper) {
+        return switch (wrapper) {
+            case "default" -> "tr_securities";
+            case "tax_wrapper_fr" -> "tr_pea";
+            default -> "tr_" + wrapper.replaceAll("[^a-zA-Z0-9]+", "_").toLowerCase();
+        };
+    }
+
+    private String nameForWrapper(String wrapper) {
+        return switch (wrapper) {
+            case "default" -> "TR Titres";
+            case "tax_wrapper_fr" -> "TR PEA";
+            default -> "TR Titres";
+        };
+    }
+
     private List<TrAccountData> parseCashJson(String json) {
         log.info("TR availableCash raw: {}", json);
         List<TrAccountData> accounts = new ArrayList<>();
+        BigDecimal value = parseCashValue(json);
+        if (value.compareTo(BigDecimal.ZERO) >= 0) {
+            accounts.add(new TrAccountData("tr_cash", "TR Cash", AccountType.CHECKING, value, List.of()));
+        }
+        return accounts;
+    }
+
+    private BigDecimal parseCashValue(String json) {
+        if (json == null || json.isBlank()) return BigDecimal.ZERO;
         try {
             JsonNode root = objectMapper.readTree(json);
             JsonNode array = root.isArray() ? root : root.path("availableCash");
@@ -507,20 +661,19 @@ public class TradeRepublicAdapter implements TradeRepublicPort {
                 for (JsonNode item : array) {
                     BigDecimal value = extractValue(item);
                     if (value.compareTo(BigDecimal.ZERO) >= 0) {
-                        accounts.add(new TrAccountData("tr_cash", "TR Cash", AccountType.CHECKING, value, List.of()));
-                        break;
+                        return value;
                     }
                 }
             } else if (array.isObject()) {
                 BigDecimal value = extractValue(array);
                 if (value.compareTo(BigDecimal.ZERO) >= 0) {
-                    accounts.add(new TrAccountData("tr_cash", "TR Cash", AccountType.CHECKING, value, List.of()));
+                    return value;
                 }
             }
         } catch (Exception ex) {
             log.error("Failed to parse TR availableCash: {}", json, ex);
         }
-        return accounts;
+        return BigDecimal.ZERO;
     }
 
     private BigDecimal extractValue(JsonNode node) {

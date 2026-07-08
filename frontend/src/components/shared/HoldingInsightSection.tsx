@@ -105,7 +105,7 @@ function CompositionViewToggle({ view, onChange, t }: CompositionViewToggleProps
     { value: 'line' as const, label: t('holdings.insight.viewLine'), Icon: AlignJustify },
   ]
   return (
-    <div className="inline-flex items-center rounded-full bg-muted p-0.5">
+    <div className="inline-flex items-center rounded-2xl bg-muted p-1">
       {options.map(({ value, label, Icon }) => (
         <button
           key={value}
@@ -114,13 +114,13 @@ function CompositionViewToggle({ view, onChange, t }: CompositionViewToggleProps
           aria-pressed={view === value}
           title={label}
           className={cn(
-            'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all',
+            'inline-flex h-10 min-w-32 items-center justify-center gap-2 rounded-xl px-6 text-sm font-medium transition-[background-color,color]',
             view === value
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-background text-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
-          <Icon className="size-3.5" />
+          <Icon className="size-4" />
           <span>{label}</span>
         </button>
       ))}

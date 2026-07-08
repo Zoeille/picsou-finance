@@ -1,10 +1,10 @@
 # Feature: Frontend utility library (`lib/utils.ts`)
 
-> Last updated: 2026-07-07 (locale resolution via the `SUPPORTED_LOCALES` registry)
+> Last updated: 2026-07-08 (locale resolution via the `SUPPORTED_LOCALES` registry + `localeFromLanguage`)
 
 ## Context
 
-Shared formatting functions used across the frontend. Centralised in one file to ensure consistent number/date formatting and avoid ad-hoc `Intl` calls scattered across components. The locale is resolved from the active UI language through the `SUPPORTED_LOCALES` registry (see [i18n.md](./i18n.md)).
+Shared formatting functions used across the frontend. Centralised in one file to ensure consistent number/date formatting and avoid ad-hoc `Intl` calls scattered across components. The locale is resolved from the active UI language (via `document.documentElement.lang`, kept in sync by the i18n bootstrap) through the `SUPPORTED_LOCALES` registry (see [i18n.md](./i18n.md)).
 
 ## How it works
 
@@ -18,8 +18,9 @@ Shared formatting functions used across the frontend. Centralised in one file to
 | Function | Signature | Output example |
 |----------|-----------|---------------|
 | `cn` | `(...inputs: ClassValue[]) => string` | Merges Tailwind classes via clsx + tailwind-merge |
-| `getLocale` | `() => string` | Intl locale (`'fr-FR'`, `'en-US'`, `'de-DE'`, `'es-ES'`) resolved from `document.documentElement.lang` via `resolveLocale()` |
-| `formatCurrency` | `(value, currency='EUR', locale=getLocale())` | `"1 234,50 €"` |
+| `getLocale` | `() => string` | Intl locale (`'fr-FR'`, `'en-US'`, `'de-DE'`, `'es-ES'`) resolved from `document.documentElement.lang` via `localeFromLanguage()` |
+| `localeFromLanguage` | `(language) => string` | Maps i18n/browser language tags to the registry's Intl locale (`resolveLocale().intlLocale`) |
+| `formatCurrency` | `(value, currency='EUR', locale=getLocale())` | `"1 234,50 €"`; falls back to decimal + code for invalid currency values |
 | `formatDate` | `(dateStr, locale=getLocale(), format?)` | `"08/04/2026"` (locale) or `"08-04-2026"` (iso) |
 | `parseDate` | `(input, locale=getLocale(), format=store.dateFormat) => string \| null` | `"08/04/2026"` → `"2026-04-08"` (inverse of `formatDate`); `null` if unparseable |
 | `formatDateTime` | `(dateStr, locale=getLocale(), format?)` | `"08/04/2026 14:30"` (locale) or `"08-04-2026 14:30"` (iso) |
@@ -28,7 +29,7 @@ Shared formatting functions used across the frontend. Centralised in one file to
 | `formatLocalDate` | `(dateStr, locale=getLocale())` | `"8 avril 2026"` (long month) |
 | `formatPercent` | `(value, locale=getLocale())` | `"50,0 %"` — value is a ratio (0.5 → 50%) |
 | `formatTimeAgo` | `(dateStr, locale=getLocale())` | `"il y a 3 heures"` via `Intl.RelativeTimeFormat` |
-| `todayLabel` | `(locale=getLocale())` | `"mardi 8 avril 2026"` (weekday + full date) |
+| `todayLabel` | `(locale=getLocale(), date=new Date())` | `"Mardi 8 avril 2026"` (weekday + full date, sentence-cased) |
 | `safeRedirect` | `(redirect, fallback='/')` | Returns the path only if it starts with `/`, else fallback |
 
 ## Technical choices
@@ -49,6 +50,18 @@ Shared formatting functions used across the frontend. Centralised in one file to
 - **react-hook-form** — `register(name, { setValueAs: v => parseAmount(v) })` (RHF also reads the sanitized `e.target.value`). Relies on React 19 treating `ref` as a regular prop, so no `forwardRef` is needed.
 
 All numeric inputs across Picsou (account balances & loan fields, goal target, month override/manual contribution, transaction qty/price/amount, holding qty/buy-in, month-end balances) use `NumericInput` + `parseAmount`.
+
+### Page header date
+
+`frontend/src/components/shared/PageHeader.tsx` uses `todayLabel(locale, headerDate)` as its default surtitle so top-level pages keep the same dated header rhythm. The header stores the date once at mount, then formats it from the active i18n language (`fr-FR` / `en-US`) so changing the app language updates the visible weekday and month names without needing a page reload. Pass an explicit `surtitle` only when a page needs a different label.
+
+`frontend/src/i18n/index.ts` also synchronizes `<html lang>` after init and on
+every language change, so lower-level helpers and charts that call `getLocale()`
+inherit the same language as the visible app.
+
+`todayLabel` sentence-cases the first character after `Intl.DateTimeFormat`
+returns the localized string, so French headers show `Lundi 6 juillet 2026`
+rather than `lundi 6 juillet 2026`.
 
 ### Date input — `DateInput` (hybrid native/desktop)
 
@@ -79,7 +92,8 @@ Wired into the four date fields: `AddTransactionModal` (transaction date),
 
 ## Gotchas / Pitfalls
 
-- **`getLocale()` reads `document.documentElement.lang`** — `i18n/index.ts` keeps that attribute in sync on every `languageChanged` event. `getLocale()` itself is not reactive: an already-rendered component won't re-render on language switch unless something else (usually a `t()` call) triggers it. For chart/formatting code that must react to a language switch, use the `useIntlLocale()` hook (`hooks/use-intl-locale.ts`).
+- **`getLocale()` reads `document.documentElement.lang`** — `i18n/index.ts` keeps that attribute in sync on every `languageChanged` event, but `getLocale()` itself is not reactive: an already-rendered component won't re-render on language switch. For UI that must react immediately, use `localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)` with the `useTranslation()` hook (the established pattern in charts and `CurrencyDisplay`).
+- **`formatCurrency()` validates its locale before calling `Intl.NumberFormat`** — invalid translation/mocking values must not crash the UI. Invalid currency codes fall back to a decimal number followed by the raw code.
 - **`formatDate` vs `formatLocalDate`**: `formatDate` outputs `dd/mm/yyyy` (compact, for tables) or `DD-MM-YYYY` if the user selected the ISO format in settings; `formatLocalDate` outputs long-month form (for readable labels). Don't swap them.
 - **`formatDate` format resolution**: reads `useAppStore.getState().dateFormat` at call time (`'locale'` or `'iso'`). The optional `format` parameter overrides the store value — used by callers that need a specific format regardless of user preference.
 - **Store import in `utils.ts`**: `formatDate` imports `useAppStore` directly — safe because `app-store.ts` has no dependency on `utils.ts` (no circular dependency).
@@ -92,4 +106,4 @@ Wired into the four date fields: `AddTransactionModal` (transaction date),
 
 ## Tests
 
-- `frontend/src/lib/utils.test.ts` — covers `cn`, `formatCurrency`, `formatDate`, `formatPercent`, and `parseDate` (dd/mm vs mm/dd ordering, iso mode, mixed separators, 2-digit years, impossible-date rejection, malformed input, and the `formatDate`∘`parseDate` round-trip across both formats × both locales).
+- `frontend/src/lib/utils.test.ts` — covers `cn`, `formatCurrency` including invalid currency/locale fallback, `formatDate`, `formatPercent`, and `parseDate` (dd/mm vs mm/dd ordering, iso mode, mixed separators, 2-digit years, impossible-date rejection, malformed input, and the `formatDate`∘`parseDate` round-trip across both formats × both locales).

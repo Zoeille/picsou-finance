@@ -149,6 +149,11 @@ now a thin `safeBackendMessage(err) ?? fallback`.
 non-React contexts where no translator is in scope. Never display `err.message`,
 `err.response.data.detail`, or a `` `${status} — …` `` string directly.
 
+The shared Axios client redirects ordinary GET 5xx errors to `/error/500`. Use
+`skipGlobalErrorRedirect: true` only for queries whose failure is expected to be
+shown inline by the current surface (for example bank institution search inside
+the add-account modal).
+
 ### Backend message language
 
 The backend is **English-only** (no i18n layer — see `backend/CLAUDE.md`); messages

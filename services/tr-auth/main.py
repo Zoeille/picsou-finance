@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("tr-auth")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 app = FastAPI()
 
@@ -114,6 +115,22 @@ def normalise_phone(phone: str) -> str:
     return phone
 
 
+def mask_phone(phone: str) -> str:
+    # Below 7 chars, prefix + suffix would reveal most (or all) of the number.
+    if len(phone) <= 6:
+        return "****"
+    return phone[:3] + "****" + phone[-2:]
+
+
+def cookie_names(headers: httpx.Headers) -> list[str]:
+    names: list[str] = []
+    for cookie_str in headers.get_list("set-cookie"):
+        first = cookie_str.split(";", 1)[0].strip()
+        if "=" in first:
+            names.append(first.split("=", 1)[0])
+    return names
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 class InitiateRequest(BaseModel):
@@ -130,7 +147,7 @@ class CompleteRequest(BaseModel):
 async def initiate(req: InitiateRequest):
     waf_token = await get_waf_token()
     phone = normalise_phone(req.phoneNumber)
-    log.info("Initiating TR auth for %s", phone)
+    log.info("Initiating TR auth for %s", mask_phone(phone))
 
     async with httpx.AsyncClient(timeout=15) as client:
         try:
@@ -139,7 +156,7 @@ async def initiate(req: InitiateRequest):
                 json={"phoneNumber": phone, "pin": req.pin},
                 headers=tr_headers(waf_token),
             )
-            log.info("TR /login → %d  body: %s", resp.status_code, resp.text[:300])
+            log.info("TR /login → %d", resp.status_code)
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code,
@@ -167,8 +184,8 @@ async def complete(req: CompleteRequest):
                 f"{TR_API}/api/v1/auth/web/login/{req.processId}/{req.tan}",
                 headers=tr_headers(waf_token),
             )
-            log.info("TR /login/complete → %d  set-cookie: %s",
-                     resp.status_code, resp.headers.get("set-cookie", "")[:200])
+            log.info("TR /login/complete → %d  set-cookie names: %s",
+                     resp.status_code, cookie_names(resp.headers))
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code,
@@ -187,7 +204,7 @@ async def complete(req: CompleteRequest):
                     break
             if session_token:
                 break
-    log.info("TR set-cookie headers: %s", resp.headers.get_list("set-cookie"))
+    log.info("TR set-cookie names: %s", cookie_names(resp.headers))
 
     if not session_token:
         raise HTTPException(status_code=502,

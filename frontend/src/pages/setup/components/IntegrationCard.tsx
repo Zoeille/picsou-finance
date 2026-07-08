@@ -36,9 +36,8 @@ export function IntegrationCard({
       disabled={disabled}
       onClick={onToggle}
       className={cn(
-        'w-full rounded-2xl border-2 p-4 sm:p-5 text-left transition-all',
+        'w-full rounded-2xl border-2 p-4 text-left transition-[border-color,background-color,color,opacity] sm:p-5',
         'flex items-start gap-4',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         checked
           ? 'border-primary bg-primary/5'
           : 'border-border bg-card hover:border-primary/40',

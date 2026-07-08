@@ -29,10 +29,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(FinaryServiceUnavailableException.class)
+    ProblemDetail handleFinaryUnavailable(FinaryServiceUnavailableException ex) {
+        log.warn("Finary/Clerk service unavailable: {}", ex.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Finary service is temporarily unavailable. Please try again later.");
+    }
+
     @ExceptionHandler(SyncException.class)
     ProblemDetail handleSync(SyncException ex) {
         log.warn("Sync error: {}", ex.getMessage());
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
     @ExceptionHandler(BadCredentialsException.class)

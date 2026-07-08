@@ -74,9 +74,6 @@ export function SetupStepCrypto() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.crypto.surtitle')}
-        </p>
         <div className="flex justify-center">
           <span className="rounded-xl bg-primary/10 p-3 text-primary">
             <Bitcoin className="h-6 w-6" />
@@ -120,30 +117,28 @@ export function SetupStepCrypto() {
         </div>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={skip}
-          className="w-full sm:w-auto"
+          className="w-full rounded-full"
         >
           {t('setup.crypto.skip')}
         </Button>
         {phase === 'error' ? (
           <Button
-            size="lg"
             onClick={run}
             disabled={gen.isPending}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="w-full rounded-full"
           >
             {t('setup.crypto.generateCta')}
           </Button>
         ) : (
           <Button
-            size="lg"
             onClick={proceed}
             disabled={phase === 'running'}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="w-full rounded-full"
           >
             {t('setup.crypto.continue')}
           </Button>

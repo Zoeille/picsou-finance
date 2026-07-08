@@ -2,10 +2,13 @@ package com.picsou.service;
 
 import com.picsou.dto.GoalProgressResponse;
 import com.picsou.dto.GoalRequest;
+import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.model.Account;
 import com.picsou.model.AccountType;
 import com.picsou.model.FamilyMember;
 import com.picsou.model.Goal;
+import com.picsou.model.GoalManualContribution;
+import com.picsou.model.GoalMonthOverride;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.BalanceSnapshotRepository;
 import com.picsou.repository.FamilyMemberRepository;
@@ -22,6 +25,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -140,6 +144,76 @@ class GoalServiceTest {
         verify(accountRepository).findByIdInAndMemberId(List.of(1L, 2L), 42L);
         verify(accountRepository, never()).findAllById(any());
         verify(goalRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteMonthOverride_foreignGoal_doesNotDelete() {
+        when(goalRepository.findByIdAndMemberId(99L, 42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> goalService.deleteMonthOverride(99L, "2026-06", 42L))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(overrideRepository, never()).findByGoalIdAndYearMonth(any(), any());
+        verify(overrideRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteManualContribution_foreignGoal_doesNotDelete() {
+        when(goalRepository.findByIdAndMemberId(99L, 42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> goalService.deleteManualContribution(99L, "2026-06", 42L))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(manualContributionRepository, never()).findByGoalIdAndYearMonth(any(), any());
+        verify(manualContributionRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteMonthOverride_ownedGoal_deletesEntry() {
+        Goal goal = Goal.builder()
+            .id(99L)
+            .name("Trip")
+            .targetAmount(new BigDecimal("1200"))
+            .deadline(LocalDate.now().plusMonths(6))
+            .accounts(List.of())
+            .build();
+        GoalMonthOverride override = new GoalMonthOverride();
+        override.setGoal(goal);
+        override.setYearMonth("2026-06");
+        override.setAmount(new BigDecimal("150"));
+        when(goalRepository.findByIdAndMemberId(99L, 42L)).thenReturn(Optional.of(goal));
+        when(overrideRepository.findByGoalIdAndYearMonth(99L, "2026-06"))
+            .thenReturn(Optional.of(override));
+
+        var response = goalService.deleteMonthOverride(99L, "2026-06", 42L);
+
+        verify(overrideRepository).delete(override);
+        assertThat(response.yearMonth()).isEqualTo("2026-06");
+        assertThat(response.override()).isNull();
+    }
+
+    @Test
+    void deleteManualContribution_ownedGoal_deletesEntry() {
+        Goal goal = Goal.builder()
+            .id(99L)
+            .name("Trip")
+            .targetAmount(new BigDecimal("1200"))
+            .deadline(LocalDate.now().plusMonths(6))
+            .accounts(List.of())
+            .build();
+        GoalManualContribution contribution = new GoalManualContribution();
+        contribution.setGoal(goal);
+        contribution.setYearMonth("2026-06");
+        contribution.setAmount(new BigDecimal("150"));
+        when(goalRepository.findByIdAndMemberId(99L, 42L)).thenReturn(Optional.of(goal));
+        when(manualContributionRepository.findByGoalIdAndYearMonth(99L, "2026-06"))
+            .thenReturn(Optional.of(contribution));
+
+        var response = goalService.deleteManualContribution(99L, "2026-06", 42L);
+
+        verify(manualContributionRepository).delete(contribution);
+        assertThat(response.yearMonth()).isEqualTo("2026-06");
+        assertThat(response.manualActual()).isNull();
     }
 
     @Test

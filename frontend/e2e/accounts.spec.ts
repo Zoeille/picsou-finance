@@ -19,8 +19,9 @@ test.describe('Accounts page', () => {
     // The total row should still be visible
     await expect(page.getByText('Total').first()).toBeVisible()
 
-    // Reset with "Tout"
-    await page.getByRole('button', { name: 'Tout', exact: true }).click()
+    // Reset with "Tout" — .first() because the chart's time-range selector
+    // also has a "Tout" button once it loads; the type filter row comes first in the DOM.
+    await page.getByRole('button', { name: 'Tout', exact: true }).first().click()
     await expect(page.locator('.grid').first()).toBeVisible()
   })
 

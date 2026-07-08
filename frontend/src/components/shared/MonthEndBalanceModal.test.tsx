@@ -10,7 +10,10 @@ vi.mock('@/features/accounts/hooks', () => ({
 }))
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
+  useTranslation: () => ({
+    t: (key: string, fallback?: string) => fallback ?? key,
+    i18n: { language: 'en', resolvedLanguage: 'en' },
+  }),
 }))
 
 function renderModal(onClose = vi.fn()) {

@@ -132,6 +132,7 @@ export function GoalsPage() {
 
       {goalList.length === 0 ? (
         <EmptyState
+          className="min-h-[calc(100vh-14rem)]"
           icon={<Target className="size-12" />}
           title={t('goals.noGoals')}
           action={{ label: t('goals.addGoal'), onClick: openCreate }}
@@ -159,7 +160,7 @@ export function GoalsPage() {
 
       {/* Create / Edit dialog */}
       <Dialog open={showForm} onOpenChange={(open) => { if (!open) closeForm() }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingGoal ? t('goals.editGoal') : t('goals.addGoal')}
@@ -317,25 +318,26 @@ function GoalCard({ goal, onEdit, onDelete, onCalendar, onOpenDetail }: GoalCard
         {/* Header: name + status + actions */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="cn-font-heading text-xs font-medium tracking-wider text-muted-foreground uppercase truncate">
+            <span className="cn-font-heading truncate text-sm font-semibold text-foreground">
               {goal.name}
             </span>
             {statusBadge}
           </div>
           <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-              <Pencil className="size-3.5" />
+            <Button variant="ghost" size="icon" onClick={onEdit} aria-label={t('common.edit')}>
+              <Pencil className="size-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onCalendar}>
-              <Calendar className="size-3.5" />
+            <Button variant="ghost" size="icon" onClick={onCalendar} aria-label={t('goals.viewCalendar')}>
+              <Calendar className="size-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive"
               onClick={onDelete}
+              aria-label={t('goals.deleteGoal')}
             >
-              <Trash2 className="size-3.5" />
+              <Trash2 className="size-4" />
             </Button>
           </div>
         </div>

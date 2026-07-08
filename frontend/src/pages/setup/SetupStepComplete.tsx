@@ -155,17 +155,15 @@ export function SetupStepComplete() {
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
           {autoLogin === 'success' ? (
             <Button
-              size="lg"
               onClick={goToDashboard}
-              className="w-full rounded-full px-8 transition-transform hover:scale-[1.02] sm:w-auto"
+              className="w-full rounded-full"
             >
               {t('setup.complete.cta')}
             </Button>
           ) : autoLogin === 'failed' ? (
             <Button
-              size="lg"
               onClick={goToLogin}
-              className="w-full rounded-full px-8 transition-transform hover:scale-[1.02] sm:w-auto"
+              className="w-full rounded-full"
             >
               {t('setup.complete.loginFallback')}
             </Button>

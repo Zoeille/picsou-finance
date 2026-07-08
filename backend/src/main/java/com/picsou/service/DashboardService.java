@@ -79,12 +79,7 @@ public class DashboardService {
                     BigDecimal qty = h.getQuantity();
                     BigDecimal avgBuy = h.getAverageBuyIn() != null ? h.getAverageBuyIn() : BigDecimal.ZERO;
 
-                    BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
-                    if (livePrice == null) {
-                        livePrice = h.getCurrentPrice() != null ? h.getCurrentPrice() : BigDecimal.ZERO;
-                    }
-
-                    liveValue = liveValue.add(qty.multiply(livePrice));
+                    liveValue = liveValue.add(holdingValueEur(h));
                     investedValue = investedValue.add(qty.multiply(avgBuy));
                 }
                 log.info("getDashboard: account={} holdings={} liveValue={} investedValue={}",
@@ -143,12 +138,7 @@ public class DashboardService {
             } else {
                 balanceEur = BigDecimal.ZERO;
                 for (AccountHolding h : holdings) {
-                    BigDecimal qty = h.getQuantity();
-                    BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
-                    if (livePrice == null) {
-                        livePrice = h.getCurrentPrice() != null ? h.getCurrentPrice() : BigDecimal.ZERO;
-                    }
-                    balanceEur = balanceEur.add(qty.multiply(livePrice));
+                    balanceEur = balanceEur.add(holdingValueEur(h));
                 }
             }
 
@@ -170,5 +160,15 @@ public class DashboardService {
         }
 
         return items;
+    }
+
+    private BigDecimal holdingValueEur(AccountHolding holding) {
+        BigDecimal livePrice = holding.getTicker() != null ? priceService.getPriceEur(holding.getTicker()) : null;
+        if (livePrice == null) {
+            log.warn("No live price for ticker '{}' — holding {} valued at zero until a quote is available",
+                holding.getTicker(), holding.getId());
+            return BigDecimal.ZERO;
+        }
+        return holding.getQuantity().multiply(livePrice);
     }
 }

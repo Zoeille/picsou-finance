@@ -28,11 +28,11 @@ import java.util.Set;
  * state.
  *
  * <p>For bare-metal installs where an operator skipped the init script,
- * calling {@link #ensureKey()} creates a fresh key on first invocation and
- * never overwrites after that. We intentionally do not propagate the newly
- * generated key into the running {@code CryptoEncryption} bean — it will
- * only become active after a restart, and the wizard's Done screen warns
- * the user of this edge case.
+ * when {@code CRYPTO_ENCRYPTION_KEY} is already present in the runtime
+ * environment, the setup step treats that as the source of truth and never
+ * tries to write Docker's {@code /data} path. That keeps bare-metal dev
+ * installs from failing on a read-only root while preserving the Docker file
+ * fallback for environments that explicitly configure {@code app.crypto.key-path}.
  */
 @Service
 public class CryptoKeyGeneratorService {
@@ -47,17 +47,26 @@ public class CryptoKeyGeneratorService {
                    PosixFilePermission.OWNER_EXECUTE);
 
     private final Path keyPath;
+    private final boolean runtimeKeyConfigured;
 
-    public CryptoKeyGeneratorService(@Value("${app.crypto.key-path:/data/.secrets/crypto_key}") String path) {
+    public CryptoKeyGeneratorService(
+        @Value("${app.crypto.key-path:/data/.secrets/crypto_key}") String path,
+        @Value("${app.crypto.encryption-key:}") String runtimeKey
+    ) {
         this.keyPath = Path.of(path);
+        this.runtimeKeyConfigured = runtimeKey != null && !runtimeKey.isBlank();
     }
 
     public boolean exists() {
-        return Files.exists(keyPath);
+        return runtimeKeyConfigured || Files.exists(keyPath);
     }
 
     public Path keyPath() {
         return keyPath;
+    }
+
+    public String keyLocation() {
+        return runtimeKeyConfigured ? "CRYPTO_ENCRYPTION_KEY" : keyPath.toString();
     }
 
     /**
@@ -66,6 +75,9 @@ public class CryptoKeyGeneratorService {
      * silently render every previously-encrypted secret undecryptable.
      */
     public synchronized boolean ensureKey() {
+        if (runtimeKeyConfigured) {
+            return false;
+        }
         if (Files.exists(keyPath)) {
             return false;
         }

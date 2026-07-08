@@ -109,6 +109,12 @@ export const ServerErrorPage = lazy(() =>
   import('@/pages/error/ServerErrorPage').then((m) => ({ default: m.ServerErrorPage }))
 )
 
-export function SuspensePage({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<LoadingSkeleton />}>{children}</Suspense>
+export function SuspensePage({
+  children,
+  fallback = <LoadingSkeleton />,
+}: {
+  children: React.ReactNode
+  fallback?: React.ReactNode
+}) {
+  return <Suspense fallback={fallback}>{children}</Suspense>
 }

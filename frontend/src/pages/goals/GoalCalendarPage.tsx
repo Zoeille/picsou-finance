@@ -15,14 +15,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
 import { ArrowLeft, Calendar, LayoutGrid, Clock, Loader2, Plus } from 'lucide-react'
-import { cn, parseAmount, getLocale } from '@/lib/utils'
+import { cn, formatCurrency, localeFromLanguage, parseAmount } from '@/lib/utils'
 import type { GoalMonthEntry } from '@/types/api'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const MONTH_ABBR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 function isPastOrCurrent(ym: string): boolean {
   const now = new Date()
@@ -30,14 +28,23 @@ function isPastOrCurrent(ym: string): boolean {
   return y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)
 }
 
-function monthAbbr(ym: string): string {
-  return MONTH_ABBR[parseInt(ym.split('-')[1]) - 1]
+function monthDate(ym: string): Date {
+  const [year, month] = ym.split('-').map(Number)
+  return new Date(year, month - 1, 1)
 }
 
-function fullMonthName(ym: string): string {
-  const [year, month] = ym.split('-')
-  return new Date(parseInt(year), parseInt(month) - 1, 1)
-    .toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' })
+function capitalizeLocalized(value: string, locale: string): string {
+  const [first = '', ...rest] = Array.from(value)
+  return first.toLocaleUpperCase(locale) + rest.join('')
+}
+
+function monthAbbr(ym: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: 'short' }).format(monthDate(ym))
+}
+
+function fullMonthName(ym: string, locale: string): string {
+  const label = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(monthDate(ym))
+  return capitalizeLocalized(label, locale)
 }
 
 function groupByYear(months: GoalMonthEntry[]): { year: number; entries: GoalMonthEntry[] }[] {
@@ -109,15 +116,20 @@ function getProgressColor(entry: GoalMonthEntry, isPast: boolean): { color: stri
 // Compact currency formatter (for inner donut text)
 // ---------------------------------------------------------------------------
 
-function formatCompact(value: number): string {
+function formatCompact(value: number, locale: string, currency: string): string {
   const abs = Math.abs(value)
-  if (abs >= 1_000_000)
-    return new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 2 }).format(value) + '€'
-  if (abs >= 10_000)
-    return new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 0 }).format(value) + '€'
-  if (abs >= 1_000)
-    return new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(value) + '€'
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value)
+  try {
+    if (abs >= 1_000_000)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 2 }).format(value)
+    if (abs >= 10_000)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 0 }).format(value)
+    if (abs >= 1_000)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  } catch {
+    // Invalid currency/locale makes Intl.NumberFormat throw a RangeError —
+    // fall through to formatCurrency, which degrades gracefully.
+  }
+  return formatCurrency(value, currency, locale)
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +140,9 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
   months: GoalMonthEntry[]; selectedYm: string | null; onSelect: (ym: string) => void
   onAddPreviousMonth: () => void; isAddingMonth: boolean
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
+  const currency = 'EUR'
   const years = useMemo(() => groupByYear((months ?? []).filter(e => isPastOrCurrent(e.yearMonth))), [months])
   const earliestYear = years[0]?.year
 
@@ -164,7 +178,7 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
                   const hasOverride = entry.override != null
                   const hasManual = entry.manualActual != null
                   const { color, pct, textColor } = getProgressColor(entry, true)
-                  const effectiveText = entry.effective != null ? formatCompact(entry.effective) : null
+                  const effectiveText = entry.effective != null ? formatCompact(entry.effective, locale, currency) : null
                   const percentLabel = effectiveText != null
                     ? (pct > 1 ? `+${Math.round((pct - 1) * 100)}%` : `${Math.round(pct * 100)}%`)
                     : null
@@ -178,7 +192,7 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
                       }`}
                     >
                       <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground leading-none">
-                        {monthAbbr(entry.yearMonth)}
+                        {monthAbbr(entry.yearMonth, locale)}
                       </span>
                       <div className="relative">
                         {hasOverride && !hasManual && (
@@ -206,7 +220,7 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
                         </div>
                       </div>
                       <span className="text-[10px] text-muted-foreground leading-none">
-                        obj.&nbsp;{formatCompact(entry.objective)}
+                        obj.&nbsp;{formatCompact(entry.objective, locale, currency)}
                       </span>
                     </button>
                   )
@@ -227,6 +241,8 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
 function TimelineView({ months, selectedYm, onSelect }: {
   months: GoalMonthEntry[]; selectedYm: string | null; onSelect: (ym: string) => void
 }) {
+  const { i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const sorted = useMemo(() =>
     [...(months ?? [])].filter(e => isPastOrCurrent(e.yearMonth)).reverse(),
     [months]
@@ -248,9 +264,9 @@ function TimelineView({ months, selectedYm, onSelect }: {
               onClick={() => onSelect(entry.yearMonth)}
               className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${isSelected ? 'bg-accent' : 'hover:bg-accent/50'}`}
             >
-              <span className="w-28 shrink-0 text-sm font-medium">{fullMonthName(entry.yearMonth)}</span>
+              <span className="w-28 shrink-0 text-sm font-medium">{fullMonthName(entry.yearMonth, locale)}</span>
               <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${pct}%` }} />
+                <div className={`h-full rounded-full transition-[width] ${barClass}`} style={{ width: `${pct}%` }} />
               </div>
               <span className="w-12 shrink-0 text-sm font-bold text-right">
                 {entry.effective != null ? `${Math.round(pct)}%` : '—'}
@@ -279,6 +295,8 @@ function TimelineView({ months, selectedYm, onSelect }: {
 function CalendarGridView({ months, selectedYm, onSelect }: {
   months: GoalMonthEntry[]; selectedYm: string | null; onSelect: (ym: string) => void
 }) {
+  const { i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const years = useMemo(() => groupByYear(months), [months])
 
   return (
@@ -302,13 +320,13 @@ function CalendarGridView({ months, selectedYm, onSelect }: {
                     className={`rounded-lg border p-3 text-left transition-colors ${isSelected ? 'border-primary bg-accent' : 'border-border hover:bg-accent/50'}`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{monthAbbr(entry.yearMonth)}</span>
+                      <span className="text-sm font-medium">{monthAbbr(entry.yearMonth, locale)}</span>
                       <span className="text-xs font-bold" style={{ color: textColor }}>{label}</span>
                     </div>
                     {entry.effective != null ? (
                       <div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1">
-                          <div className="h-full rounded-full bg-primary/70 transition-all" style={{ width: `${Math.min(100, pct * 100)}%` }} />
+                          <div className="h-full rounded-full bg-primary/70 transition-[width]" style={{ width: `${Math.min(100, pct * 100)}%` }} />
                         </div>
                         <div className="flex justify-between text-[11px] text-muted-foreground">
                           <span>obj. <CurrencyDisplay value={entry.objective} className="text-[11px]" /></span>
@@ -342,7 +360,8 @@ function CalendarGridView({ months, selectedYm, onSelect }: {
 function MonthDetailPanel({ goalId, entry, onClose, className }: {
   goalId: number; entry: GoalMonthEntry; onClose: () => void; className?: string
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const setOverride = useSetMonthOverride()
   const deleteOverride = useDeleteMonthOverride()
   const setManual = useSetManualContribution()
@@ -358,7 +377,7 @@ function MonthDetailPanel({ goalId, entry, onClose, className }: {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-base capitalize">{fullMonthName(entry.yearMonth)}</CardTitle>
+            <CardTitle className="text-base">{fullMonthName(entry.yearMonth, locale)}</CardTitle>
             {entry.override != null && (
               <Badge variant="outline" className="text-[10px]">{t('goals.modified')}</Badge>
             )}
@@ -485,7 +504,8 @@ export function GoalCalendarPage() {
   const { id } = useParams<{ id: string }>()
   const goalId = Number(id)
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
 
   const { data: goal, isLoading: goalLoading, error: goalError } = useGoal(goalId)
   const { data: months, isLoading: monthsLoading } = useGoalMonths(goalId)
@@ -652,7 +672,7 @@ export function GoalCalendarPage() {
           className="max-h-[85vh] overflow-y-auto rounded-t-2xl p-4"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>{selectedEntry ? fullMonthName(selectedEntry.yearMonth) : ''}</SheetTitle>
+            <SheetTitle>{selectedEntry ? fullMonthName(selectedEntry.yearMonth, locale) : ''}</SheetTitle>
             <SheetDescription>{t('goals.calendar')}</SheetDescription>
           </SheetHeader>
           {selectedEntry && (

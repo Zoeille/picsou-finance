@@ -357,12 +357,12 @@ public class GoalService {
 
     @Transactional
     public GoalMonthEntryResponse deleteMonthOverride(Long goalId, String yearMonth, Long memberId) {
-        overrideRepository.findByGoalIdAndYearMonth(goalId, yearMonth)
-            .ifPresent(overrideRepository::delete);
         Goal goal = getOrThrow(goalId, memberId);
+        overrideRepository.findByGoalIdAndYearMonth(goal.getId(), yearMonth)
+            .ifPresent(overrideRepository::delete);
         BigDecimal objective = toProgressResponse(goal).monthlyNeeded();
         BigDecimal actual = calculateActualForMonth(goal, YearMonth.parse(yearMonth));
-        BigDecimal manualActual = manualContributionRepository.findByGoalIdAndYearMonth(goalId, yearMonth)
+        BigDecimal manualActual = manualContributionRepository.findByGoalIdAndYearMonth(goal.getId(), yearMonth)
             .map(GoalManualContribution::getAmount).orElse(null);
         BigDecimal effective = manualActual != null ? manualActual : actual;
         return new GoalMonthEntryResponse(yearMonth, objective, actual, manualActual, null, effective);
@@ -392,12 +392,12 @@ public class GoalService {
 
     @Transactional
     public GoalMonthEntryResponse deleteManualContribution(Long goalId, String yearMonth, Long memberId) {
-        manualContributionRepository.findByGoalIdAndYearMonth(goalId, yearMonth)
-            .ifPresent(manualContributionRepository::delete);
         Goal goal = getOrThrow(goalId, memberId);
+        manualContributionRepository.findByGoalIdAndYearMonth(goal.getId(), yearMonth)
+            .ifPresent(manualContributionRepository::delete);
         BigDecimal objective = toProgressResponse(goal).monthlyNeeded();
         BigDecimal actual = calculateActualForMonth(goal, YearMonth.parse(yearMonth));
-        BigDecimal override = overrideRepository.findByGoalIdAndYearMonth(goalId, yearMonth)
+        BigDecimal override = overrideRepository.findByGoalIdAndYearMonth(goal.getId(), yearMonth)
             .map(GoalMonthOverride::getAmount).orElse(null);
         BigDecimal effective = override != null ? override : actual;
         return new GoalMonthEntryResponse(yearMonth, objective, actual, null, override, effective);

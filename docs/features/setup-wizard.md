@@ -40,8 +40,10 @@ Backend:
   idempotent RSA-2048 PEM generation at `/data/keys/enablebanking-private.pem` (POSIX
   `0600`).
 - `backend/src/main/java/com/picsou/service/CryptoKeyGeneratorService.java` —
-  idempotent AES-256 key writer at `/data/.secrets/crypto_key`. Same path as the Docker
-  entrypoint, so whichever runs first wins and the other no-ops.
+  idempotent AES-256 key checker/writer. If `CRYPTO_ENCRYPTION_KEY` is already present
+  in the running process (the normal bare-metal `.env.local` flow), the wizard treats
+  that as configured and does not touch Docker's `/data` path. Otherwise it writes the
+  same `/data/.secrets/crypto_key` path as the Docker entrypoint.
 - `backend/src/main/java/com/picsou/config/SetupFilter.java` — 503/410 gate.
 - `backend/src/main/java/com/picsou/config/DynamicCorsConfigurationSource.java` — reads
   `cors.allowed-origins` from `app_setting` so the wizard's Security step takes effect
@@ -54,7 +56,7 @@ Backend:
 
 Frontend:
 - `frontend/src/pages/setup/SetupLayout.tsx` — the centered hero layout, top progress
-  bar, step pill, font preload.
+  bar, language switcher, step pill, font preload.
 - `frontend/src/pages/setup/HelloGreeting.tsx` — 12-greeting multilingual opener in
   Homemade Apple font, `prefers-reduced-motion` aware.
 - `frontend/src/pages/setup/SetupStep{Intro,Admin,Security,Integrations,Complete}.tsx`
@@ -114,10 +116,13 @@ Done → POST /api/setup/complete → auto-login → /
 
 ## Gotchas / Pitfalls
 
-- **`CryptoKeyGeneratorService` and the Docker entrypoint write to the same path**
-  (`/data/.secrets/crypto_key`). If you move one, move both or the app won't boot on a
-  fresh install. Covered by
-  `CryptoKeyGeneratorServiceTest.ensureKey_isIdempotent_neverOverwritesExistingKey`.
+- **`CryptoKeyGeneratorService` must not write Docker's `/data` path when
+  `CRYPTO_ENCRYPTION_KEY` is already loaded from `.env.local`.** Bare-metal macOS
+  installs often cannot create `/data`; the runtime env key is already sufficient for
+  encryption. If a file fallback is needed, `CryptoKeyGeneratorService` and the Docker
+  entrypoint still share `/data/.secrets/crypto_key`. Covered by
+  `CryptoKeyGeneratorServiceTest.ensureKey_treatsConfiguredRuntimeKeyAsExistingWithoutWritingFile`
+  and `ensureKey_isIdempotent_neverOverwritesExistingKey`.
 - **V25 migration seeding logic** reads `EXISTS(SELECT 1 FROM app_user)` and seeds
   `setup.state='COMPLETE'` for existing installs. If you rename `app_user` don't
   forget this query.
@@ -139,6 +144,19 @@ Done → POST /api/setup/complete → auto-login → /
   corresponding sub-step completion endpoint is hit (e.g., `/enablebanking/test`
   returning `ok: true`). This is deliberate: ticking EB but then skipping the substeps
   should not leave the app thinking EB is configured.
+- **Client-side admin validation errors are i18n keys.** `setupAdminSchema` uses
+  `auth.validation.*` messages; every new key must exist in both locale files or the
+  wizard will show raw translation keys under the form fields. Inline errors should
+  only be shown after the user has typed into the field; empty untouched fields keep
+  their neutral helper copy.
+- **Setup loading is intentionally blank.** The generic dashboard `LoadingSkeleton`
+  must not be used for `/setup` route guards or lazy-route fallbacks; it flashes
+  dashboard-shaped grey placeholders before the wizard appears.
+- **Setup form scale is intentionally consistent.** Wizard steps use `max-w-2xl`,
+  `h-10` inputs / primary CTAs, rounded field controls, and no decorative uppercase
+  surtitles. Multiple primary choices in a wizard step should stack vertically instead
+  of sitting side-by-side. New wizard form steps should keep that scale unless the page
+  has a distinct reason.
 - **`SetupFilter` must anchor its `addFilterBefore(...)` to a Spring-Security-registered
   filter class (e.g. `UsernamePasswordAuthenticationFilter`), not to a custom one like
   `JwtAuthenticationFilter`.** Passing a custom class as the anchor throws
@@ -155,14 +173,17 @@ future work):
 
 - Every interactive element meets `4.5:1` contrast against its background.
 - Full keyboard traversal works on every step (Tab / Shift+Tab / Enter / Space / Esc).
+- The admin password field includes a keyboard-focusable visibility toggle with a
+  translated `aria-label`; toggling it only changes the input type (`password`/`text`).
 - `role="switch"` on the `IntegrationCard` with `aria-checked`; the whole card is the
   hit target.
 - `aria-live="polite"` on the greeting announcer, the integrations-selected counter,
   and the EB test result card.
 - `prefers-reduced-motion` honored by: HelloGreeting (collapses to a static render),
   step transitions (`animate-setup-slide-in` → no-op), confetti (pieces hidden).
-- Focus rings: every custom button uses `focus-visible:ring-2 focus-visible:ring-ring`.
-- Skip-to-content link at the top of `SetupLayout`.
+- Focus styling uses the global `:focus-visible` ring from `index.css`.
+- Skip-to-content link at the top of `SetupLayout`; it is visually hidden by default
+  and becomes visible when focused.
 
 ## Security posture
 

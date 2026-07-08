@@ -384,8 +384,33 @@ handlers.set(key('POST', '/access-keys'), (config) => {
 handlers.set(key('DELETE', '/access-keys/1'), () => null)
 handlers.set(key('DELETE', '/access-keys/2'), () => null)
 
-// Family (solo demo profile: no managed members)
+// Family (solo demo profile: no managed members, a small shared view)
 handlers.set(key('GET', '/family/members'), () => [])
+handlers.set(key('GET', '/family/dashboard'), () => ({
+  sharedAccounts: [
+    { id: 1, ownerName: 'Demo', name: 'LEP La Banque Postale', type: 'LEP', currency: 'EUR', balance: 7800, balanceEur: 7800 },
+    { id: 2, ownerName: 'Demo', name: 'PEA Boursorama', type: 'PEA', currency: 'EUR', balance: 12450, balanceEur: 12450 },
+  ],
+  sharedGoals: [
+    {
+      id: 1,
+      ownerName: 'Demo',
+      name: 'Vacances été 2025',
+      targetAmount: 3000,
+      currentTotal: 1580.9,
+      contributions: [{ memberName: 'Demo', amount: 1580.9 }],
+    },
+  ],
+  totalSharedNetWorth: 20_250,
+}))
+handlers.set(key('GET', '/family/sharing'), (config) => {
+  const params = (config.params ?? {}) as { resourceType?: string }
+  return {
+    resourceType: params.resourceType ?? 'ACCOUNT',
+    sharingLevel: 'ALL',
+    sharedResourceIds: [],
+  }
+})
 
 handlers.set(key('GET', '/finary/configured'), () => true)
 

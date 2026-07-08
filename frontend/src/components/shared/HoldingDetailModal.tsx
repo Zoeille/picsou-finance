@@ -142,7 +142,7 @@ export function HoldingDetailModal({ line, onClose }: HoldingDetailModalProps) {
 
               {/* Chart with mode toggle */}
               <div className="space-y-3">
-                <div className="inline-flex items-center rounded-full bg-muted p-0.5">
+                <div className="inline-flex items-center rounded-2xl bg-muted p-1">
                   {([
                     { value: 'price' as ChartMode, label: t('holdings.assetPrice') },
                     { value: 'holding' as ChartMode, label: t('holdings.myPosition') },
@@ -150,9 +150,9 @@ export function HoldingDetailModal({ line, onClose }: HoldingDetailModalProps) {
                     <button
                       key={opt.value}
                       onClick={() => setMode(opt.value)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                      className={`inline-flex h-10 min-w-32 items-center justify-center rounded-xl px-6 text-sm font-medium transition-[background-color,color] ${
                         mode === opt.value
-                          ? 'bg-background text-foreground shadow-sm'
+                          ? 'bg-background text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >

@@ -52,7 +52,7 @@ export function EBStep4Redirect({ onNext, onBack }: Props) {
             readOnly
             value={redirectUri}
             onFocus={(e) => e.currentTarget.select()}
-            className="w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm font-mono text-foreground"
           />
           <Button
             type="button"
@@ -84,9 +84,8 @@ export function EBStep4Redirect({ onNext, onBack }: Props) {
             {t('setup.enablebanking.back')}
           </Button>
           <Button
-            size="lg"
             onClick={onNext}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
           >
             {t('setup.enablebanking.redirect.addedCta')}
           </Button>

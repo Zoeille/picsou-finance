@@ -72,7 +72,7 @@ When JPA is needed, use `@DataJpaTest` with **H2 in-memory** (not Testcontainers
 
 ```bash
 # H2 auto-configures; no external database needed
-mvn test -Dtest=SomeRepoTest
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=SomeRepoTest
 ```
 
 H2 is on the test classpath via `spring-boot-starter-test`. No Testcontainers dependency exists in the project.
@@ -89,15 +89,18 @@ H2 is on the test classpath via `spring-boot-starter-test`. No Testcontainers de
 
 ## Running tests
 
+Backend Maven runs enforce Java 21 during `validate`; set `JAVA_HOME` to a JDK 21
+installation before running backend tests locally.
+
 ```bash
 # Backend — all tests
-mvn test
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test
 
 # Backend — single test class
-mvn test -Dtest=GoalServiceTest
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=GoalServiceTest
 
 # Backend — single test method
-mvn test -Dtest=GoalServiceTest#progressCalculation_onTrack
+JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=GoalServiceTest#progressCalculation_onTrack
 ```
 
 ## Current coverage

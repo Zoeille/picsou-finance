@@ -36,7 +36,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { TrendingUp, TrendingDown, Plus, RefreshCw, ChevronDown } from 'lucide-react'
-import { todayLabel } from '@/lib/utils'
 import { GoalDetailModal } from '@/pages/goals/GoalDetailModal'
 
 type WealthMode = 'net' | 'gross' | 'financial'
@@ -146,12 +145,12 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        surtitle={todayLabel()}
         title={t('dashboard.title')}
         actions={
           <Button
             variant="outline"
-            size="sm"
+            size="default"
+            className="h-10 min-w-44 rounded-full px-6 text-sm"
             onClick={() => setShowSyncModal(true)}
           >
             <RefreshCw className="mr-2 size-4" />
@@ -166,17 +165,20 @@ export function DashboardPage() {
           <div className="flex items-center">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                <button className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
                   {t(`dashboard.${wealthModeOptions.find(m => m.value === wealthMode)!.key}`)}
                   <ChevronDown className="size-3.5" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent
+                align="start"
+                className="w-64 min-w-64 border border-border bg-background p-1.5 ring-0 before:hidden"
+              >
                 {wealthModeOptions.map(m => (
                   <DropdownMenuItem
                     key={m.value}
                     onClick={() => setWealthMode(m.value)}
-                    className={wealthMode === m.value ? 'font-semibold' : ''}
+                    className={wealthMode === m.value ? 'font-semibold text-foreground' : ''}
                   >
                     {t(`dashboard.${m.key}`)}
                   </DropdownMenuItem>
@@ -221,11 +223,11 @@ export function DashboardPage() {
 
       {/* Charts row */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="h-[420px]">
           <CardHeader>
             <CardTitle>{t('dashboard.gainLoss')}</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-h-0 flex-1">
             <NetWorthChart data={history ?? []} intraday={intraday ?? []} range={range} onRangeChange={setRange} />
           </CardContent>
         </Card>
@@ -265,7 +267,7 @@ export function DashboardPage() {
                   onClick={() => setDetailGoalId(goal.id)}
                 >
                   <ItemContent className="gap-3">
-                    <ItemDescription className="cn-font-heading text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    <ItemDescription className="cn-font-heading text-sm font-semibold text-foreground">
                       {goal.name}
                     </ItemDescription>
                     <CurrencyDisplay

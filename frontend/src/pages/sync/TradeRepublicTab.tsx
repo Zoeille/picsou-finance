@@ -17,8 +17,9 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import type { TrSessionStatus } from '@/types/api'
-import { extractErrorMessage, getErrorStatus, getErrorDetail } from '@/lib/errors'
+import { formatTrAuthError } from '@/lib/errors'
 import { formatDateTime } from '@/lib/utils'
+import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 
 type AuthState = 'IDLE' | 'AWAITING_TAN' | 'CONNECTED' | 'ERROR'
 
@@ -26,50 +27,6 @@ export function TradeRepublicTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const formatAuthError = (error: unknown): string => {
-    const status = getErrorStatus(error)
-
-    // Rate limit error
-    if (status === 429) {
-      return t('sync.tr.errors.tooManyAttempts')
-    }
-
-    // Bad gateway or TR rejection
-    if (status === 502) {
-      const detail = getErrorDetail(error) || ''
-
-      // Try to extract specific TR error
-      if (detail.includes('NUMBER_INVALID')) {
-        return t('sync.tr.errors.invalidPhoneNumber')
-      }
-      if (detail.includes('PIN_INVALID')) {
-        return t('sync.tr.errors.invalidPin')
-      }
-      if (detail.includes('AUTHENTICATION_ERROR')) {
-        return t('sync.tr.errors.authenticationFailed')
-      }
-
-      return t('sync.tr.errors.serverError')
-    }
-
-    // Validation errors (422)
-    if (status === 422) {
-      const errors =
-        (error as { response?: { data?: { errors?: Record<string, unknown> } } })?.response
-          ?.data?.errors ?? {}
-      if (errors.phoneNumber) {
-        return t('sync.tr.errors.phoneNumberRequired')
-      }
-      if (errors.pin) {
-        return t('sync.tr.errors.pinRequired')
-      }
-      return t('sync.tr.errors.validationFailed')
-    }
-
-    // Fallback
-    return extractErrorMessage(error, t('sync.tr.errors.unknownError'))
-  }
 
   const [authState, setAuthState] = useState<AuthState>('IDLE')
   const [phone, setPhone] = useState('')
@@ -91,19 +48,22 @@ export function TradeRepublicTab() {
       api.post<{ processId: string }>('/tr/auth/initiate', { phoneNumber: params.phone, pin: params.pin }).then(r => r.data),
     onSuccess: (data) => {
       setProcessId(data.processId)
+      setTan('')
       setAuthState('AWAITING_TAN')
       setErrorMsg(null)
     },
     onError: (error: unknown) => {
-      const friendlyMsg = formatAuthError(error)
+      const friendlyMsg = formatTrAuthError(error, t)
       setErrorMsg(friendlyMsg)
-      setAuthState('ERROR')
+      setProcessId(null)
+      setTan('')
+      setAuthState('IDLE')
     },
   })
 
   const submitTanMutation = useMutation({
-    mutationFn: (tanCode: string) =>
-      api.post('/tr/auth/complete', { processId: processId!, tan: tanCode }).then(r => r.data),
+    mutationFn: (params: { processId: string; tan: string }) =>
+      api.post('/tr/auth/complete', params).then(r => r.data),
     onSuccess: () => {
       setAuthState('IDLE')
       setTan('')
@@ -114,9 +74,10 @@ export function TradeRepublicTab() {
       queryClient.invalidateQueries({ queryKey: ['sync', 'tr', 'status'] })
     },
     onError: (error: unknown) => {
-      const friendlyMsg = formatAuthError(error)
+      const friendlyMsg = formatTrAuthError(error, t)
       setErrorMsg(friendlyMsg)
-      setAuthState('ERROR')
+      setTan('')
+      setAuthState('AWAITING_TAN')
     },
   })
 
@@ -163,7 +124,8 @@ export function TradeRepublicTab() {
 
   function handleTan(e: React.FormEvent) {
     e.preventDefault()
-    submitTanMutation.mutate(tan)
+    if (!processId || tan.length !== TR_VERIFICATION_CODE_LENGTH) return
+    submitTanMutation.mutate({ processId, tan })
   }
 
   function handleCsvChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -308,13 +270,16 @@ export function TradeRepublicTab() {
                 <Input
                   id="tr-tan"
                   value={tan}
-                  onChange={(e) => setTan(e.target.value)}
+                  onChange={(e) => setTan(e.target.value.replace(/\D/g, '').slice(0, TR_VERIFICATION_CODE_LENGTH))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={TR_VERIFICATION_CODE_LENGTH}
                   required
                   autoFocus
                 />
               </div>
 
-              <Button type="submit" disabled={submitTanMutation.isPending} className="w-full">
+              <Button type="submit" disabled={submitTanMutation.isPending || tan.length !== TR_VERIFICATION_CODE_LENGTH} className="w-full">
                 {t('sync.tr.connect')}
               </Button>
             </CardContent>

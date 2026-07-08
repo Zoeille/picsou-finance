@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { useForm, useFieldArray, Controller } from 'react-hook-form'
+import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { PlusCircle, X } from 'lucide-react'
+import { formatApiError } from '@/lib/errors'
 import { setupSecuritySchema, type SetupSecurityFormValues } from '@/features/setup/schemas'
 import { useSubmitSecurity } from '@/features/setup/hooks'
 
@@ -38,6 +39,7 @@ export function SetupStepSecurity() {
     control,
     name: 'allowedOrigins' as never,
   })
+  const allowedOrigins = useWatch({ control, name: 'allowedOrigins' })
 
   const onSubmit = handleSubmit(async (values) => {
     await submit.mutateAsync({
@@ -50,9 +52,6 @@ export function SetupStepSecurity() {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-          {t('setup.security.surtitle')}
-        </p>
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
           {t('setup.security.title')}
         </h1>
@@ -61,61 +60,74 @@ export function SetupStepSecurity() {
         </p>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-6" noValidate>
+      <form onSubmit={onSubmit} className="mx-auto w-full max-w-2xl space-y-5" noValidate>
         <div className="space-y-2">
-          <Label>{t('setup.security.originsLabel')}</Label>
-          <p className="text-xs text-muted-foreground">
+          <Label className="text-sm font-semibold">{t('setup.security.originsLabel')}</Label>
+          <p className="text-sm text-muted-foreground">
             {t('setup.security.originsHint')}
           </p>
-          <div className="space-y-2">
-            {fields.map((field, idx) => (
-              <div key={field.id} className="flex items-center gap-2">
-                <Input
-                  placeholder="https://example.com"
-                  aria-invalid={!!formState.errors.allowedOrigins?.[idx]}
-                  {...register(`allowedOrigins.${idx}` as const)}
-                />
-                {fields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(idx)}
-                    aria-label={t('setup.security.originRemove')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            ))}
+          <div className="space-y-3">
+            {fields.map((field, idx) => {
+              const originError = formState.errors.allowedOrigins?.[idx]
+              const originMessage = typeof originError?.message === 'string' ? originError.message : undefined
+              const originHasInput = (allowedOrigins?.[idx] ?? '').trim().length > 0
+              const showOriginError = (originHasInput || formState.submitCount > 0) && !!originMessage
+
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <div className="flex items-center gap-3">
+                    <Input
+                      placeholder="https://example.com"
+                      aria-invalid={showOriginError}
+                      aria-describedby={showOriginError ? `origin-error-${idx}` : undefined}
+                      {...register(`allowedOrigins.${idx}` as const)}
+                    />
+                    {fields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => remove(idx)}
+                        aria-label={t('setup.security.originRemove')}
+                        className="h-10 w-10 rounded-xl"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {showOriginError && (
+                    <p id={`origin-error-${idx}`} className="text-xs text-destructive">
+                      {t(originMessage)}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => append('')}
-            className="mt-1"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            {t('setup.security.originAdd')}
-          </Button>
-          {formState.errors.allowedOrigins && (
+          {typeof formState.errors.allowedOrigins?.message === 'string' && formState.submitCount > 0 && (
             <p className="text-xs text-destructive">
-              {t(
-                typeof formState.errors.allowedOrigins.message === 'string'
-                  ? formState.errors.allowedOrigins.message
-                  : 'setup.security.originRequired'
-              )}
+              {t(formState.errors.allowedOrigins.message)}
             </p>
           )}
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => append('')}
+              className="rounded-xl px-4"
+            >
+              <PlusCircle className="mr-2 size-4" />
+              {t('setup.security.originAdd')}
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 p-4">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-5">
           <div className="space-y-1">
-            <Label htmlFor="setup-secure-cookies" className="text-sm font-medium">
+            <Label htmlFor="setup-secure-cookies" className="text-sm font-semibold">
               {t('setup.security.secureCookiesLabel')}
             </Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t('setup.security.secureCookiesHint')}
             </p>
           </div>
@@ -127,6 +139,7 @@ export function SetupStepSecurity() {
                 id="setup-secure-cookies"
                 checked={field.value}
                 onCheckedChange={field.onChange}
+                className="origin-right scale-125"
               />
             )}
           />
@@ -134,17 +147,15 @@ export function SetupStepSecurity() {
 
         {submit.error && (
           <p role="alert" className="text-sm text-destructive">
-            {(submit.error as { response?: { data?: { detail?: string } } })?.response?.data
-              ?.detail ?? String(submit.error)}
+            {formatApiError(submit.error, t, 'setup.security.submitError')}
           </p>
         )}
 
         <div className="pt-2">
           <Button
             type="submit"
-            size="lg"
             disabled={submit.isPending}
-            className="w-full rounded-full transition-transform hover:scale-[1.01] sm:w-auto"
+            className="w-full rounded-full"
           >
             {submit.isPending ? t('setup.security.saving') : t('setup.security.cta')}
           </Button>

@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { AccountTypeBadge } from '@/components/shared/AccountTypeBadge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, localeFromLanguage } from '@/lib/utils'
 
 interface AccountCardProps {
   account: Account
@@ -21,7 +21,8 @@ function AccountAvatar({ logoUrl, color }: { logoUrl: string | null; color: stri
 }
 
 export function AccountCard({ account, onClick }: AccountCardProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = localeFromLanguage(i18n.resolvedLanguage ?? i18n.language)
   const isLoan = account.type === 'LOAN'
   const isRealEstate = account.type === 'REAL_ESTATE'
 
@@ -34,7 +35,7 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
 
   return (
     <Card
-      className="cursor-pointer transition-shadow hover:shadow-md"
+      className="cursor-pointer transition-colors hover:bg-muted/20"
       onClick={onClick}
     >
       <CardContent className="flex items-start gap-3 p-4">
@@ -56,13 +57,13 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
           </div>
           {isRealEstate && pnl !== null && (
             <p className={`mt-1 text-xs ${pnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-              {pnl >= 0 ? '+' : ''}{pnl.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              {pnl >= 0 ? '+' : ''}{formatCurrency(pnl, 'EUR', locale)}
               {pnlPct !== null && ` (${pnl >= 0 ? '+' : ''}${pnlPct}%)`}
             </p>
           )}
           {isLoan && account.debt && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {t('debt.borrowedAmount')}: {account.debt.borrowedAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              {t('debt.borrowedAmount')}: {formatCurrency(account.debt.borrowedAmount, 'EUR', locale)}
             </p>
           )}
           {account.lastSyncedAt && (

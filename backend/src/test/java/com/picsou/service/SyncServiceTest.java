@@ -25,6 +25,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +110,33 @@ class SyncServiceTest {
         ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
         verify(accountRepository).save(captor.capture());
         assertThat(captor.getValue().getLogoUrl()).isEqualTo("https://logos.example/bnp.png");
+    }
+
+    /** A retry that still sees no accounts must stay retryable instead of becoming a false success. */
+    @Test
+    void retrySync_emptyAccountListMarksRequisitionFailed() {
+        Long memberId = 4L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        Requisition requisition = Requisition.builder()
+            .id(40L)
+            .member(member)
+            .requisitionId("session-40")
+            .institutionId("REVOLUT::FR")
+            .institutionName("Revolut")
+            .status(RequisitionStatus.FAILED)
+            .build();
+
+        when(requisitionRepository.findByIdAndMemberId(40L, memberId)).thenReturn(Optional.of(requisition));
+        when(bankConnector.fetchBalances("session-40")).thenReturn(List.of());
+
+        List<AccountResponse> responses = syncService.retrySync(40L, memberId);
+
+        assertThat(responses).isEmpty();
+        assertThat(requisition.getStatus()).isEqualTo(RequisitionStatus.FAILED);
+        assertThat(requisition.getLastSyncedAt()).isNull();
+        verify(requisitionRepository).save(requisition);
+        verify(accountRepository, never()).save(any(Account.class));
     }
 
     /** A requisition created before logos existed gets backfilled on the next resync. */
@@ -224,10 +252,12 @@ class SyncServiceTest {
 
         syncService.resyncAll(memberId);
 
-        // The failed logo lookup is swallowed inside ensureLogoUrl -- the resync itself
-        // still completes normally (fetchBalances succeeds, requisition stays LINKED).
+        // The failed logo lookup is swallowed inside ensureLogoUrl. The empty
+        // balance response is not a successful sync, but an already-LINKED
+        // session must not flap to FAILED on a transient provider gap.
         assertThat(requisition.getLogoUrl()).isNull();
         assertThat(requisition.getStatus()).isEqualTo(RequisitionStatus.LINKED);
-        verify(requisitionRepository).save(requisition);
+        assertThat(requisition.getLastSyncedAt()).isNull();
+        verify(requisitionRepository, never()).save(requisition);
     }
 }

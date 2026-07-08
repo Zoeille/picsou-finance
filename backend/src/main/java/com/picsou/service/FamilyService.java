@@ -16,7 +16,9 @@ import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 @Service
@@ -28,6 +30,8 @@ public class FamilyService {
     private final UserMfaRepository userMfaRepository;
     private final SharingSettingsRepository sharingSettingsRepository;
     private final SharedResourceRepository sharedResourceRepository;
+    private final AccountRepository accountRepository;
+    private final GoalRepository goalRepository;
     private final PasswordEncoder passwordEncoder;
 
     public FamilyService(
@@ -36,6 +40,8 @@ public class FamilyService {
         UserMfaRepository userMfaRepository,
         SharingSettingsRepository sharingSettingsRepository,
         SharedResourceRepository sharedResourceRepository,
+        AccountRepository accountRepository,
+        GoalRepository goalRepository,
         PasswordEncoder passwordEncoder
     ) {
         this.memberRepository = memberRepository;
@@ -43,6 +49,8 @@ public class FamilyService {
         this.userMfaRepository = userMfaRepository;
         this.sharingSettingsRepository = sharingSettingsRepository;
         this.sharedResourceRepository = sharedResourceRepository;
+        this.accountRepository = accountRepository;
+        this.goalRepository = goalRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -224,9 +232,18 @@ public class FamilyService {
 
     @Transactional
     public void updateSharingSettings(Long memberId, SharingSettingsRequest req) {
+        String resourceType = validateResourceType(req.resourceType());
+        SharingLevel sharingLevel = req.sharingLevel();
+        if (sharingLevel == null) {
+            throw new IllegalArgumentException("Sharing level is required");
+        }
+        List<Long> manualResourceIds = sharingLevel == SharingLevel.MANUAL
+            ? validateManualResourceIds(resourceType, memberId, req.sharedResourceIds())
+            : List.of();
+
         SharingSettings settings = sharingSettingsRepository
-            .findByMemberIdAndResourceType(memberId, req.resourceType())
-            .orElseGet(() -> new SharingSettings(null, null, req.resourceType(), SharingLevel.NONE));
+            .findByMemberIdAndResourceType(memberId, resourceType)
+            .orElseGet(() -> new SharingSettings(null, null, resourceType, SharingLevel.NONE));
 
         FamilyMember member = memberRepository.findById(memberId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found"));
@@ -234,20 +251,54 @@ public class FamilyService {
             settings.setMember(member);
         }
 
-        settings.setSharingLevel(req.sharingLevel());
+        settings.setSharingLevel(sharingLevel);
         sharingSettingsRepository.save(settings);
 
-        sharedResourceRepository.deleteAllByOwnerMemberIdAndResourceType(memberId, req.resourceType());
+        sharedResourceRepository.deleteAllByOwnerMemberIdAndResourceType(memberId, resourceType);
 
-        if (req.sharingLevel() == SharingLevel.MANUAL && req.sharedResourceIds() != null) {
-            for (Long resourceId : req.sharedResourceIds()) {
-                SharedResource sr = SharedResource.builder()
+        if (sharingLevel == SharingLevel.MANUAL) {
+            List<SharedResource> resources = manualResourceIds.stream()
+                .map(resourceId -> SharedResource.builder()
                     .ownerMember(member)
-                    .resourceType(req.resourceType())
+                    .resourceType(resourceType)
                     .resourceId(resourceId)
-                    .build();
-                sharedResourceRepository.save(sr);
+                    .build())
+                .toList();
+            sharedResourceRepository.saveAll(resources);
+        }
+    }
+
+    private String validateResourceType(String resourceType) {
+        if (!"ACCOUNT".equals(resourceType) && !"GOAL".equals(resourceType)) {
+            throw new IllegalArgumentException("Unsupported resource type");
+        }
+        return resourceType;
+    }
+
+    private List<Long> validateManualResourceIds(String resourceType, Long memberId, List<Long> resourceIds) {
+        List<Long> distinctIds = new ArrayList<>();
+        LinkedHashSet<Long> seen = new LinkedHashSet<>();
+        for (Long resourceId : resourceIds == null ? List.<Long>of() : resourceIds) {
+            if (resourceId == null) {
+                throw new IllegalArgumentException("Shared resource IDs must not contain null");
+            }
+            if (seen.add(resourceId)) {
+                distinctIds.add(resourceId);
             }
         }
+
+        if (distinctIds.isEmpty()) {
+            return distinctIds;
+        }
+
+        int resolvedCount = switch (resourceType) {
+            case "ACCOUNT" -> accountRepository.findByIdInAndMemberId(distinctIds, memberId).size();
+            case "GOAL" -> goalRepository.findByIdInAndMemberId(distinctIds, memberId).size();
+            default -> throw new IllegalArgumentException("Unsupported resource type");
+        };
+        if (resolvedCount != distinctIds.size()) {
+            throw new IllegalArgumentException("One or more shared resource IDs not found");
+        }
+        return distinctIds;
     }
 }

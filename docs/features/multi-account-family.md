@@ -1,6 +1,6 @@
 # Feature: Multi-account family system
 
-> Last updated: 2026-06-03
+> Last updated: 2026-07-07
 
 ## Context
 
@@ -53,6 +53,14 @@ Members choose what to share via `SharingSettings` per resource type (`ACCOUNT`,
 - `ALL` — share everything of that type
 - `MANUAL` — share only specific resources via `shared_resource` table
 
+Manual sharing is validated on both sides of the boundary. `FamilyService.updateSharingSettings`
+only accepts `ACCOUNT` and `GOAL`, resolves requested manual ids with member-scoped
+repository methods (`findByIdInAndMemberId(...)`), and rejects the request before
+deleting prior shares if any id is missing, foreign, or null. `FamilyViewService`
+also reads manual shares through member-scoped batch lookups, so stale or manually
+corrupted `shared_resource` rows are omitted instead of leaking another member's
+account or goal.
+
 The `FamilyViewService` aggregates shared data for the family dashboard.
 
 ### Profile activation flow
@@ -83,9 +91,11 @@ switch into their profile and browse their data:
   Overriding to an **activated** member throws `403 "Cannot access an independent
   member's data"`. This is the single choke point through which every controller
   scopes data (`currentMemberId()`), so all endpoints are covered at once.
-- **Frontend (UX):** the sidebar profile switcher is built from
-  `selectSwitchableMembers()` (`features/family/members.ts` = `managed && !activated`),
-  so independent members **disappear** from the switcher. They remain listed in Family
+- **Frontend (UX):** admin users get a visible sidebar profile switcher. It is
+  built from `selectSwitchableMembers()` (`features/family/members.ts` =
+  `managed && !activated`) so independent members cannot be impersonated from
+  the UI. Non-admin and demo sessions do not call `/family/members`; they keep
+  the simple Settings account link. Independent members remain listed in Family
   settings and on the family dashboard.
 
 This is an automatic confidentiality guarantee, not a toggle. **Voluntary sharing is
@@ -193,8 +203,8 @@ Step 3 is critical: without it, the next request would fail because the old JWT 
 - `stores/profile-store.ts` — `activeMemberId`, `viewMode` (own/managed/family)
 - `features/family/hooks.ts` — TanStack Query hooks for members, sharing, dashboard
 - `features/family/api.ts` — API functions
-- `features/family/members.ts` — `selectSwitchableMembers()` (admin switcher excludes independent members)
-- `components/layout/AppSidebar.tsx` — profile switcher in dropdown
+- `features/family/members.ts` — `selectSwitchableMembers()` helper used by the admin switcher; excludes independent members
+- `components/layout/AppSidebar.tsx` — admin profile switcher; non-admin/demo bottom account row links to Settings
 - `lib/api-client.ts` — Axios interceptor adds `?memberId=X` only when an **admin** has a managed profile active
 - `lib/reset-client-state.ts` — `resetClientState(queryClient)`: resets profile-store + clears the Query cache; the one shared auth-boundary reset
 - `features/auth/hooks.ts` — `useLogout` calls `resetClientState` (logout side)
@@ -211,15 +221,22 @@ Step 3 is critical: without it, the next request would fail because the old JWT 
 
 ### Flow: admin switching to managed profile
 
+The app shell exposes a visible profile switcher for admins.
+
 ```
-Admin clicks managed profile in sidebar dropdown
+Admin selects a managed profile from the sidebar switcher
   → setActiveMember(memberId) in profile-store
-  → queryClient.invalidateQueries() clears all TanStack Query cache
+  → queryClient.invalidateQueries() marks cached queries stale
   → Axios interceptor reads activeMemberId from store
   → Adds ?memberId=X to every outgoing API request
   → UserContext.currentMemberId() sees admin + memberId param → returns X
   → All queries scoped to member X
-  → Sidebar avatar/name updates to show managed profile
+  → The switcher UI updates to show the managed profile
+
+Admin selects their own account
+  → setActiveMember(null) in profile-store
+  → queryClient.invalidateQueries()
+  → Axios interceptor stops adding ?memberId
 ```
 
 ## Technical choices
@@ -236,14 +253,14 @@ Admin clicks managed profile in sidebar dropdown
 
 - **LazyInitializationException**: With `open-in-view: false`, any entity with `@ManyToOne(fetch = LAZY)` that gets serialized directly by a controller will 500. All lazy relation fields have `@JsonIgnore` as a safeguard. New entities with lazy relations MUST add `@JsonIgnore`.
 - **PG native enum columns**: PostgreSQL enum types (`sharing_level`, `requisition_status`, `account_type`) require `@JdbcTypeCode(SqlTypes.NAMED_ENUM)` + `columnDefinition`. Without it, Hibernate sends a varchar and PG rejects the INSERT/UPDATE.
-- **Admin-only endpoints**: `FamilyController` member management methods call `requireAdmin()`. If a non-admin hits these, they get 403, and the global Axios interceptor turns any GET 403 into a full-app redirect to `/error/403`. The frontend must therefore **never call these for non-admins**: `useFamilyMembers({ enabled })` is gated on `isAdmin` in `AppSidebar.tsx` (the sidebar renders for every user). Other callers are already admin-scoped — `MembersSection` sits under `RequireAdmin`, and `FamilySettingsPage`'s `MemberManagement` is only rendered when `isAdmin`. Regression: a non-admin's first login used to fire `/api/family/members` from the sidebar → 403 → `/error/403`.
+- **Admin-only endpoints**: `FamilyController` member management methods call `requireAdmin()`. If a non-admin hits these, they get 403, and the global Axios interceptor turns any GET 403 into a full-app redirect to `/error/403`. The frontend must therefore **never call these for non-admins**: `FamilySettingsPage` renders `MemberManagement` only when `isAdmin`, and admin pages sit under `RequireAdmin`. Regression: a non-admin's first login used to fire `/api/family/members` from the sidebar → 403 → `/error/403`.
 - **Stale auth store**: The frontend caches user info (including role) at login time. Changing role in DB requires re-login to take effect in the UI.
 - **Username change requires token rotation**: `PATCH /api/auth/username` must re-issue the JWT cookies. If you only update the DB row, the existing tokens still carry the old username — the filter can't find the user → immediate 401 on next request.
 - **`isIndependent` in frontend must include `managed`**: The display logic for a member's status in `FamilySettingsPage` uses `isIndependent = member.managed && member.hasLogin && member.activated`. Without `managed`, admin users (who are also `hasLogin && activated`) would show "Compte indépendant" instead of "Administrateur".
 - **Member deletion cascades everything — but order matters**: `FamilyService.deleteMember(id, requesterMemberId)` must delete the loaded `AppUser` **before** the member. `AppUser.member` is a non-nullable `@OneToOne`; deleting the member while a managed `AppUser` still references it makes Hibernate throw `TransientObjectException` at flush (before any SQL), so the DB `ON DELETE CASCADE` never runs. After the `AppUser` is removed, `memberRepository.delete(member)` cascades the rest (accounts, goals, sessions…) at the DB level. A Mockito `InOrder` test (`FamilyServiceTest.deleteMember_withLogin_deletesUserBeforeMember`) locks the ordering; a true flush test isn't possible because the PG-specific schema (`TIMESTAMPTZ`, native enums) won't replay on H2 (see "Member deletion" and `docs/conventions/testing.md`). Only two 403 guards remain — self-delete and last-admin (see "Member deletion"). Activated members are deletable (the old "cannot delete an activated member" rule was removed). The frontend requires retyping the display name (`ConfirmDialog confirmPhrase`) before deleting an activated member, and surfaces any backend error inside the dialog via `formatApiError` (see `docs/conventions/error-handling.md`).
-- **Cannot impersonate an activated member**: `UserContext.getMemberIdOverride()` throws 403 when an admin's `?memberId=X` targets an activated (independent) member other than themselves. The sidebar hides them too (`selectSwitchableMembers`), but the backend is the authoritative guard — never rely on the frontend filter alone.
+- **Cannot impersonate an activated member**: `UserContext.getMemberIdOverride()` throws 403 when an admin's `?memberId=X` targets an activated (independent) member other than themselves. The sidebar switcher hides them via `selectSwitchableMembers`, but the backend is the authoritative guard — never rely on the frontend filter alone.
 - **Yahoo Finance null closes**: Yahoo can return `null` in historical price arrays for non-trading days. Must check `close == null` before unboxing to avoid NPE.
-- **Profile switch cache**: TanStack Query cache is global. Without `invalidateQueries()` on switch, the old member's data persists visually.
+- **Profile switch cache**: TanStack Query cache is global. The sidebar switcher must invalidate queries on every effective switch; otherwise the old member's data persists visually.
 - **Cross-user leak on a shared browser**: query keys are not scoped by user and `activeMemberId` is persisted to localStorage, so every auth-boundary crossing MUST `queryClient.clear()` + `useProfileStore.getState().reset()` — centralised in `resetClientState` (`lib/reset-client-state.ts`), wired into `useLogout` (logout) and `useLoginWithRememberMe`/`useVerifyMfa` (login). Otherwise the next person to log in on the same device briefly sees the previous user's balance/history (and, for an admin re-login, the stale `?memberId` returns another member's real data). Regression that prompted the fix: a member reported seeing "un solde et historique qui n'est pas du tout le sien" on first login. A related **identity** bleed — entering one user's credentials but landing on *another* user's account — is the server-side cookie-severing case in [mfa-and-remember-me.md](./mfa-and-remember-me.md#cross-identity-session-bleed-at-login).
 
 ## Tests

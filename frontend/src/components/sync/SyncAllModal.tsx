@@ -52,6 +52,7 @@ import {
 } from '@/features/sync/hooks'
 import { useAccounts } from '@/features/accounts/hooks'
 import { formatTimeAgo } from '@/lib/utils'
+import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 
 type SyncConnection = {
   id: string
@@ -61,6 +62,7 @@ type SyncConnection = {
   lastSyncedAt: string | null
   syncId?: number
 }
+
 
 const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{ className?: string }>> = {
   bank: Landmark,
@@ -342,7 +344,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
 
   function handleTrComplete(e: React.FormEvent) {
     e.preventDefault()
-    if (!trProcessId) return
+    if (!trProcessId || trTan.length !== TR_VERIFICATION_CODE_LENGTH) return
     completeTrMutation.mutate(
       { processId: trProcessId, tan: trTan },
       {
@@ -511,7 +513,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         {boursoAuthStep === 'credentials' && (
                           <form onSubmit={handleBoursoInitiate} className="space-y-3">
                             <div className="space-y-1">
-                              <Label htmlFor="bourso-modal-id" className="text-xs">
+                              <Label htmlFor="bourso-modal-id">
                                 <User className="size-3 inline-block mr-1" />
                                 {t('sync.bourso.customerId')}
                               </Label>
@@ -521,12 +523,11 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                                 inputMode="numeric"
                                 value={boursoCustomerId}
                                 onChange={e => setBoursoCustomerId(e.target.value)}
-                                className="h-8 text-sm"
                                 required
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label htmlFor="bourso-modal-pwd" className="text-xs">
+                              <Label htmlFor="bourso-modal-pwd">
                                 <Lock className="size-3 inline-block mr-1" />
                                 {t('sync.bourso.password')}
                               </Label>
@@ -536,7 +537,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                                 inputMode="numeric"
                                 value={boursoPassword}
                                 onChange={e => setBoursoPassword(e.target.value)}
-                                className="h-8 text-sm"
                                 required
                               />
                             </div>
@@ -559,7 +559,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                               </p>
                             )}
                             <div className="space-y-1">
-                              <Label htmlFor="bourso-modal-mfa" className="text-xs">
+                              <Label htmlFor="bourso-modal-mfa">
                                 <ShieldCheck className="size-3 inline-block mr-1" />
                                 {t('sync.bourso.mfaCode')}
                               </Label>
@@ -571,7 +571,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                                 value={boursoMfaCode}
                                 onChange={e => setBoursoMfaCode(e.target.value)}
                                 autoFocus
-                                className="h-8 text-sm"
                                 required
                               />
                             </div>
@@ -598,7 +597,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         {trAuthStep === 'phone' && (
                           <form onSubmit={handleTrInitiate} className="space-y-3">
                             <div className="space-y-1">
-                              <Label htmlFor="tr-modal-phone" className="text-xs">
+                              <Label htmlFor="tr-modal-phone">
                                 <Smartphone className="size-3 inline-block mr-1" />
                                 {t('sync.tr.phone')}
                               </Label>
@@ -608,12 +607,11 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                                 value={trPhone}
                                 onChange={e => setTrPhone(e.target.value)}
                                 placeholder="+49..."
-                                className="h-8 text-sm"
                                 required
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label htmlFor="tr-modal-pin" className="text-xs">
+                              <Label htmlFor="tr-modal-pin">
                                 <Lock className="size-3 inline-block mr-1" />
                                 {t('sync.tr.pin')}
                               </Label>
@@ -622,7 +620,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                                 type="password"
                                 value={trPin}
                                 onChange={e => setTrPin(e.target.value)}
-                                className="h-8 text-sm"
                                 required
                               />
                             </div>
@@ -640,21 +637,23 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         {trAuthStep === 'tan' && (
                           <form onSubmit={handleTrComplete} className="space-y-3">
                             <div className="space-y-1">
-                              <Label htmlFor="tr-modal-tan" className="text-xs">
+                              <Label htmlFor="tr-modal-tan">
                                 <ShieldCheck className="size-3 inline-block mr-1" />
                                 {t('sync.tr.tan')}
                               </Label>
                               <Input
                                 id="tr-modal-tan"
                                 value={trTan}
-                                onChange={e => setTrTan(e.target.value)}
+                                onChange={e => setTrTan(e.target.value.replace(/\D/g, '').slice(0, TR_VERIFICATION_CODE_LENGTH))}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={TR_VERIFICATION_CODE_LENGTH}
                                 autoFocus
-                                className="h-8 text-sm"
                                 required
                               />
                             </div>
                             <div className="flex gap-2">
-                              <Button type="submit" size="sm" disabled={completeTrMutation.isPending}>
+                              <Button type="submit" size="sm" disabled={completeTrMutation.isPending || trTan.length !== TR_VERIFICATION_CODE_LENGTH}>
                                 {completeTrMutation.isPending && <Loader2 className="size-3 animate-spin" />}
                                 {t('sync.tr.connect')}
                               </Button>
