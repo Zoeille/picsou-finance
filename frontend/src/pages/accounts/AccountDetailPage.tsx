@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { toast } from 'sonner'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useAccount, useAccountHistory, useHoldingsWithLivePrices,
   useAccountTransactions, useAddTransaction, useDeleteTransaction,
-  useUpdateTransaction, useUpdateHolding, useDeleteHolding
+  useUpdateTransaction, useUpdateHolding, useDeleteHolding, useImportTRTransactions
 } from '@/features/accounts/hooks'
 import { useCategories, useCategorize } from '@/features/budget/hooks'
 import { useHistory } from '@/features/history/hooks'
@@ -47,8 +48,9 @@ export function AccountDetailPage() {
   const addTxMutation = useAddTransaction(accountId)
   const deleteTxMutation = useDeleteTransaction(accountId)
   const updateTxMutation = useUpdateTransaction(accountId)
-  const updateHoldingMutation = useUpdateHolding(accountId)
   const deleteHoldingMutation = useDeleteHolding(accountId)
+  const updateHoldingMutation = useUpdateHolding(accountId)
+  const importTRMutation = useImportTRTransactions(accountId)
   const { data: pnlData } = useHistory(accountId ? [accountId] : [], 12)
   const { data: savingsSuggestions } = useSavingsSuggestions()
   const { data: categories } = useCategories()
@@ -60,6 +62,32 @@ export function AccountDetailPage() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [editingHolding, setEditingHolding] = useState<HoldingResponse | null>(null)
   const [range, setRange] = useState<TimeRange>('1Y')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (file) {
+      importTRMutation.mutate(file, {
+        onSuccess: (result) => {
+          if (result && result.inserted > 0) {
+            toast.success(
+              result.skipped > 0
+                ? `${result.inserted} transaction${result.inserted > 1 ? 's' : ''} importée${result.inserted > 1 ? 's' : ''} (${result.skipped} déjà présente${result.skipped > 1 ? 's' : ''})`
+                : `${result.inserted} transaction${result.inserted > 1 ? 's' : ''} importée${result.inserted > 1 ? 's' : ''}`,
+            )
+          } else {
+            toast.info('Aucune nouvelle transaction — le CSV est déjà importé.')
+          }
+        },
+        onError: (err) => {
+          toast.error(`Erreur lors de l'import : ${err instanceof Error ? err.message : 'Erreur inconnue'}`)
+        },
+      })
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   function handleCategorize(txId: number, categoryId: number) {
     categorizeMutation.mutate(
@@ -149,9 +177,23 @@ export function AccountDetailPage() {
         <>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold">{t('accounts.transactions')}</h3>
-            <Button size="sm" variant="outline" onClick={() => setShowAddTx(true)}>
-              + Ajouter
-            </Button>
+            <div className="flex items-center gap-2">
+              <input 
+                type="file" 
+                accept=".csv" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+              />
+              {account?.provider === 'Trade Republic' && account?.type === 'CHECKING' && (
+                <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importTRMutation.isPending}>
+                  {importTRMutation.isPending ? t('common.loading') : '+ Ajouter CSV (TR)'}
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setShowAddTx(true)}>
+                + Ajouter
+              </Button>
+            </div>
           </div>
           <TransactionsList
             transactions={transactions}

@@ -56,8 +56,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     // ─── Budget & Cashflow (1.1.0) ────────────────────────────────────────────
 
-    /** Dedup guard for synced ingestion. */
+    /** Dedup guard for synced ingestion (account-scoped). */
     boolean existsByAccountIdAndExternalId(Long accountId, String externalId);
+
+    /** Dedup guard for TR CSV import: external IDs are globally unique within a member's import. */
+    boolean existsByExternalId(String externalId);
 
     /** Member-scoped single transaction lookup (categorize endpoint). */
     Optional<Transaction> findByIdAndAccountMemberId(Long id, Long memberId);

@@ -34,9 +34,17 @@ export const accountsApi = {
   addTransaction: (id: number, data: TransactionRequest) =>
     api.post<Transaction>(`/accounts/${id}/transactions`, data).then(r => r.data),
   deleteTransaction: (accountId: number, txId: number) =>
-    api.delete(`/accounts/${accountId}/transactions/${txId}`),
+    api.delete<void>(`/accounts/${accountId}/transactions/${txId}`).then(r => r.data),
   updateTransaction: (accountId: number, txId: number, data: TransactionRequest) =>
     api.put<Transaction>(`/accounts/${accountId}/transactions/${txId}`, data).then(r => r.data),
+  /** Imports the full TR transaction history CSV. Returns a count of rows inserted and skipped (already present). */
+  importTRTransactions: (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<{ inserted: number; skipped: number }>(`/tr/accounts/${id}/transactions/import-csv`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
   updateHolding: (accountId: number, ticker: string, data: { quantity: number; averageBuyIn?: number }) =>
     api.put<HoldingResponse>(`/accounts/${accountId}/holdings/${ticker}`, data).then(r => r.data),
   deleteHolding: (accountId: number, ticker: string) =>

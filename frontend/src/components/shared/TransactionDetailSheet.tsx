@@ -73,10 +73,10 @@ export function TransactionDetailSheet({
           logoUrl={logoUrlFor?.(tx.merchantBrandId)}
           size="md"
         />
-        <div className="min-w-0">
-          <p className="font-semibold truncate">{tx.merchantLabel || tx.description}</p>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold break-words">{tx.merchantLabel || tx.description}</p>
           {tx.merchantLabel && tx.description !== tx.merchantLabel && (
-            <p className="text-xs text-muted-foreground truncate">{tx.description}</p>
+            <p className="text-xs text-muted-foreground break-words">{tx.description}</p>
           )}
         </div>
       </div>
@@ -173,7 +173,7 @@ export function TransactionDetailSheet({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t('transactions.detail')}</DialogTitle>
         </DialogHeader>

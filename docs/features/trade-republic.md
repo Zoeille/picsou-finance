@@ -57,9 +57,28 @@ holdings for a TR account are deleted and recreated on every WebSocket sync; if 
 portfolio is returned with an empty position list, stale holdings are cleared. The
 CSV fallback imports balances only and therefore does not replace holdings.
 
-### CSV import fallback
+### CSV import fallback (account balances)
 
 `TradeRepublicSyncService.importCsv()` parses a CSV file with columns `name,type,balance`. Accounts are deduplicated via a stable external ID derived from the name (`tr_csv_` prefix + slugified name).
+
+### CSV transaction import
+
+`TradeRepublicSyncService.importTransactionsCsv()` parses the full Trade Republic transaction history CSV (exported from the TR app). It implements a **double-entry** pattern to reflect real cash flows without creating holdings positions:
+
+| Row type | `account_type` | Action |
+|----------|---------------|--------|
+| `TRADING` / `BUY` or `SELL` on PEA | `PEA` | **Cash leg**: `WITHDRAWAL` on TR Cash (negative amount) + **Investment leg**: `DEPOSIT` on TR PEA (absolute amount) |
+| `TRADING` / `BUY` or `SELL` on CTO | `DEFAULT` + category `TRADING` | Same pattern but investment leg targets TR Titres |
+| `CASH` (Saveback, interest, card, transfers from main bank) | `DEFAULT` | Single `DEPOSIT` or `WITHDRAWAL` on TR Cash |
+| `TRANSFER_IN` or `TRANSFER_OUT` | any | **Ignored** — these are TR's internal accounting of PEA top-ups; the double-entry above covers the same movement without duplication |
+
+**Deduplication**: every row produces external IDs suffixed with `_cash` and `_inv`. `TransactionRepository.existsByExternalId()` guards both. Re-importing the same CSV is safe — already-present rows are skipped and counted.
+
+**No positions created**: the import touches only the `transaction` table. Account holdings continue to be managed by the WebSocket sync or by manual BUY/SELL transactions.
+
+**Endpoint**: `POST /api/tr/accounts/{id}/transactions/import-csv` (multipart `file` param). Returns `{ inserted: N, skipped: M }`.
+
+**Frontend**: on any TR account detail page, the **"+ Ajouter CSV (TR)"** button appears next to the manual-transaction button. After upload, a sonner toast shows the count of inserted rows and, if some were already present, the skip count.
 
 ### Scheduled sync
 

@@ -10,6 +10,8 @@ import com.picsou.model.AccountHolding;
 import com.picsou.model.AccountType;
 import com.picsou.model.FamilyMember;
 import com.picsou.model.TradeRepublicSession;
+import com.picsou.model.Transaction;
+import com.picsou.model.TransactionType;
 import com.picsou.port.TradeRepublicPort;
 import com.picsou.port.TradeRepublicPort.TrAccountData;
 import com.picsou.port.TradeRepublicPort.TrPosition;
@@ -18,6 +20,7 @@ import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.TradeRepublicSessionRepository;
+import com.picsou.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -58,6 +61,7 @@ public class TradeRepublicSyncService {
     private final TradeRepublicSessionRepository sessionRepository;
     private final AccountRepository             accountRepository;
     private final AccountHoldingRepository      holdingRepository;
+    private final TransactionRepository         transactionRepository;
     private final FamilyMemberRepository        familyMemberRepository;
     private final AccountService                accountService;
     private final OpenFigiIsinConverter         isinConverter;
@@ -69,6 +73,7 @@ public class TradeRepublicSyncService {
         TradeRepublicSessionRepository sessionRepository,
         AccountRepository accountRepository,
         AccountHoldingRepository holdingRepository,
+        TransactionRepository transactionRepository,
         FamilyMemberRepository familyMemberRepository,
         AccountService accountService,
         OpenFigiIsinConverter isinConverter,
@@ -79,6 +84,7 @@ public class TradeRepublicSyncService {
         this.sessionRepository = sessionRepository;
         this.accountRepository = accountRepository;
         this.holdingRepository = holdingRepository;
+        this.transactionRepository = transactionRepository;
         this.familyMemberRepository = familyMemberRepository;
         this.accountService    = accountService;
         this.isinConverter     = isinConverter;
@@ -269,6 +275,173 @@ public class TradeRepublicSyncService {
 
         log.info("TR CSV import complete: {} accounts processed", responses.size());
         return responses;
+    }
+
+    public record ImportResult(int inserted, int skipped) {}
+
+    /**
+     * Parses the full Trade Republic CSV export and creates double-entry transactions:
+     * - TRADING rows → debit on TR Cash + credit on TR PEA / TR Titres (no position created).
+     * - CASH rows (Saveback, interest, card payments, incoming transfers) → single transaction on TR Cash.
+     * - TRANSFER_IN / TRANSFER_OUT are ignored (already covered by the TRADING double-entry).
+     * Rows are deduplicated via {@code externalId}; re-importing the same CSV is safe.
+     *
+     * @param accountId the account from which the import was triggered (used only for authorization; not for routing)
+     * @param file      the raw CSV export from Trade Republic
+     * @param memberId  the authenticated member
+     */
+    public ImportResult importTransactionsCsv(Long accountId, MultipartFile file, Long memberId) {
+        List<Account> trAccounts = accountRepository.findAllByMemberIdOrderByCreatedAtAsc(memberId).stream()
+            .filter(a -> "Trade Republic".equals(a.getProvider()))
+            .toList();
+            
+        Account trCash = trAccounts.stream().filter(a -> a.getType() == AccountType.CHECKING).findFirst().orElse(null);
+        Account trPea = trAccounts.stream().filter(a -> a.getType() == AccountType.PEA).findFirst().orElse(null);
+        Account trTitres = trAccounts.stream().filter(a -> a.getType() == AccountType.COMPTE_TITRES).findFirst().orElse(null);
+
+        if (trCash == null) {
+            log.warn("TR CSV Import: No CHECKING account (TR Cash) found for member {}. Create TR accounts first by syncing or importing the accounts CSV.", memberId);
+            return new ImportResult(0, 0);
+        }
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+
+            String line;
+            boolean firstLine = true;
+            int insertedCount = 0;
+            int skippedCount = 0;
+
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+
+                if (firstLine) {
+                    firstLine = false;
+                    if (line.toLowerCase().contains("datetime") || line.toLowerCase().startsWith("\"datetime\"")) {
+                        continue;
+                    }
+                }
+
+                List<String> parts = parseCsvLine(line);
+                if (parts.size() < 19) {
+                    continue;
+                }
+
+                String dateStr = parts.get(1);
+                String accountTypeStr = parts.get(2);
+                String category = parts.get(3);
+                String type = parts.get(4);
+                String stockName = parts.get(6);
+                String amountStr = parts.get(10);
+                String description = parts.get(17);
+                String externalId = parts.get(18);
+
+                if ("TRANSFER_IN".equalsIgnoreCase(type) || "TRANSFER_OUT".equalsIgnoreCase(type)) {
+                    continue;
+                }
+
+                BigDecimal amount;
+                try {
+                    amount = new BigDecimal(amountStr);
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+
+                LocalDate date = LocalDate.parse(dateStr);
+                
+                // Build a readable description for the transaction
+                String finalDescription = (description != null && !description.isBlank()) ? description : type;
+                if ("BUY".equalsIgnoreCase(type) || "SELL".equalsIgnoreCase(type)) {
+                    // e.g. "BUY S&P 500 EUR (Acc)" or "SELL Dell Technologies"
+                    finalDescription = type + (stockName != null && !stockName.isBlank() ? " " + stockName : "");
+                }
+
+                // --- Cash leg (always created, except TRANSFER_IN/OUT already filtered above) ---
+                boolean cashSkipped = false;
+                if (!transactionRepository.existsByExternalId(externalId + "_cash")) {
+                    // DEPOSIT for positive amounts (Saveback, interest, incoming transfers)
+                    // WITHDRAWAL for negative amounts (card payments, investment debits)
+                    TransactionType txTypeCash = amount.compareTo(BigDecimal.ZERO) < 0
+                        ? TransactionType.WITHDRAWAL
+                        : TransactionType.DEPOSIT;
+                    Transaction txCash = Transaction.builder()
+                        .account(trCash)
+                        .date(date)
+                        .amount(amount)
+                        .description(finalDescription)
+                        .merchantLabel(finalDescription)
+                        .type(type)
+                        .category(category)
+                        .txType(txTypeCash)
+                        .externalId(externalId + "_cash")
+                        .nativeCurrency("EUR")
+                        .build();
+                    transactionRepository.save(txCash);
+                    insertedCount++;
+                } else {
+                    cashSkipped = true;
+                }
+
+                // --- Investment leg (only for TRADING rows, opposite sign on the target account) ---
+                if ("TRADING".equalsIgnoreCase(category)) {
+                    Account targetInvestmentAccount = "PEA".equalsIgnoreCase(accountTypeStr) ? trPea : trTitres;
+
+                    if (targetInvestmentAccount != null) {
+                        if (!transactionRepository.existsByExternalId(externalId + "_inv")) {
+                            // BUY: amount is negative in the CSV (e.g. -59.31€) → WITHDRAWAL on the investment account
+                            // SELL: amount is positive in the CSV (e.g. +72.72€)  → DEPOSIT on the investment account
+                            // We use the signed amount directly — .abs() was wrong and made BUY show as positive.
+                            TransactionType txTypeInv = "SELL".equalsIgnoreCase(type)
+                                ? TransactionType.DEPOSIT
+                                : TransactionType.WITHDRAWAL;
+                            Transaction txInv = Transaction.builder()
+                                .account(targetInvestmentAccount)
+                                .date(date)
+                                .amount(amount)
+                                .description(finalDescription)
+                                .merchantLabel(finalDescription)
+                                .type(type)
+                                .category(category)
+                                .txType(txTypeInv)
+                                .externalId(externalId + "_inv")
+                                .nativeCurrency("EUR")
+                                .build();
+                            transactionRepository.save(txInv);
+                            insertedCount++;
+                        } else if (cashSkipped) {
+                            // Both legs already exist → count as fully skipped
+                            skippedCount++;
+                        }
+                    }
+                } else if (cashSkipped) {
+                    skippedCount++;
+                }
+            }
+            log.info("TR CSV import complete: {} inserted, {} skipped (already present)", insertedCount, skippedCount);
+            return new ImportResult(insertedCount, skippedCount);
+        } catch (Exception ex) {
+            log.error("Failed to read TR Transactions CSV", ex);
+            throw new RuntimeException("Failed to read CSV file: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static List<String> parseCsvLine(String line) {
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (char c : line.toCharArray()) {
+            if (c == '\"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                result.add(current.toString().trim());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        result.add(current.toString().trim());
+        return result;
     }
 
     // --- Session status ---

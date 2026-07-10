@@ -287,6 +287,19 @@ export function useLoanSummary(id: number, enabled: boolean = true) {
   })
 }
 
+export function useImportTRTransactions(accountId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => accountsApi.importTRTransactions(accountId, file),
+    onSuccess: () => {
+      // The CSV import creates transactions on multiple TR accounts (Cash, PEA, Titres),
+      // so we need to invalidate all account-level queries — not just the triggering account.
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
 export function useAddTransaction(accountId: number) {
   const queryClient = useQueryClient()
   return useMutation({
