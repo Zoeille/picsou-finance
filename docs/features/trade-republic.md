@@ -67,16 +67,21 @@ CSV fallback imports balances only and therefore does not replace holdings.
 
 | Row type | `account_type` | Action |
 |----------|---------------|--------|
-| `TRADING` / `BUY` or `SELL` on PEA | `PEA` | **Cash leg**: `WITHDRAWAL` on TR Cash (negative amount) + **Investment leg**: `DEPOSIT` on TR PEA (absolute amount) |
-| `TRADING` / `BUY` or `SELL` on CTO | `DEFAULT` + category `TRADING` | Same pattern but investment leg targets TR Titres |
+| `TRADING` **BUY** on PEA | `PEA` | **Cash leg**: `WITHDRAWAL` `−amount` on TR Cash + **Investment leg**: `DEPOSIT` `+amount` on TR PEA |
+| `TRADING` **SELL** on PEA | `PEA` | **Cash leg**: `DEPOSIT` `+amount` on TR Cash + **Investment leg**: `WITHDRAWAL` `−amount` on TR PEA |
+| `TRADING` on CTO | `DEFAULT` + category `TRADING` | Same pattern but the investment leg targets TR Titres |
 | `CASH` (Saveback, interest, card, transfers from main bank) | `DEFAULT` | Single `DEPOSIT` or `WITHDRAWAL` on TR Cash |
-| `TRANSFER_IN` or `TRANSFER_OUT` | any | **Ignored** — these are TR's internal accounting of PEA top-ups; the double-entry above covers the same movement without duplication |
+| `TRANSFER_IN` or `TRANSFER_OUT` | any | **Ignored** — these are TR's internal Cash↔PEA accounting; the double-entry above covers the same movement without duplication |
 
-**Deduplication**: every row produces external IDs suffixed with `_cash` and `_inv`. `TransactionRepository.existsByExternalId()` guards both. Re-importing the same CSV is safe — already-present rows are skipped and counted.
+The two legs are strict mirrors: the investment leg always carries the **opposite sign** of the cash leg (`amount.negate()`), so the same €X moves out of cash and into investments (or vice-versa).
 
-**No positions created**: the import touches only the `transaction` table. Account holdings continue to be managed by the WebSocket sync or by manual BUY/SELL transactions.
+**Cashflow / allocation treatment**: a securities purchase is treated as a real outflow (an "investment purchase"). The **cash leg** is booked under an `Investissement` **EXPENSE** category (slug `investissement-titres`), so `CashflowService` counts it as spending (and a sale as an inflow). That category is *not* part of the default seed set — it is created on demand the first time a member imports TR trades (existing members are never re-seeded), so members who never use this feature don't get an extra category. To avoid counting the same movement a second time (as income), the **investment leg** is tagged with the member's seeded `investissement` category (kind `TRANSFER`), which excludes it from cashflow while still feeding `AllocationService` — it reads the positive investment `DEPOSIT` as an investment contribution. This removes the earlier **double-counting** where both legs landed in the cashflow totals. `CASH` rows stay uncategorized and count as ordinary income/expense by sign.
 
-**Endpoint**: `POST /api/tr/accounts/{id}/transactions/import-csv` (multipart `file` param). Returns `{ inserted: N, skipped: M }`.
+**Deduplication**: every row produces external IDs suffixed with `_cash` and `_inv`. `TransactionRepository.existsByAccountIdAndExternalId()` guards both, backed by the `(account_id, external_id)` partial unique index (`V33`). Re-importing the same CSV is safe — already-present rows are skipped and counted.
+
+**No positions created**: the import touches only the `transaction` table. Account holdings continue to be managed by the WebSocket sync or by manual BUY/SELL transactions. The imported legs use `tx_type` `DEPOSIT`/`WITHDRAWAL` (never `BUY`/`SELL`), so `HoldingComputeService` — which recomputes positions from `BUY`/`SELL` rows — ignores them.
+
+**Endpoint**: `POST /api/tr/accounts/{id}/transactions/import-csv` (multipart `file` param). The `{id}` is validated to belong to the authenticated member. Returns `{ inserted: N, skipped: M }`.
 
 **Frontend**: on the **TR Cash** (CHECKING) account detail page, the **"+ Ajouter CSV (TR)"** button appears next to the manual-transaction button. After upload, a sonner toast shows the count of inserted rows and, if some were already present, the skip count.
 

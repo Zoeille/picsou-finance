@@ -8,6 +8,8 @@ import com.picsou.exception.SyncException;
 import com.picsou.model.Account;
 import com.picsou.model.AccountHolding;
 import com.picsou.model.AccountType;
+import com.picsou.model.Category;
+import com.picsou.model.CategoryKind;
 import com.picsou.model.FamilyMember;
 import com.picsou.model.TradeRepublicSession;
 import com.picsou.model.Transaction;
@@ -18,9 +20,11 @@ import com.picsou.port.TradeRepublicPort.TrPosition;
 import com.picsou.port.TradeRepublicPort.TrTokens;
 import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
+import com.picsou.repository.CategoryRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.TradeRepublicSessionRepository;
 import com.picsou.repository.TransactionRepository;
+import com.picsou.service.budget.CategorizationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -67,6 +71,8 @@ public class TradeRepublicSyncService {
     private final OpenFigiIsinConverter         isinConverter;
     private final CryptoEncryption              encryption;
     private final TransactionTemplate           txTemplate;
+    private final CategorizationService         categorizationService;
+    private final CategoryRepository            categoryRepository;
 
     public TradeRepublicSyncService(
         TradeRepublicPort trPort,
@@ -78,7 +84,9 @@ public class TradeRepublicSyncService {
         AccountService accountService,
         OpenFigiIsinConverter isinConverter,
         CryptoEncryption encryption,
-        TransactionTemplate txTemplate
+        TransactionTemplate txTemplate,
+        CategorizationService categorizationService,
+        CategoryRepository categoryRepository
     ) {
         this.trPort            = trPort;
         this.sessionRepository = sessionRepository;
@@ -90,6 +98,8 @@ public class TradeRepublicSyncService {
         this.isinConverter     = isinConverter;
         this.encryption        = encryption;
         this.txTemplate        = txTemplate;
+        this.categorizationService = categorizationService;
+        this.categoryRepository = categoryRepository;
     }
 
     // --- Auth ---
@@ -277,6 +287,9 @@ public class TradeRepublicSyncService {
         return responses;
     }
 
+    /** Slug of the EXPENSE category under which imported securities purchases are booked. */
+    private static final String INVESTMENT_PURCHASE_SLUG = "investissement-titres";
+
     public record ImportResult(int inserted, int skipped) {}
 
     /**
@@ -289,15 +302,25 @@ public class TradeRepublicSyncService {
      * Rows are deduplicated per-account via {@code existsByAccountIdAndExternalId};
      * re-importing the same CSV is safe and isolation between members is guaranteed.
      *
-     * @param accountId the account from which the import was triggered (used only for authorization; not for routing)
+     * <p>A securities purchase is a real outflow: the cash leg stays uncategorized so cashflow
+     * counts it as spending (and a sale as an inflow). Only the investment leg is tagged with the
+     * member's {@code investissement} category (kind {@link com.picsou.model.CategoryKind#TRANSFER}),
+     * which excludes it from cashflow — so the same movement is never counted twice — while still
+     * feeding the allocation view as an investment contribution.
+     *
+     * @param accountId the account the import was triggered from; validated to belong to the member
      * @param file      the raw CSV export from Trade Republic
      * @param memberId  the authenticated member
      */
     public ImportResult importTransactionsCsv(Long accountId, MultipartFile file, Long memberId) {
+        // Authorize: the triggering account must belong to the member (guards against a spoofed {id}).
+        accountRepository.findByIdAndMemberId(accountId, memberId)
+            .orElseThrow(() -> ResourceNotFoundException.account(accountId));
+
         List<Account> trAccounts = accountRepository.findAllByMemberIdOrderByCreatedAtAsc(memberId).stream()
             .filter(a -> "Trade Republic".equals(a.getProvider()))
             .toList();
-            
+
         Account trCash = trAccounts.stream().filter(a -> a.getType() == AccountType.CHECKING).findFirst().orElse(null);
         Account trPea = trAccounts.stream().filter(a -> a.getType() == AccountType.PEA).findFirst().orElse(null);
         Account trTitres = trAccounts.stream().filter(a -> a.getType() == AccountType.COMPTE_TITRES).findFirst().orElse(null);
@@ -306,6 +329,18 @@ public class TradeRepublicSyncService {
             log.warn("TR CSV Import: No CHECKING account (TR Cash) found for member {}. Create TR accounts first by syncing or importing the accounts CSV.", memberId);
             return new ImportResult(0, 0);
         }
+
+        // Investment leg → seeded "investissement" TRANSFER category: excluded from cashflow (so
+        // the movement is not counted a second time as income) while still feeding the allocation
+        // view. Cash leg of a buy/sell → "investissement-titres" EXPENSE category so the purchase
+        // shows up as spending; resolved lazily below (created on demand — see the helper).
+        Map<String, Category> categoriesBySlug = categorizationService.categoriesBySlug(memberId);
+        Category investmentTransferCategory = categoriesBySlug.get("investissement");
+        if (investmentTransferCategory == null) {
+            log.warn("TR CSV Import: 'investissement' (transfer) category not found for member {}; investment legs may skew cashflow.", memberId);
+        }
+        // Resolved on the first TRADING row so a CASH-only import creates nothing.
+        Category investmentPurchaseCategory = categoriesBySlug.get(INVESTMENT_PURCHASE_SLUG);
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
@@ -376,6 +411,8 @@ public class TradeRepublicSyncService {
                     finalDescription = type + (stockName != null && !stockName.isBlank() ? " " + stockName : "");
                 }
 
+                boolean isTrading = "TRADING".equalsIgnoreCase(category);
+
                 // --- Cash leg (always created, except TRANSFER_IN/OUT already filtered above) ---
                 // Dedup is scoped by account to ensure member isolation.
                 boolean cashSkipped = false;
@@ -385,6 +422,14 @@ public class TradeRepublicSyncService {
                     TransactionType txTypeCash = amount.compareTo(BigDecimal.ZERO) < 0
                         ? TransactionType.WITHDRAWAL
                         : TransactionType.DEPOSIT;
+                    // A securities purchase is a real outflow (an "investment purchase"): the cash
+                    // leg of a TRADING row is booked under the "Investissement" EXPENSE category so
+                    // it counts as spending (a sale, being positive, as an inflow). Non-TRADING
+                    // CASH rows stay uncategorized and count by sign. Only the investment leg below
+                    // is a TRANSFER, which keeps the movement from being counted twice (as income).
+                    if (isTrading && investmentPurchaseCategory == null) {
+                        investmentPurchaseCategory = ensureInvestmentPurchaseCategory(memberId);
+                    }
                     Transaction txCash = Transaction.builder()
                         .account(trCash)
                         .date(date)
@@ -393,6 +438,7 @@ public class TradeRepublicSyncService {
                         .merchantLabel(finalDescription)
                         .type(type)
                         .category(category)
+                        .categoryRef(isTrading ? investmentPurchaseCategory : null)
                         .txType(txTypeCash)
                         .externalId(externalId + "_cash")
                         .nativeCurrency("EUR")
@@ -404,25 +450,29 @@ public class TradeRepublicSyncService {
                 }
 
                 // --- Investment leg (only for TRADING rows, opposite sign on the target account) ---
-                if ("TRADING".equalsIgnoreCase(category)) {
+                if (isTrading) {
                     Account targetInvestmentAccount = "PEA".equalsIgnoreCase(accountTypeStr) ? trPea : trTitres;
 
                     if (targetInvestmentAccount != null) {
                         if (!transactionRepository.existsByAccountIdAndExternalId(targetInvestmentAccount.getId(), externalId + "_inv")) {
-                            // BUY: amount is negative in the CSV (e.g. -59.31€) → WITHDRAWAL on the investment account
-                            // SELL: amount is positive in the CSV (e.g. +72.72€)  → DEPOSIT on the investment account
-                            // We use the signed amount directly — .abs() was wrong and made BUY show as positive.
-                            TransactionType txTypeInv = "SELL".equalsIgnoreCase(type)
+                            // Double-entry: the investment leg is the mirror of the cash leg, so it
+                            // carries the opposite sign. BUY (cash −) → money enters investments:
+                            // DEPOSIT +amount. SELL (cash +) → money leaves investments: WITHDRAWAL
+                            // −amount. The positive DEPOSIT is what AllocationService reads as an
+                            // investment contribution.
+                            BigDecimal investAmount = amount.negate();
+                            TransactionType txTypeInv = investAmount.signum() >= 0
                                 ? TransactionType.DEPOSIT
                                 : TransactionType.WITHDRAWAL;
                             Transaction txInv = Transaction.builder()
                                 .account(targetInvestmentAccount)
                                 .date(date)
-                                .amount(amount)
+                                .amount(investAmount)
                                 .description(finalDescription)
                                 .merchantLabel(finalDescription)
                                 .type(type)
                                 .category(category)
+                                .categoryRef(investmentTransferCategory)
                                 .txType(txTypeInv)
                                 .externalId(externalId + "_inv")
                                 .nativeCurrency("EUR")
@@ -449,13 +499,40 @@ public class TradeRepublicSyncService {
         }
     }
 
+    /**
+     * Get-or-create the EXPENSE category ("Investissement") under which securities purchases are
+     * booked. It is not part of the default seed set on purpose: only members who import TR trades
+     * need it, and existing members are never re-seeded once they have categories. Idempotent by
+     * slug — the caller only invokes this when the slug is absent from the member's categories.
+     */
+    private Category ensureInvestmentPurchaseCategory(Long memberId) {
+        Category created = categoryRepository.save(Category.builder()
+            .member(familyMemberRepository.getReferenceById(memberId))
+            .slug(INVESTMENT_PURCHASE_SLUG)
+            .name("Investissement")
+            .kind(CategoryKind.EXPENSE)
+            .color("#7c3aed")
+            .icon("trending-up")
+            .isDefault(true)
+            .build());
+        log.info("TR CSV Import: created the 'Investissement' expense category for member {}.", memberId);
+        return created;
+    }
+
     private static List<String> parseCsvLine(String line) {
         List<String> result = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
-        for (char c : line.toCharArray()) {
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
             if (c == '\"') {
-                inQuotes = !inQuotes;
+                // RFC 4180: a doubled quote inside a quoted field is a literal quote.
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '\"') {
+                    current.append('\"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
             } else if (c == ',' && !inQuotes) {
                 result.add(current.toString().trim());
                 current.setLength(0);
