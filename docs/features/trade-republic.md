@@ -78,7 +78,7 @@ CSV fallback imports balances only and therefore does not replace holdings.
 
 **Endpoint**: `POST /api/tr/accounts/{id}/transactions/import-csv` (multipart `file` param). Returns `{ inserted: N, skipped: M }`.
 
-**Frontend**: on any TR account detail page, the **"+ Ajouter CSV (TR)"** button appears next to the manual-transaction button. After upload, a sonner toast shows the count of inserted rows and, if some were already present, the skip count.
+**Frontend**: on the **TR Cash** (CHECKING) account detail page, the **"+ Ajouter CSV (TR)"** button appears next to the manual-transaction button. After upload, a sonner toast shows the count of inserted rows and, if some were already present, the skip count.
 
 ### Scheduled sync
 

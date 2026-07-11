@@ -281,10 +281,13 @@ public class TradeRepublicSyncService {
 
     /**
      * Parses the full Trade Republic CSV export and creates double-entry transactions:
-     * - TRADING rows → debit on TR Cash + credit on TR PEA / TR Titres (no position created).
-     * - CASH rows (Saveback, interest, card payments, incoming transfers) → single transaction on TR Cash.
-     * - TRANSFER_IN / TRANSFER_OUT are ignored (already covered by the TRADING double-entry).
-     * Rows are deduplicated via {@code externalId}; re-importing the same CSV is safe.
+     * <ul>
+     *   <li>TRADING rows → debit on TR Cash + credit on TR PEA / TR Titres (no position created).</li>
+     *   <li>CASH rows (Saveback, interest, card payments, incoming transfers) → single transaction on TR Cash.</li>
+     *   <li>TRANSFER_IN / TRANSFER_OUT are ignored (already covered by the TRADING double-entry).</li>
+     * </ul>
+     * Rows are deduplicated per-account via {@code existsByAccountIdAndExternalId};
+     * re-importing the same CSV is safe and isolation between members is guaranteed.
      *
      * @param accountId the account from which the import was triggered (used only for authorization; not for routing)
      * @param file      the raw CSV export from Trade Republic
@@ -337,18 +340,34 @@ public class TradeRepublicSyncService {
                 String description = parts.get(17);
                 String externalId = parts.get(18);
 
+                // Skip rows with no external ID — they would all collide on "_cash"/"_inv"
+                if (externalId == null || externalId.isBlank()) {
+                    log.debug("TR CSV Import: skipping row with blank externalId (date={}, type={})", dateStr, type);
+                    continue;
+                }
+
                 if ("TRANSFER_IN".equalsIgnoreCase(type) || "TRANSFER_OUT".equalsIgnoreCase(type)) {
                     continue;
                 }
 
+                // Handle FR-locale decimal comma (e.g. "59,31" → "59.31")
                 BigDecimal amount;
                 try {
-                    amount = new BigDecimal(amountStr);
+                    amount = new BigDecimal(amountStr.replace(",", "."));
                 } catch (NumberFormatException e) {
+                    log.debug("TR CSV Import: skipping row with unparseable amount '{}'", amountStr);
                     continue;
                 }
 
-                LocalDate date = LocalDate.parse(dateStr);
+                // Defensive date parsing: handle both yyyy-MM-dd and ISO timestamps (yyyy-MM-ddTHH:mm:ssZ)
+                LocalDate date;
+                try {
+                    String datePart = dateStr.length() > 10 ? dateStr.substring(0, 10) : dateStr;
+                    date = LocalDate.parse(datePart);
+                } catch (Exception e) {
+                    log.debug("TR CSV Import: skipping row with unparseable date '{}'", dateStr);
+                    continue;
+                }
                 
                 // Build a readable description for the transaction
                 String finalDescription = (description != null && !description.isBlank()) ? description : type;
@@ -358,8 +377,9 @@ public class TradeRepublicSyncService {
                 }
 
                 // --- Cash leg (always created, except TRANSFER_IN/OUT already filtered above) ---
+                // Dedup is scoped by account to ensure member isolation.
                 boolean cashSkipped = false;
-                if (!transactionRepository.existsByExternalId(externalId + "_cash")) {
+                if (!transactionRepository.existsByAccountIdAndExternalId(trCash.getId(), externalId + "_cash")) {
                     // DEPOSIT for positive amounts (Saveback, interest, incoming transfers)
                     // WITHDRAWAL for negative amounts (card payments, investment debits)
                     TransactionType txTypeCash = amount.compareTo(BigDecimal.ZERO) < 0
@@ -388,7 +408,7 @@ public class TradeRepublicSyncService {
                     Account targetInvestmentAccount = "PEA".equalsIgnoreCase(accountTypeStr) ? trPea : trTitres;
 
                     if (targetInvestmentAccount != null) {
-                        if (!transactionRepository.existsByExternalId(externalId + "_inv")) {
+                        if (!transactionRepository.existsByAccountIdAndExternalId(targetInvestmentAccount.getId(), externalId + "_inv")) {
                             // BUY: amount is negative in the CSV (e.g. -59.31€) → WITHDRAWAL on the investment account
                             // SELL: amount is positive in the CSV (e.g. +72.72€)  → DEPOSIT on the investment account
                             // We use the signed amount directly — .abs() was wrong and made BUY show as positive.
@@ -413,6 +433,9 @@ public class TradeRepublicSyncService {
                             // Both legs already exist → count as fully skipped
                             skippedCount++;
                         }
+                    } else if (cashSkipped) {
+                        // No investment account found and cash was also skipped → row fully skipped
+                        skippedCount++;
                     }
                 } else if (cashSkipped) {
                     skippedCount++;

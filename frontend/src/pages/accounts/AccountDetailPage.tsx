@@ -72,15 +72,15 @@ export function AccountDetailPage() {
           if (result && result.inserted > 0) {
             toast.success(
               result.skipped > 0
-                ? `${result.inserted} transaction${result.inserted > 1 ? 's' : ''} importée${result.inserted > 1 ? 's' : ''} (${result.skipped} déjà présente${result.skipped > 1 ? 's' : ''})`
-                : `${result.inserted} transaction${result.inserted > 1 ? 's' : ''} importée${result.inserted > 1 ? 's' : ''}`,
+                ? t('accounts.importSuccessWithSkipped', { count: result.inserted, skipped: result.skipped })
+                : t('accounts.importSuccess', { count: result.inserted }),
             )
           } else {
-            toast.info('Aucune nouvelle transaction — le CSV est déjà importé.')
+            toast.info(t('accounts.importAlreadyDone'))
           }
         },
         onError: (err) => {
-          toast.error(`Erreur lors de l'import : ${err instanceof Error ? err.message : 'Erreur inconnue'}`)
+          toast.error(t('accounts.importError', { message: err instanceof Error ? err.message : 'Unknown error' }))
         },
       })
     }
@@ -187,7 +187,7 @@ export function AccountDetailPage() {
               />
               {account?.provider === 'Trade Republic' && account?.type === 'CHECKING' && (
                 <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importTRMutation.isPending}>
-                  {importTRMutation.isPending ? t('common.loading') : '+ Ajouter CSV (TR)'}
+                  {importTRMutation.isPending ? t('common.loading') : t('accounts.importCsvTR')}
                 </Button>
               )}
               <Button size="sm" variant="outline" onClick={() => setShowAddTx(true)}>
