@@ -41,6 +41,7 @@ class ManualTransactionServiceTest {
 
     @InjectMocks ManualTransactionService manualTransactionService;
 
+    /** A manual cash account — its balance IS the sum of its (hand-entered) transactions. */
     private Account checkingAccount() {
         return Account.builder()
             .id(1L)
@@ -48,6 +49,20 @@ class ManualTransactionServiceTest {
             .type(AccountType.CHECKING)
             .currency("EUR")
             .currentBalance(BigDecimal.ZERO)
+            .isManual(true)
+            .build();
+    }
+
+    /** A synced cash account — its balance is owned by the connector, not the transaction ledger. */
+    private Account syncedCheckingAccount() {
+        return Account.builder()
+            .id(3L)
+            .name("TR Cash")
+            .type(AccountType.CHECKING)
+            .provider("Trade Republic")
+            .currency("EUR")
+            .currentBalance(new BigDecimal("250"))
+            .isManual(false)
             .build();
     }
 
@@ -84,6 +99,31 @@ class ManualTransactionServiceTest {
         verify(accountRepository).save(account);
         verify(holdingComputeService, never()).recomputeHoldings(any());
         verify(finaryPersistenceHelper).reconstructSnapshotsFromDb(account);
+    }
+
+    @Test
+    void addTransaction_syncedCashAccount_leavesSyncOwnedBalanceUntouched() {
+        Account account = syncedCheckingAccount();
+        TransactionRequest req = new TransactionRequest(
+            LocalDate.of(2024, 1, 15),
+            "Manual annotation",
+            new BigDecimal("-5"),
+            TransactionType.WITHDRAWAL,
+            null, null, null, null, "EUR", null
+        );
+
+        when(accountRepository.findByIdAndMemberId(3L, 10L)).thenReturn(Optional.of(account));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        manualTransactionService.addTransaction(3L, 10L, req);
+
+        // The annotation is recorded, but the connector-owned balance & history are left alone —
+        // recomputing them from a partial ledger would corrupt the balance (the #2 collision).
+        verify(transactionRepository).save(any(Transaction.class));
+        verify(transactionRepository, never()).sumAmountByAccountId(any());
+        verify(accountRepository, never()).save(any());
+        verify(finaryPersistenceHelper, never()).reconstructSnapshotsFromDb(any());
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("250");
     }
 
     @Test

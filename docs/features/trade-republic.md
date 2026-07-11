@@ -81,6 +81,8 @@ The two legs are strict mirrors: the investment leg always carries the **opposit
 
 **No positions created**: the import touches only the `transaction` table. Account holdings continue to be managed by the WebSocket sync or by manual BUY/SELL transactions. The imported legs use `tx_type` `DEPOSIT`/`WITHDRAWAL` (never `BUY`/`SELL`), so `HoldingComputeService` — which recomputes positions from `BUY`/`SELL` rows — ignores them.
 
+**Balance ownership**: the TR Cash balance stays owned by the sync — the import writes ledger rows but never overwrites `currentBalance`. More generally, `ManualTransactionService` now recomputes a cash account's balance/history from its transactions **only for manual accounts** (`refreshManualCashBalance`). For a synced account the balance and snapshots come from the connector; recomputing them from this (deliberately partial — `TRANSFER_IN/OUT` excluded) ledger would corrupt the balance the next time a manual transaction is added.
+
 **Endpoint**: `POST /api/tr/accounts/{id}/transactions/import-csv` (multipart `file` param). The `{id}` is validated to belong to the authenticated member. Returns `{ inserted: N, skipped: M }`.
 
 **Frontend**: on the **TR Cash** (CHECKING) account detail page, the **"+ Ajouter CSV (TR)"** button appears next to the manual-transaction button. After upload, a sonner toast shows the count of inserted rows and, if some were already present, the skip count.

@@ -68,8 +68,7 @@ public class ManualTransactionService {
         if (INVESTMENT_TYPES.contains(account.getType())) {
             holdingComputeService.recomputeHoldings(account);
         } else {
-            recomputeCashBalance(account);
-            finaryPersistenceHelper.reconstructSnapshotsFromDb(account);
+            refreshManualCashBalance(account);
         }
 
         return TransactionResponse.from(tx);
@@ -101,8 +100,7 @@ public class ManualTransactionService {
         if (INVESTMENT_TYPES.contains(account.getType())) {
             holdingComputeService.recomputeHoldings(account);
         } else {
-            recomputeCashBalance(account);
-            finaryPersistenceHelper.reconstructSnapshotsFromDb(account);
+            refreshManualCashBalance(account);
         }
 
         return TransactionResponse.from(tx);
@@ -125,8 +123,7 @@ public class ManualTransactionService {
         if (INVESTMENT_TYPES.contains(account.getType())) {
             holdingComputeService.recomputeHoldings(account);
         } else {
-            recomputeCashBalance(account);
-            finaryPersistenceHelper.reconstructSnapshotsFromDb(account);
+            refreshManualCashBalance(account);
         }
     }
 
@@ -171,6 +168,21 @@ public class ManualTransactionService {
         tx.setDescription(effectiveName != null
             ? effectiveName
             : (tx.getTxType() == TransactionType.SELL ? "Vente " : "Achat ") + resolvedTicker);
+    }
+
+    /**
+     * Refresh a cash account's derived balance and snapshot history after a manual change — but
+     * only for {@link Account#isManual() manual} accounts, whose balance IS the transaction ledger.
+     * A synced account's balance and history are owned by its connector; recomputing them from a
+     * partial ledger (e.g. a TR Cash account that imported CSV history without the internal
+     * transfers) would corrupt the balance, so they are left untouched until the next sync.
+     */
+    private void refreshManualCashBalance(Account account) {
+        if (!account.isManual()) {
+            return;
+        }
+        recomputeCashBalance(account);
+        finaryPersistenceHelper.reconstructSnapshotsFromDb(account);
     }
 
     private void recomputeCashBalance(Account account) {
