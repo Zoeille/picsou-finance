@@ -27,7 +27,8 @@
     "yes": "Sí",
     "no": "No",
     "today": "Hoy",
-    "currency": "EUR"
+    "currency": "EUR",
+    "done": "Hecho"
   },
   "nav": {
     "dashboard": "Panel",
@@ -179,7 +180,8 @@
       "CRYPTO": "Cripto",
       "REAL_ESTATE": "Inmobiliario",
       "DEBTS": "Deudas"
-    }
+    },
+    "fees": "Comisiones"
   },
   "accountTypes": {
     "checking": "Cuenta corriente",
@@ -1080,5 +1082,45 @@
       "loginFallback": "Ir al inicio de sesión",
       "loggingIn": "Iniciando tu sesión..."
     }
+  },
+  "import": {
+    "importCsv": "Importar CSV",
+    "title": "Importar transacciones desde CSV",
+    "uploadHint": "Arrastra y suelta un archivo CSV aquí, o elige uno",
+    "chooseFile": "Elegir un archivo",
+    "mapColumns": "Asignar columnas",
+    "delimiter": "Separador",
+    "delimiterComma": "Coma (,)",
+    "delimiterSemicolon": "Punto y coma (;)",
+    "delimiterTab": "Tabulación",
+    "decimal": "Separador decimal",
+    "dateFormat": "Formato de fecha",
+    "feesIncluded": "Las comisiones ya están incluidas en el importe",
+    "preview": "Vista previa",
+    "rowsTotal": "{{count}} filas",
+    "none": "— ninguna —",
+    "back": "Atrás",
+    "import": "Importar",
+    "rowsImported": "{{count}} transacciones importadas",
+    "rowsSkipped": "{{count}} filas omitidas",
+    "rowLabel": "Fila {{row}}",
+    "field": {
+      "date": "Fecha",
+      "side": "Compra / Venta",
+      "tickerOrIsin": "Ticker / ISIN",
+      "name": "Nombre",
+      "quantity": "Cantidad",
+      "unitPrice": "Precio unitario",
+      "fees": "Comisiones",
+      "currency": "Moneda",
+      "amount": "Importe"
+    }
+  },
+  "realized": {
+    "title": "Plusvalías realizadas",
+    "realizedGains": "Realizado",
+    "proceeds": "Ingresos",
+    "avgCost": "Coste medio",
+    "qtySold": "Cant. vendida"
   }
 }

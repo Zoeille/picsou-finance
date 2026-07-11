@@ -27,7 +27,8 @@
     "yes": "Ja",
     "no": "Nein",
     "today": "Heute",
-    "currency": "EUR"
+    "currency": "EUR",
+    "done": "Fertig"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -179,7 +180,8 @@
       "CRYPTO": "Krypto",
       "REAL_ESTATE": "Immobilien",
       "DEBTS": "Schulden"
-    }
+    },
+    "fees": "Gebühren"
   },
   "accountTypes": {
     "checking": "Girokonto",
@@ -1080,5 +1082,45 @@
       "loginFallback": "Zur Anmeldung",
       "loggingIn": "Du wirst angemeldet..."
     }
+  },
+  "import": {
+    "importCsv": "CSV importieren",
+    "title": "Transaktionen aus CSV importieren",
+    "uploadHint": "CSV-Datei hierher ziehen oder auswählen",
+    "chooseFile": "Datei auswählen",
+    "mapColumns": "Spalten zuordnen",
+    "delimiter": "Trennzeichen",
+    "delimiterComma": "Komma (,)",
+    "delimiterSemicolon": "Semikolon (;)",
+    "delimiterTab": "Tabulator",
+    "decimal": "Dezimaltrennzeichen",
+    "dateFormat": "Datumsformat",
+    "feesIncluded": "Gebühren sind bereits im Betrag enthalten",
+    "preview": "Vorschau",
+    "rowsTotal": "{{count}} Zeilen",
+    "none": "— keine —",
+    "back": "Zurück",
+    "import": "Importieren",
+    "rowsImported": "{{count}} Transaktionen importiert",
+    "rowsSkipped": "{{count}} Zeilen übersprungen",
+    "rowLabel": "Zeile {{row}}",
+    "field": {
+      "date": "Datum",
+      "side": "Kauf / Verkauf",
+      "tickerOrIsin": "Ticker / ISIN",
+      "name": "Name",
+      "quantity": "Menge",
+      "unitPrice": "Stückpreis",
+      "fees": "Gebühren",
+      "currency": "Währung",
+      "amount": "Betrag"
+    }
+  },
+  "realized": {
+    "title": "Realisierte Gewinne",
+    "realizedGains": "Realisiert",
+    "proceeds": "Erlös",
+    "avgCost": "Ø-Kosten",
+    "qtySold": "Verk. Menge"
   }
 }

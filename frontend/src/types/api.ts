@@ -343,6 +343,7 @@ export interface Transaction {
   name: string | null
   quantity: number | null
   pricePerUnit: number | null
+  fees: number | null
 }
 
 export interface TransactionRequest {
@@ -355,4 +356,84 @@ export interface TransactionRequest {
   quantity?: number
   pricePerUnit?: number
   currency?: string
+  fees?: number         // per-trade fees, folded into the PMP cost basis
+}
+
+// --- CSV transaction import (two-phase wizard) ---
+
+export interface CsvDialectDto {
+  delimiter: string
+  decimal: 'DOT' | 'COMMA'
+  dateFormat: string
+}
+
+export interface ColumnMappingDto {
+  date: number | null
+  side: number | null
+  tickerOrIsin: number | null
+  name: number | null
+  quantity: number | null
+  unitPrice: number | null
+  fees: number | null
+  currency: number | null
+  amount: number | null
+}
+
+export interface TransactionImportPreviewResponse {
+  fileToken: string
+  detectedColumns: string[]
+  sampleRows: string[][]
+  totalRows: number
+  hasHeaderRow: boolean
+  dialect: CsvDialectDto
+  suggestedMapping: ColumnMappingDto
+}
+
+export interface TransactionImportRequest {
+  fileToken: string
+  mapping: ColumnMappingDto
+  dialect: CsvDialectDto
+  hasHeaderRow: boolean
+  feesIncludedInAmount: boolean
+  sideValueMap?: Record<string, string>
+}
+
+export interface ImportRowError {
+  rowNumber: number
+  message: string
+}
+
+export interface TransactionImportResultResponse {
+  imported: number
+  skipped: number
+  errors: ImportRowError[]
+}
+
+// --- Realized P&L (closed positions) ---
+
+export interface RealizedLot {
+  ticker: string
+  name: string | null
+  date: string
+  quantity: number
+  avgCost: number
+  proceeds: number
+  realized: number
+}
+
+export interface TickerRealized {
+  ticker: string
+  name: string | null
+  realized: number
+  quantitySold: number
+  proceeds: number
+  costBasis: number
+  warning: boolean
+}
+
+export interface RealizedPnlResponse {
+  currency: string
+  realizedTotal: number
+  byTicker: TickerRealized[]
+  lots: RealizedLot[]
 }

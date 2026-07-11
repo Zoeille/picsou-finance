@@ -96,6 +96,7 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
   const [name, setName] = useState(() => (isInvestmentTx ? (initialValues?.name ?? '') : ''))
   const [quantity, setQuantity] = useState(() => (isInvestmentTx && initialValues?.quantity != null ? String(initialValues.quantity) : ''))
   const [pricePerUnit, setPricePerUnit] = useState(() => (isInvestmentTx && initialValues?.pricePerUnit != null ? String(initialValues.pricePerUnit) : ''))
+  const [fees, setFees] = useState(() => (isInvestmentTx && initialValues?.fees != null ? String(initialValues.fees) : ''))
 
   // Auto-fill the name from an existing holding when the ticker matches —
   // done in the change handler (not an effect) so it stays out of render.
@@ -119,7 +120,10 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
     if (isInvestment) {
       const qty = parseAmount(quantity)
       const price = parseAmount(pricePerUnit)
-      const amount = investType === 'BUY' ? -(qty * price) : (qty * price)
+      const feeVal = parseAmount(fees) || 0
+      // Sign convention mirrors the backend TransactionAmountCalculator: fees add to a BUY's
+      // cash outflow and reduce a SELL's proceeds, and fold into the PMP cost basis.
+      const amount = investType === 'BUY' ? -(qty * price + feeVal) : (qty * price - feeVal)
       data = {
         date,
         description: name || (investType === 'BUY' ? `Achat ${ticker}` : `Vente ${ticker}`),
@@ -129,6 +133,7 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
         name: name.trim() || undefined,
         quantity: qty,
         pricePerUnit: price,
+        fees: feeVal || undefined,
       }
     } else {
       const raw = parseAmount(cashAmount)
@@ -188,6 +193,10 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
           <div className="space-y-1">
             <Label>{t('holdings.unitPrice')}</Label>
             <NumericInput value={pricePerUnit} onChange={e => setPricePerUnit(e.target.value)} required />
+          </div>
+          <div className="space-y-1">
+            <Label>{t('accounts.fees')} <span className="text-muted-foreground text-xs">({t('common.optional')})</span></Label>
+            <NumericInput value={fees} onChange={e => setFees(e.target.value)} />
           </div>
           <p className="text-sm text-muted-foreground">
             {t('accounts.total')}: {total != null && Number.isFinite(total) ? formatCurrency(total, 'EUR', locale) : '—'}

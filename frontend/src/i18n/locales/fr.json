@@ -27,7 +27,8 @@
     "yes": "Oui",
     "no": "Non",
     "today": "Aujourd'hui",
-    "currency": "EUR"
+    "currency": "EUR",
+    "done": "Terminé"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -186,7 +187,8 @@
       "CRYPTO": "Crypto",
       "REAL_ESTATE": "Immobilier",
       "DEBTS": "Dettes"
-    }
+    },
+    "fees": "Frais"
   },
   "accountTypes": {
     "checking": "Compte courant",
@@ -310,12 +312,31 @@
         "real_estate": "Immobilier"
       },
       "countryNames": {
-        "US": "États-Unis", "NL": "Pays-Bas", "CA": "Canada", "FR": "France",
-        "GB": "Royaume-Uni", "DE": "Allemagne", "CH": "Suisse", "IE": "Irlande",
-        "JP": "Japon", "CN": "Chine", "LU": "Luxembourg", "AU": "Australie",
-        "ES": "Espagne", "IT": "Italie", "SE": "Suède", "DK": "Danemark", "HK": "Hong Kong",
-        "KR": "Corée du Sud", "TW": "Taïwan", "IN": "Inde", "BR": "Brésil", "BE": "Belgique",
-        "FI": "Finlande", "NO": "Norvège", "SG": "Singapour"
+        "US": "États-Unis",
+        "NL": "Pays-Bas",
+        "CA": "Canada",
+        "FR": "France",
+        "GB": "Royaume-Uni",
+        "DE": "Allemagne",
+        "CH": "Suisse",
+        "IE": "Irlande",
+        "JP": "Japon",
+        "CN": "Chine",
+        "LU": "Luxembourg",
+        "AU": "Australie",
+        "ES": "Espagne",
+        "IT": "Italie",
+        "SE": "Suède",
+        "DK": "Danemark",
+        "HK": "Hong Kong",
+        "KR": "Corée du Sud",
+        "TW": "Taïwan",
+        "IN": "Inde",
+        "BR": "Brésil",
+        "BE": "Belgique",
+        "FI": "Finlande",
+        "NO": "Norvège",
+        "SG": "Singapour"
       }
     }
   },
@@ -658,16 +679,46 @@
     "revokeTitle": "Révoquer cette clé ?",
     "revokeDescription": "Tout client MCP utilisant cette clé perd l'accès immédiatement. Action irréversible.",
     "scopes": {
-      "accounts_read": { "label": "Comptes", "desc": "Voir les comptes, soldes, positions et historique" },
-      "transactions_read": { "label": "Transactions", "desc": "Voir les transactions" },
-      "goals_read": { "label": "Objectifs", "desc": "Voir les objectifs d'épargne" },
-      "dashboard_read": { "label": "Tableau de bord", "desc": "Voir le patrimoine, le tableau de bord et les +/- values" },
-      "prices_read": { "label": "Cours", "desc": "Consulter les cours des actifs" },
-      "family_read": { "label": "Famille", "desc": "Voir le tableau de bord familial partagé" },
-      "accounts_write": { "label": "Comptes", "desc": "Créer et modifier comptes manuels, soldes et positions" },
-      "transactions_write": { "label": "Transactions", "desc": "Ajouter, modifier et supprimer des transactions manuelles" },
-      "goals_write": { "label": "Objectifs", "desc": "Créer, modifier et supprimer objectifs et contributions" },
-      "sync_trigger": { "label": "Synchronisation", "desc": "Rafraîchir les connexions bancaires, crypto et courtier existantes" }
+      "accounts_read": {
+        "label": "Comptes",
+        "desc": "Voir les comptes, soldes, positions et historique"
+      },
+      "transactions_read": {
+        "label": "Transactions",
+        "desc": "Voir les transactions"
+      },
+      "goals_read": {
+        "label": "Objectifs",
+        "desc": "Voir les objectifs d'épargne"
+      },
+      "dashboard_read": {
+        "label": "Tableau de bord",
+        "desc": "Voir le patrimoine, le tableau de bord et les +/- values"
+      },
+      "prices_read": {
+        "label": "Cours",
+        "desc": "Consulter les cours des actifs"
+      },
+      "family_read": {
+        "label": "Famille",
+        "desc": "Voir le tableau de bord familial partagé"
+      },
+      "accounts_write": {
+        "label": "Comptes",
+        "desc": "Créer et modifier comptes manuels, soldes et positions"
+      },
+      "transactions_write": {
+        "label": "Transactions",
+        "desc": "Ajouter, modifier et supprimer des transactions manuelles"
+      },
+      "goals_write": {
+        "label": "Objectifs",
+        "desc": "Créer, modifier et supprimer objectifs et contributions"
+      },
+      "sync_trigger": {
+        "label": "Synchronisation",
+        "desc": "Rafraîchir les connexions bancaires, crypto et courtier existantes"
+      }
     }
   },
   "admin": {
@@ -1038,5 +1089,45 @@
       "loginFallback": "Aller à la connexion",
       "loggingIn": "Connexion en cours..."
     }
+  },
+  "import": {
+    "importCsv": "Importer CSV",
+    "title": "Importer des transactions depuis un CSV",
+    "uploadHint": "Glissez-déposez un fichier CSV ici, ou choisissez-en un",
+    "chooseFile": "Choisir un fichier",
+    "mapColumns": "Associer les colonnes",
+    "delimiter": "Séparateur",
+    "delimiterComma": "Virgule (,)",
+    "delimiterSemicolon": "Point-virgule (;)",
+    "delimiterTab": "Tabulation",
+    "decimal": "Séparateur décimal",
+    "dateFormat": "Format de date",
+    "feesIncluded": "Les frais sont déjà inclus dans le montant",
+    "preview": "Aperçu",
+    "rowsTotal": "{{count}} lignes",
+    "none": "— aucune —",
+    "back": "Retour",
+    "import": "Importer",
+    "rowsImported": "{{count}} transactions importées",
+    "rowsSkipped": "{{count}} lignes ignorées",
+    "rowLabel": "Ligne {{row}}",
+    "field": {
+      "date": "Date",
+      "side": "Achat / Vente",
+      "tickerOrIsin": "Ticker / ISIN",
+      "name": "Nom",
+      "quantity": "Quantité",
+      "unitPrice": "Prix unitaire",
+      "fees": "Frais",
+      "currency": "Devise",
+      "amount": "Montant"
+    }
+  },
+  "realized": {
+    "title": "Plus-values réalisées",
+    "realizedGains": "Réalisé",
+    "proceeds": "Produit",
+    "avgCost": "PMP",
+    "qtySold": "Qté vendue"
   }
 }

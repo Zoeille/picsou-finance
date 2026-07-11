@@ -27,7 +27,8 @@
     "yes": "Yes",
     "no": "No",
     "today": "Today",
-    "currency": "EUR"
+    "currency": "EUR",
+    "done": "Done"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -186,7 +187,8 @@
       "CRYPTO": "Crypto",
       "REAL_ESTATE": "Real estate",
       "DEBTS": "Debts"
-    }
+    },
+    "fees": "Fees"
   },
   "accountTypes": {
     "checking": "Checking",
@@ -310,12 +312,31 @@
         "real_estate": "Real Estate"
       },
       "countryNames": {
-        "US": "United States", "NL": "Netherlands", "CA": "Canada", "FR": "France",
-        "GB": "United Kingdom", "DE": "Germany", "CH": "Switzerland", "IE": "Ireland",
-        "JP": "Japan", "CN": "China", "LU": "Luxembourg", "AU": "Australia",
-        "ES": "Spain", "IT": "Italy", "SE": "Sweden", "DK": "Denmark", "HK": "Hong Kong",
-        "KR": "South Korea", "TW": "Taiwan", "IN": "India", "BR": "Brazil", "BE": "Belgium",
-        "FI": "Finland", "NO": "Norway", "SG": "Singapore"
+        "US": "United States",
+        "NL": "Netherlands",
+        "CA": "Canada",
+        "FR": "France",
+        "GB": "United Kingdom",
+        "DE": "Germany",
+        "CH": "Switzerland",
+        "IE": "Ireland",
+        "JP": "Japan",
+        "CN": "China",
+        "LU": "Luxembourg",
+        "AU": "Australia",
+        "ES": "Spain",
+        "IT": "Italy",
+        "SE": "Sweden",
+        "DK": "Denmark",
+        "HK": "Hong Kong",
+        "KR": "South Korea",
+        "TW": "Taiwan",
+        "IN": "India",
+        "BR": "Brazil",
+        "BE": "Belgium",
+        "FI": "Finland",
+        "NO": "Norway",
+        "SG": "Singapore"
       }
     }
   },
@@ -658,16 +679,46 @@
     "revokeTitle": "Revoke this key?",
     "revokeDescription": "Any MCP client using this key loses access immediately. This can't be undone.",
     "scopes": {
-      "accounts_read": { "label": "Accounts", "desc": "View accounts, balances, holdings and history" },
-      "transactions_read": { "label": "Transactions", "desc": "View transactions" },
-      "goals_read": { "label": "Goals", "desc": "View savings goals" },
-      "dashboard_read": { "label": "Dashboard", "desc": "View net worth, dashboard and P&L" },
-      "prices_read": { "label": "Prices", "desc": "Look up asset prices" },
-      "family_read": { "label": "Family", "desc": "View the shared family dashboard" },
-      "accounts_write": { "label": "Accounts", "desc": "Create and edit manual accounts, balances and holdings" },
-      "transactions_write": { "label": "Transactions", "desc": "Add, edit and delete manual transactions" },
-      "goals_write": { "label": "Goals", "desc": "Create, edit and delete goals and contributions" },
-      "sync_trigger": { "label": "Sync", "desc": "Refresh existing bank, crypto and broker connections" }
+      "accounts_read": {
+        "label": "Accounts",
+        "desc": "View accounts, balances, holdings and history"
+      },
+      "transactions_read": {
+        "label": "Transactions",
+        "desc": "View transactions"
+      },
+      "goals_read": {
+        "label": "Goals",
+        "desc": "View savings goals"
+      },
+      "dashboard_read": {
+        "label": "Dashboard",
+        "desc": "View net worth, dashboard and P&L"
+      },
+      "prices_read": {
+        "label": "Prices",
+        "desc": "Look up asset prices"
+      },
+      "family_read": {
+        "label": "Family",
+        "desc": "View the shared family dashboard"
+      },
+      "accounts_write": {
+        "label": "Accounts",
+        "desc": "Create and edit manual accounts, balances and holdings"
+      },
+      "transactions_write": {
+        "label": "Transactions",
+        "desc": "Add, edit and delete manual transactions"
+      },
+      "goals_write": {
+        "label": "Goals",
+        "desc": "Create, edit and delete goals and contributions"
+      },
+      "sync_trigger": {
+        "label": "Sync",
+        "desc": "Refresh existing bank, crypto and broker connections"
+      }
     }
   },
   "admin": {
@@ -1038,5 +1089,45 @@
       "loginFallback": "Go to login",
       "loggingIn": "Logging you in..."
     }
+  },
+  "import": {
+    "importCsv": "Import CSV",
+    "title": "Import transactions from CSV",
+    "uploadHint": "Drag & drop a CSV file here, or choose one",
+    "chooseFile": "Choose a file",
+    "mapColumns": "Map columns",
+    "delimiter": "Delimiter",
+    "delimiterComma": "Comma (,)",
+    "delimiterSemicolon": "Semicolon (;)",
+    "delimiterTab": "Tab",
+    "decimal": "Decimal separator",
+    "dateFormat": "Date format",
+    "feesIncluded": "Fees are already included in the amount",
+    "preview": "Preview",
+    "rowsTotal": "{{count}} rows",
+    "none": "— none —",
+    "back": "Back",
+    "import": "Import",
+    "rowsImported": "{{count}} transactions imported",
+    "rowsSkipped": "{{count}} rows skipped",
+    "rowLabel": "Row {{row}}",
+    "field": {
+      "date": "Date",
+      "side": "Buy / Sell",
+      "tickerOrIsin": "Ticker / ISIN",
+      "name": "Name",
+      "quantity": "Quantity",
+      "unitPrice": "Unit price",
+      "fees": "Fees",
+      "currency": "Currency",
+      "amount": "Amount"
+    }
+  },
+  "realized": {
+    "title": "Realized gains",
+    "realizedGains": "Realized",
+    "proceeds": "Proceeds",
+    "avgCost": "Avg cost",
+    "qtySold": "Qty sold"
   }
 }

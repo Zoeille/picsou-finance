@@ -1,5 +1,5 @@
 import { api } from '@/lib/api-client'
-import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, RealEstateMetadataRequest, RealEstateMetadata, SecurityInsight, Transaction, TransactionRequest } from '@/types/api'
+import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, RealEstateMetadataRequest, RealEstateMetadata, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest } from '@/types/api'
 
 export const accountsApi = {
   list: () => api.get<Account[]>('/accounts').then(r => r.data),
@@ -41,4 +41,16 @@ export const accountsApi = {
     api.put<HoldingResponse>(`/accounts/${accountId}/holdings/${ticker}`, data).then(r => r.data),
   deleteHolding: (accountId: number, ticker: string) =>
     api.delete(`/accounts/${accountId}/holdings/${ticker}`),
+  importPreview: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<TransactionImportPreviewResponse>(
+      `/accounts/${id}/transactions/import/preview`, form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    ).then(r => r.data)
+  },
+  importExecute: (id: number, data: TransactionImportRequest) =>
+    api.post<TransactionImportResultResponse>(`/accounts/${id}/transactions/import`, data).then(r => r.data),
+  realizedPnl: (id: number) =>
+    api.get<RealizedPnlResponse>(`/accounts/${id}/realized-pnl`).then(r => r.data),
 }

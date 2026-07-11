@@ -10,8 +10,10 @@ import { useHistory } from '@/features/history/hooks'
 import { BalanceHistoryChart } from '@/components/shared/BalanceHistoryChart'
 import { NetWorthChart } from '@/components/shared/NetWorthChart'
 import { HoldingsTable } from '@/components/shared/HoldingsTable'
+import { RealizedPnlSection } from '@/components/shared/RealizedPnlSection'
 import { TransactionsList } from '@/components/shared/TransactionsList'
 import { AddTransactionModal } from '@/components/shared/AddTransactionModal'
+import { ImportTransactionsModal } from '@/components/shared/ImportTransactionsModal'
 import { EditHoldingModal } from '@/components/shared/EditHoldingModal'
 import { MonthEndBalanceModal } from '@/components/shared/MonthEndBalanceModal'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
@@ -21,7 +23,7 @@ import { LoanDetailSection } from '@/components/loan/LoanDetailSection'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Calendar, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowLeft, Calendar, TrendingUp, TrendingDown, Upload } from 'lucide-react'
 import { formatLocalDate } from '@/lib/utils'
 import { accountTypeLabelKey } from '@/lib/constants'
 import { type TimeRange } from '@/components/shared/TimeRangeSelector'
@@ -48,6 +50,7 @@ export function AccountDetailPage() {
 
   const [showHistory, setShowHistory] = useState(false)
   const [showAddTx, setShowAddTx] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [editingHolding, setEditingHolding] = useState<HoldingResponse | null>(null)
   const [range, setRange] = useState<TimeRange>('1Y')
@@ -195,14 +198,25 @@ export function AccountDetailPage() {
         )
       )}
 
+      {/* Realized P&L on closed positions (investment accounts only) */}
+      {showHoldings && <RealizedPnlSection accountId={accountId} enabled={showHoldings} />}
+
       {/* Transactions */}
       {!isLoan && (transactions ? (
         <>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold">{t('accounts.transactions')}</h3>
-            <Button size="sm" variant="outline" onClick={() => setShowAddTx(true)}>
-              + Ajouter
-            </Button>
+            <div className="flex items-center gap-2">
+              {showHoldings && (
+                <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
+                  <Upload className="mr-1.5 size-4" />
+                  {t('import.importCsv')}
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setShowAddTx(true)}>
+                + {t('common.add')}
+              </Button>
+            </div>
           </div>
           <TransactionsList
             transactions={transactions}
@@ -249,6 +263,15 @@ export function AccountDetailPage() {
           accountType={account.type}
           onSubmit={async (data) => { await addTxMutation.mutateAsync(data) }}
           isLoading={addTxMutation.isPending}
+        />
+      )}
+
+      {/* Import CSV modal (investment accounts) */}
+      {account && showHoldings && (
+        <ImportTransactionsModal
+          open={showImport}
+          onOpenChange={setShowImport}
+          accountId={account.id}
         />
       )}
 

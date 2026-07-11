@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { accountsApi } from './api'
-import type { AccountRequest, Account, DebtRequest, HoldingResponse, RealEstateMetadataRequest, TransactionRequest } from '@/types/api'
+import type { AccountRequest, Account, DebtRequest, HoldingResponse, RealEstateMetadataRequest, TransactionImportRequest, TransactionRequest } from '@/types/api'
 import { QUERY_STALE_TIMES } from '@/lib/constants'
 
 export interface HoldingWithAccount extends HoldingResponse {
@@ -350,6 +350,40 @@ export function useDeleteHolding(accountId: number) {
       queryClient.invalidateQueries({ queryKey: ['accounts', accountId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// CSV transaction import + realized P&L
+// ---------------------------------------------------------------------------
+
+export function usePreviewImport(accountId: number) {
+  return useMutation({
+    mutationFn: (file: File) => accountsApi.importPreview(accountId, file),
+  })
+}
+
+export function useExecuteImport(accountId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: TransactionImportRequest) => accountsApi.importExecute(accountId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts', accountId, 'transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts', accountId, 'holdings'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts', accountId, 'history'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts', accountId, 'realized-pnl'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts', accountId] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useRealizedPnl(accountId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['accounts', accountId, 'realized-pnl'],
+    queryFn: () => accountsApi.realizedPnl(accountId),
+    staleTime: QUERY_STALE_TIMES.accountDetail,
+    enabled: enabled && !!accountId,
   })
 }
 

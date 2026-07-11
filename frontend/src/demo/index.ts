@@ -67,6 +67,46 @@ for (let i = 1; i <= 7; i++) {
   handlers.set(key('GET', `/accounts/${i}/transactions`), () => mockTransactions[i] ?? [])
 }
 
+// Realized P&L on closed positions. PEA (id=2) shows a green + a red closed lot;
+// the other holding accounts report nothing realized yet.
+handlers.set(key('GET', '/accounts/2/realized-pnl'), () => ({
+  currency: 'EUR',
+  realizedTotal: 420.5,
+  byTicker: [
+    { ticker: 'AAPL', name: 'Apple Inc.', realized: 512, quantitySold: 8, proceeds: 1512, costBasis: 1000, warning: false },
+    { ticker: 'TSLA', name: 'Tesla Inc.', realized: -91.5, quantitySold: 3, proceeds: 660, costBasis: 751.5, warning: false },
+  ],
+  lots: [
+    { ticker: 'AAPL', name: 'Apple Inc.', date: '2024-05-14', quantity: 8, avgCost: 125, proceeds: 1512, realized: 512 },
+    { ticker: 'TSLA', name: 'Tesla Inc.', date: '2024-09-02', quantity: 3, avgCost: 250.5, proceeds: 660, realized: -91.5 },
+  ],
+}))
+for (const i of [3, 6]) {
+  handlers.set(key('GET', `/accounts/${i}/realized-pnl`), () => ({
+    currency: 'EUR', realizedTotal: 0, byTicker: [], lots: [],
+  }))
+}
+
+// CSV transaction import wizard (holding accounts). Preview returns a French-style
+// sample (semicolon delimiter, comma decimals); execute reports a canned result.
+for (const i of [2, 3, 6]) {
+  handlers.set(key('POST', `/accounts/${i}/transactions/import/preview`), () => ({
+    fileToken: 'demo-token',
+    detectedColumns: ['Date', 'Sens', 'ISIN', 'Quantité', 'Cours', 'Frais'],
+    sampleRows: [
+      ['15/01/2024', 'Achat', 'IE00B4L5Y983', '10', '85,20', '1,00'],
+      ['02/06/2024', 'Vente', 'IE00B4L5Y983', '10', '92,50', '1,00'],
+    ],
+    totalRows: 2,
+    hasHeaderRow: true,
+    dialect: { delimiter: ';', decimal: 'COMMA', dateFormat: 'dd/MM/yyyy' },
+    suggestedMapping: { date: 0, side: 1, tickerOrIsin: 2, name: null, quantity: 3, unitPrice: 4, fees: 5, currency: null, amount: null },
+  }))
+  handlers.set(key('POST', `/accounts/${i}/transactions/import`), () => ({
+    imported: 2, skipped: 0, errors: [],
+  }))
+}
+
 // Security insight (asset type + ETF composition). Mirrors the backend
 // SecurityInsightResponse: { ticker, assetType, composition | null }.
 const demoStockTickers = ['AAPL', 'MSFT', 'AMZN', 'NVDA']
