@@ -79,7 +79,9 @@ public class TransactionImportService {
         String dateFormat = CsvDialectDetector.detectDateFormat(rows);
         boolean hasHeader = looksLikeHeader(rows.get(0), decimal);
 
-        List<List<String>> dataRows = hasHeader && rows.size() > 1 ? rows.subList(1, rows.size()) : rows;
+        List<List<String>> dataRows = hasHeader
+            ? (rows.size() > 1 ? rows.subList(1, rows.size()) : List.of())
+            : rows;
         List<String> detectedColumns = hasHeader ? trimAll(rows.get(0)) : genericColumns(rows);
         ColumnMappingDto suggestedMapping = hasHeader ? guessMapping(rows.get(0)) : emptyMapping();
         List<List<String>> sampleRows = dataRows.stream().limit(SAMPLE_ROWS).toList();

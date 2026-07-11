@@ -130,6 +130,18 @@ class TransactionImportServiceTest {
     }
 
     @Test
+    void preview_headerOnlyFile_reportsZeroDataRows() {
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
+
+        TransactionImportPreviewResponse preview =
+            service.preview(2L, 10L, file("date,side,ticker,quantity,price,fees\n"));
+
+        assertThat(preview.hasHeaderRow()).isTrue();
+        assertThat(preview.totalRows()).isZero();
+        assertThat(preview.sampleRows()).isEmpty();
+    }
+
+    @Test
     void executeImport_expiredToken_throws() {
         when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
         TransactionImportRequest req =

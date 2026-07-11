@@ -113,6 +113,28 @@ class TransactionRowMapperTest {
     }
 
     @Test
+    void sideSingleLetterAndExplicitTokens() {
+        stubResolver();
+        assertThat(mapper.map(List.of("2024-01-15", "s", "AAPL", "10", "85.20", "0"),
+            mappingWithPrice(), dialect, null, false, account).getTxType()).isEqualTo(TransactionType.SELL);
+        assertThat(mapper.map(List.of("2024-01-15", "Sale", "AAPL", "10", "85.20", "0"),
+            mappingWithPrice(), dialect, null, false, account).getTxType()).isEqualTo(TransactionType.SELL);
+        assertThat(mapper.map(List.of("2024-01-15", "b", "AAPL", "10", "85.20", "0"),
+            mappingWithPrice(), dialect, null, false, account).getTxType()).isEqualTo(TransactionType.BUY);
+    }
+
+    @Test
+    void ambiguousSideWordWithNoAmount_throws() {
+        stubResolver();
+        // "Souscription" starts with 's' but must NOT be read as a sell; with no amount column
+        // the side is genuinely undeterminable.
+        List<String> row = List.of("2024-01-15", "Souscription", "AAPL", "10", "85.20", "0");
+        assertThatThrownBy(() -> mapper.map(row, mappingWithPrice(), dialect, null, false, account))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("BUY/SELL");
+    }
+
+    @Test
     void missingDate_throws() {
         stubResolver();
         List<String> row = List.of("", "BUY", "AAPL", "10", "85.20", "1.00");

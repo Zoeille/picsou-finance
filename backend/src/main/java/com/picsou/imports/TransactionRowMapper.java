@@ -99,10 +99,12 @@ public class TransactionRowMapper {
                 }
             }
             String lower = raw.toLowerCase();
-            if (lower.startsWith("s") || lower.contains("vent") || lower.contains("sell") || lower.contains("sale")) {
+            // Explicit tokens first; a bare "s"/"b" only matches exactly (so e.g. "Souscription"
+            // is not mistaken for a sell), then fall through to the amount-sign heuristic.
+            if (lower.equals("s") || lower.contains("vent") || lower.contains("sell") || lower.contains("sale")) {
                 return TransactionType.SELL;
             }
-            if (lower.startsWith("b") || lower.contains("ach") || lower.contains("buy")) {
+            if (lower.equals("b") || lower.contains("ach") || lower.contains("buy")) {
                 return TransactionType.BUY;
             }
         }
