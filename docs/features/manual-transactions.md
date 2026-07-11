@@ -25,6 +25,19 @@ CREATE INDEX idx_transaction_account_manual ON transaction(account_id, is_manual
 
 Existing synced transactions have `is_manual = false`. The original `type` column (Finary raw category string) is untouched.
 
+### Per-trade fees column (V53 migration)
+
+```sql
+ALTER TABLE transaction ADD COLUMN fees NUMERIC(20,8) NULL;  -- null = zero downstream
+```
+
+Optional broker/transaction fees on a BUY/SELL. Fees **fold into the PMP cost basis** (French PEA
+convention: acquisition costs raise the cost basis) — see *Holdings derivation* below. The signed
+`amount` also accounts for fees: BUY `= −(qty·price + fees)`, SELL `= +(qty·price − fees)`,
+centralised in `TransactionAmountCalculator` and mirrored by the frontend modal. Added for the CSV
+importer ([csv-transaction-import.md](csv-transaction-import.md)) and exposed as an optional field on
+the manual add/edit form.
+
 ### Security name column (V36 migration)
 
 A later migration adds a first-class label for derived positions:
@@ -67,7 +80,7 @@ Manual transactions on a **synced** cash account (`account.isManual = false` —
 
 1. Fetches all BUY/SELL transactions for the account, ordered by date ASC.
 2. Groups by ticker: `net quantity = Σ(BUY qty) − Σ(SELL qty)`.
-3. Computes `averageBuyIn` as VWAP across all BUY transactions for each ticker.
+3. Computes `averageBuyIn` as VWAP across all BUY transactions for each ticker, **fees included**: `Σ(qty·price + fees) / Σ(qty)` (null fees treated as zero). SELL rows never affect the average.
 4. Upserts `AccountHolding` for tickers where `qty > 0`.
 5. Deletes `AccountHolding` for tickers where `qty ≤ 0`.
 6. Labels each surviving position with the **most recent** transaction (date ASC, last write wins) that carries a non-blank `name`. The update is guarded by a null check, so a nameless manual transaction never erases a name already set by bank sync (OpenFIGI).
@@ -96,7 +109,7 @@ All sync services (`FinaryPersistenceHelper`, `BoursoSyncService`) now call `tra
 - Date, DEPOSIT/WITHDRAWAL toggle, Description, Amount (always positive — toggle sets sign)
 
 **Investment accounts (PEA, COMPTE_TITRES, CRYPTO):**
-- Date, BUY/SELL toggle, **Ticker ou ISIN** (a ticker like `IWDA.AS` or a 12-char ISIN like `IE00B4L5Y983`), Name (auto-filled from existing holdings when the ticker matches; otherwise resolved from the ISIN backend-side), Quantity, Price per unit, Total (read-only)
+- Date, BUY/SELL toggle, **Ticker ou ISIN** (a ticker like `IWDA.AS` or a 12-char ISIN like `IE00B4L5Y983`), Name (auto-filled from existing holdings when the ticker matches; otherwise resolved from the ISIN backend-side), Quantity, Price per unit, **Fees (optional, folded into the PMP)**, Total (read-only)
 
 The Transactions list shows a "Manuel" badge on manual entries and a delete button (only for manual entries).
 
@@ -110,7 +123,10 @@ After submit, `useAddTransaction` / `useDeleteTransaction` hooks invalidate the 
 | `db/migration/V36__transaction_security_name.sql` | Adds `transaction.name` (position label) |
 | `model/TransactionType.java` | Enum (DEPOSIT, WITHDRAWAL, BUY, SELL, DIVIDEND, FEE) |
 | `service/HoldingComputeService.java` | Derives holdings (qty, VWAP, **name**) from BUY/SELL transactions |
-| `service/ManualTransactionService.java` | Orchestrates add/edit/delete + re-derivation; resolves ISIN and owns the BUY/SELL description (`applyInstrumentFields`) |
+| `service/ManualTransactionService.java` | Orchestrates add/edit/delete + re-derivation; persists `fees`; delegates ISIN/ticker/description to `InstrumentFieldResolver` |
+| `service/InstrumentFieldResolver.java` | Shared ISIN→ticker/name + BUY/SELL description builder (reused by the CSV importer) |
+| `imports/TransactionAmountCalculator.java` | Single source of truth for the signed `amount` incl. fees |
+| `db/migration/V53__transaction_fees.sql` | Adds `transaction.fees` (folds into the PMP) |
 | `adapter/OpenFigiIsinConverter.java` | `isIsin()` detection + `resolve()` ISIN→ticker+name (shared with bank sync) |
 | `controller/AccountController.java` | POST/DELETE `/accounts/{id}/transactions` |
 | `repository/TransactionRepository.java` | `deleteByAccountIdAndIsManualFalse`, `sumAmountByAccountId`, `findByAccountIdAndTxTypeInOrderByDateAsc` |
