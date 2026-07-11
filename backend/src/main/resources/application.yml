@@ -39,8 +39,10 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 1MB
-      max-request-size: 1MB
+      # 10MB accommodates multi-year CSV transaction histories; the import endpoint is
+      # member-scoped and IP-throttled, so this does not widen the abuse surface.
+      max-file-size: 10MB
+      max-request-size: 10MB
 
   # Embedded MCP server (Model Context Protocol). Transport is HTTP+SSE — the only transport
   # Spring AI 1.0.3 / MCP SDK 0.10.0 ship (there is no Streamable HTTP on this version). Both
