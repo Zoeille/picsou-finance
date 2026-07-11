@@ -21,7 +21,8 @@ public record TransactionResponse(
     String ticker,
     String name,
     BigDecimal quantity,
-    BigDecimal pricePerUnit
+    BigDecimal pricePerUnit,
+    BigDecimal fees
 ) {
     public static TransactionResponse from(Transaction t) {
         return new TransactionResponse(
@@ -38,7 +39,8 @@ public record TransactionResponse(
             t.getTicker(),
             t.getName(),
             t.getQuantity(),
-            t.getPricePerUnit()
+            t.getPricePerUnit(),
+            t.getFees()
         );
     }
 }

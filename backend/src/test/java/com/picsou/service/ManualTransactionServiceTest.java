@@ -11,9 +11,9 @@ import com.picsou.model.Transaction;
 import com.picsou.model.TransactionType;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.TransactionRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,7 +35,16 @@ class ManualTransactionServiceTest {
     @Mock FinaryPersistenceHelper finaryPersistenceHelper;
     @Mock OpenFigiIsinConverter openFigiIsinConverter;
 
-    @InjectMocks ManualTransactionService manualTransactionService;
+    ManualTransactionService manualTransactionService;
+
+    @BeforeEach
+    void setUp() {
+        // Inject a REAL InstrumentFieldResolver over the mocked OpenFigiIsinConverter so the
+        // end-to-end ISIN/ticker resolution assertions below exercise the actual logic.
+        manualTransactionService = new ManualTransactionService(
+            accountRepository, transactionRepository, holdingComputeService,
+            finaryPersistenceHelper, new InstrumentFieldResolver(openFigiIsinConverter));
+    }
 
     private Account checkingAccount() {
         return Account.builder()
@@ -347,6 +356,56 @@ class ManualTransactionServiceTest {
         // The raw ISIN must never surface in the transaction row.
         assertThat(result.description()).isEqualTo("iShares Core MSCI World UCITS ETF");
         verify(holdingComputeService).recomputeHoldings(account);
+    }
+
+    @Test
+    void addTransaction_investmentAccount_persistsFees() {
+        Account account = peaAccount();
+        TransactionRequest req = new TransactionRequest(
+            LocalDate.of(2024, 3, 10),
+            "Buy AAPL",
+            new BigDecimal("-1001.50"),
+            TransactionType.BUY,
+            "AAPL",
+            null,
+            new BigDecimal("10"),
+            new BigDecimal("100"),
+            "EUR",
+            new BigDecimal("1.50")
+        );
+
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(account));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TransactionResponse result = manualTransactionService.addTransaction(2L, 10L, req);
+
+        assertThat(result.fees()).isEqualByComparingTo("1.50");
+        verify(holdingComputeService).recomputeHoldings(account);
+    }
+
+    @Test
+    void addTransaction_negativeFees_throws() {
+        Account account = peaAccount();
+        TransactionRequest req = new TransactionRequest(
+            LocalDate.of(2024, 3, 10),
+            "Buy AAPL",
+            new BigDecimal("-1000"),
+            TransactionType.BUY,
+            "AAPL",
+            null,
+            new BigDecimal("10"),
+            new BigDecimal("100"),
+            "EUR",
+            new BigDecimal("-1")
+        );
+
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> manualTransactionService.addTransaction(2L, 10L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Fees");
+
+        verify(transactionRepository, never()).save(any());
     }
 
     @Test

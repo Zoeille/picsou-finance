@@ -58,6 +58,20 @@ class HoldingComputeServiceTest {
                 .build();
     }
 
+    private Transaction buyTxWithFees(String ticker, String qty, String price, String fees) {
+        return Transaction.builder()
+                .account(account(1L))
+                .date(LocalDate.of(2024, 1, 1))
+                .description("BUY " + ticker)
+                .amount(BigDecimal.ZERO)
+                .txType(TransactionType.BUY)
+                .ticker(ticker)
+                .quantity(new BigDecimal(qty))
+                .pricePerUnit(price != null ? new BigDecimal(price) : null)
+                .fees(fees != null ? new BigDecimal(fees) : null)
+                .build();
+    }
+
     private Transaction buyTxWithName(String ticker, String qty, String price, String name, LocalDate date) {
         return Transaction.builder()
                 .account(account(1L))
@@ -118,6 +132,72 @@ class HoldingComputeServiceTest {
         assertThat(h.getQuantity()).isEqualByComparingTo("30");
         // VWAP = 5000 / 30 = 166.66666667
         assertThat(h.getAverageBuyIn()).isEqualByComparingTo("166.66666667");
+    }
+
+    @Test
+    void buyWithFees_foldsFeesIntoAverageBuyIn() {
+        Account account = account(1L);
+        // Buy 10 @ 100 with 5 fees → averageBuyIn = (10*100 + 5) / 10 = 100.5 (French PEA PMP convention)
+        Transaction buy = buyTxWithFees("AAPL", "10", "100.00", "5.00");
+
+        when(transactionRepository.findByAccountIdAndTxTypeInOrderByDateAsc(eq(1L), anyList()))
+                .thenReturn(List.of(buy));
+        when(accountHoldingRepository.findByAccount_Id(1L))
+                .thenReturn(List.of());
+
+        holdingComputeService.recomputeHoldings(account);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountHolding>> captor = ArgumentCaptor.forClass(List.class);
+        verify(accountHoldingRepository).saveAll(captor.capture());
+
+        AccountHolding h = captor.getValue().get(0);
+        assertThat(h.getQuantity()).isEqualByComparingTo("10");
+        assertThat(h.getAverageBuyIn()).isEqualByComparingTo("100.50000000");
+    }
+
+    @Test
+    void multipleBuysWithFees_foldsAllFeesIntoVwap() {
+        Account account = account(1L);
+        // (10*100 + 5) + (10*200 + 5) = 1005 + 2005 = 3010 over 20 → 150.5
+        Transaction buy1 = buyTxWithFees("ETH", "10", "100.00", "5.00");
+        Transaction buy2 = buyTxWithFees("ETH", "10", "200.00", "5.00");
+
+        when(transactionRepository.findByAccountIdAndTxTypeInOrderByDateAsc(eq(1L), anyList()))
+                .thenReturn(List.of(buy1, buy2));
+        when(accountHoldingRepository.findByAccount_Id(1L))
+                .thenReturn(List.of());
+
+        holdingComputeService.recomputeHoldings(account);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountHolding>> captor = ArgumentCaptor.forClass(List.class);
+        verify(accountHoldingRepository).saveAll(captor.capture());
+
+        AccountHolding h = captor.getValue().get(0);
+        assertThat(h.getQuantity()).isEqualByComparingTo("20");
+        assertThat(h.getAverageBuyIn()).isEqualByComparingTo("150.50000000");
+    }
+
+    @Test
+    void nullFees_treatedAsZeroInVwap() {
+        Account account = account(1L);
+        // No fees recorded → averageBuyIn = plain VWAP = 100
+        Transaction buy = buyTxWithFees("BTC", "10", "100.00", null);
+
+        when(transactionRepository.findByAccountIdAndTxTypeInOrderByDateAsc(eq(1L), anyList()))
+                .thenReturn(List.of(buy));
+        when(accountHoldingRepository.findByAccount_Id(1L))
+                .thenReturn(List.of());
+
+        holdingComputeService.recomputeHoldings(account);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountHolding>> captor = ArgumentCaptor.forClass(List.class);
+        verify(accountHoldingRepository).saveAll(captor.capture());
+
+        AccountHolding h = captor.getValue().get(0);
+        assertThat(h.getAverageBuyIn()).isEqualByComparingTo("100.00000000");
     }
 
     @Test

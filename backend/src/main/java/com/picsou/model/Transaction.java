@@ -67,4 +67,8 @@ public class Transaction {
 
     @Column(name = "price_per_unit", precision = 20, scale = 8)
     private BigDecimal pricePerUnit;
+
+    /** Broker/transaction fees. Null (no fee recorded) is treated as zero downstream. */
+    @Column(name = "fees", precision = 20, scale = 8)
+    private BigDecimal fees;
 }

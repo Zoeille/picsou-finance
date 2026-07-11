@@ -36,7 +36,7 @@ class TransactionsExporter implements EntityExporter {
         return List.of(
             "id", "account_id", "date", "description", "amount", "type", "category",
             "native_currency", "is_manual", "tx_type", "ticker", "quantity",
-            "price_per_unit", "created_at"
+            "price_per_unit", "fees", "created_at"
         );
     }
 
@@ -57,6 +57,7 @@ class TransactionsExporter implements EntityExporter {
                 nullSafe(t.getTicker()),
                 t.getQuantity() == null ? "" : t.getQuantity().toPlainString(),
                 t.getPricePerUnit() == null ? "" : t.getPricePerUnit().toPlainString(),
+                t.getFees() == null ? "" : t.getFees().toPlainString(),
                 t.getCreatedAt() == null ? "" : t.getCreatedAt().toString()
             ));
         }
@@ -80,6 +81,7 @@ class TransactionsExporter implements EntityExporter {
             json.writeStringField("ticker", t.getTicker());
             writeBigDecimal(json, "quantity", t.getQuantity());
             writeBigDecimal(json, "price_per_unit", t.getPricePerUnit());
+            writeBigDecimal(json, "fees", t.getFees());
             writeInstant(json, "created_at", t.getCreatedAt());
             json.writeEndObject();
         }

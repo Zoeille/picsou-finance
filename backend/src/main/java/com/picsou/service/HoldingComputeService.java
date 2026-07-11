@@ -57,7 +57,9 @@ public class HoldingComputeService {
                 netQuantity.merge(ticker, qty, BigDecimal::add);
                 // null price treated as 0; averageBuyIn will be 0, which is intentional
                 BigDecimal price = tx.getPricePerUnit() != null ? tx.getPricePerUnit() : BigDecimal.ZERO;
-                vwapNumerator.merge(ticker, qty.multiply(price), BigDecimal::add);
+                // Fees fold into the VWAP numerator (PMP cost basis), null fees treated as 0.
+                BigDecimal fees = tx.getFees() != null ? tx.getFees() : BigDecimal.ZERO;
+                vwapNumerator.merge(ticker, qty.multiply(price).add(fees), BigDecimal::add);
                 vwapDenominator.merge(ticker, qty, BigDecimal::add);
             } else { // SELL
                 netQuantity.merge(ticker, qty.negate(), BigDecimal::add);
