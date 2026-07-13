@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { SUPPORTED_LOCALES, resolveLocale } from '@/i18n/locales'
 import { useNavigate } from 'react-router'
 import { useAuthStore } from '@/stores/auth-store'
-import { useAppStore, type DateFormat } from '@/stores/app-store'
+import { useAppStore, type DateFormat, type SidebarStyle } from '@/stores/app-store'
 import { useLogout } from '@/features/auth/hooks'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -117,7 +117,7 @@ export function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const logoutMutation = useLogout()
   const setUsername = useAuthStore((s) => s.setUsername)
-  const { dateFormat, setDateFormat } = useAppStore()
+  const { dateFormat, setDateFormat, sidebarStyle, setSidebarStyle } = useAppStore()
 
   // Username editing -------------------------------------------------------
   const [editingUsername, setEditingUsername] = useState(false)
@@ -197,6 +197,11 @@ export function SettingsPage() {
     { value: 'iso', label: t('settings.dateFormatIso') },
   ]
 
+  const sidebarStyleOptions: ToggleOption[] = [
+    { value: 'current', label: t('settings.sidebarStyleCurrent') },
+    { value: 'classic', label: t('settings.sidebarStyleClassic') },
+  ]
+
   return (
     <div className="space-y-6">
       <PageHeader title={t('settings.title')} />
@@ -235,6 +240,16 @@ export function SettingsPage() {
               options={dateFormatOptions}
               value={dateFormat}
               onChange={(v) => setDateFormat(v as DateFormat)}
+            />
+          </div>
+
+          {/* Sidebar style */}
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">{t('settings.sidebarStyle')}</Label>
+            <ToggleGroup
+              options={sidebarStyleOptions}
+              value={sidebarStyle}
+              onChange={(v) => setSidebarStyle(v as SidebarStyle)}
             />
           </div>
         </div>
