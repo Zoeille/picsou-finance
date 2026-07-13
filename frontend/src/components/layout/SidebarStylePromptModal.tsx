@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next'
+import { LayoutDashboard, Wallet, Target, PieChart, Users, Settings } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -8,23 +10,44 @@ import {
 } from '@/components/ui/dialog'
 import { useAppStore, type SidebarStyle } from '@/stores/app-store'
 import { cn } from '@/lib/utils'
+import picsouLogo from '@/assets/horizontal-white-picsou.svg'
 
 const OPTIONS: { value: SidebarStyle; labelKey: string }[] = [
   { value: 'current', labelKey: 'settings.sidebarStyleCurrent' },
   { value: 'classic', labelKey: 'settings.sidebarStyleClassic' },
 ]
 
+// Mirrors AppSidebar's own NAV_ITEMS order so the miniature reads as "the real
+// thing, shrunk down" rather than a generic skeleton.
+const PREVIEW_NAV_ICONS: LucideIcon[] = [LayoutDashboard, Wallet, Target, PieChart, Users]
+
 function SidebarPreview({ variant }: { variant: SidebarStyle }) {
   const isClassic = variant === 'classic'
+  const navIcons = isClassic ? [...PREVIEW_NAV_ICONS, Settings] : PREVIEW_NAV_ICONS
+
   return (
-    <div className="flex h-28 w-full gap-1.5 rounded-lg bg-muted/40 p-2" aria-hidden="true">
-      <div className={cn('flex flex-col gap-1 rounded-md bg-background p-1.5', isClassic ? 'w-2/5' : 'w-1/2')}>
-        {Array.from({ length: isClassic ? 5 : 3 }).map((_, i) => (
-          <div key={i} className={cn('rounded-sm bg-muted', isClassic ? 'h-2.5' : 'h-3.5')} />
-        ))}
-        <div className="mt-auto flex items-center gap-1">
+    <div className="flex h-36 w-full gap-1.5 rounded-lg bg-muted/40 p-2" aria-hidden="true">
+      <div className={cn('flex flex-col rounded-md bg-background p-1.5', isClassic ? 'w-[46%] items-center' : 'w-1/2')}>
+        <img
+          src={picsouLogo}
+          alt=""
+          className={cn('h-2 w-auto opacity-70 brightness-0 dark:invert', isClassic ? 'mb-2' : 'mb-1.5 self-start')}
+        />
+        <div className={cn('flex w-full flex-col gap-1', isClassic && 'flex-1 justify-evenly')}>
+          {navIcons.map((Icon, i) => (
+            <div
+              key={i}
+              className={cn('flex items-center gap-1 rounded-sm px-1 py-0.5', i === 0 && 'bg-muted')}
+            >
+              <Icon className="size-2.5 shrink-0 text-muted-foreground" />
+              <div className="h-1 flex-1 rounded-full bg-muted" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-auto flex w-full items-center gap-1 pt-1.5">
           <div className="size-3 shrink-0 rounded-full bg-primary/40" />
-          {!isClassic && <div className="h-2 flex-1 rounded-sm bg-muted" />}
+          {!isClassic && <div className="h-1 flex-1 rounded-full bg-muted" />}
+          {!isClassic && <Settings className="size-2.5 shrink-0 text-muted-foreground" />}
         </div>
       </div>
       <div className="flex-1 space-y-1.5 rounded-md bg-background p-1.5">
