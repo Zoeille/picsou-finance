@@ -36,7 +36,7 @@ vi.mock('@/features/budget/hooks', () => ({
   useCategories: () => ({ data: state.categories }),
   useBudgetSettings: () => ({ data: state.settings }),
   useRecategorize: () => ({ mutate: vi.fn(), isPending: false }),
-  useCategorizeAiStatus: (_enabled: boolean) => ({ data: state.aiData }),
+  useCategorizeAiStatus: () => ({ data: state.aiData }),
   useStartCategorizeAi: () => ({ mutate: mocks.startAiMutate, isPending: false }),
   useCategorize: () => ({ mutate: vi.fn(), isPending: false }),
   useMerchantLogoUrl: () => () => null,

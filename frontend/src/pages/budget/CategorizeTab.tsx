@@ -235,6 +235,8 @@ export function CategorizeTab() {
       void qc.invalidateQueries({ queryKey: ['budget'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       if (aiStatus.data) {
+        // Reacting to the running → done transition detected above, not deriving render state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setDoneInfo({ applied: aiStatus.data.applied, suggested: aiStatus.data.suggested })
       }
     }

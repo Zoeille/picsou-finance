@@ -777,6 +777,8 @@ function RevolutWizard({ onDone, onBack }: { onDone: () => void; onBack: () => v
     if (prevRunningRef.current === true && running === false) {
       setIsSyncing(false)
       if (progress.data?.error) {
+        // Reacting to the running → done transition detected above, not deriving render state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setErrorMsg(progress.data.error)
       } else {
         setResultReady(true)
