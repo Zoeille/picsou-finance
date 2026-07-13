@@ -76,8 +76,8 @@ function renderSidebar(queryClient = makeClient()) {
   return queryClient
 }
 
-function openProfileMenu() {
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'nav.switchProfile' }), {
+function openAccountMenu() {
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'nav.account' }), {
     button: 0,
     ctrlKey: false,
   })
@@ -92,13 +92,17 @@ describe('AppSidebar profile switcher', () => {
     useProfileStore.getState().reset()
   })
 
-  it('does not load family members for non-admin users', async () => {
+  it('does not load family members for non-admin users, and hides profile switching from their account menu', async () => {
     useAuthStore.getState().login({ username: 'robin', role: 'MEMBER', memberId: 7, displayName: 'Robin' })
 
     renderSidebar()
 
-    expect(screen.getByRole('link', { name: /Robin/ })).toHaveAttribute('href', '/settings')
-    expect(screen.queryByRole('button', { name: 'nav.switchProfile' })).not.toBeInTheDocument()
+    await screen.findByText('Robin')
+    expect(screen.getByRole('link', { name: 'nav.settings' })).toHaveAttribute('href', '/settings')
+
+    openAccountMenu()
+    expect(await screen.findByRole('menuitem', { name: 'settings.logout' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument()
     expect(listMembers).not.toHaveBeenCalled()
   })
 
@@ -114,7 +118,7 @@ describe('AppSidebar profile switcher', () => {
     await screen.findByText('Chloe')
     expect(listMembers).toHaveBeenCalledTimes(1)
 
-    openProfileMenu()
+    openAccountMenu()
     expect(await screen.findByRole('menuitemradio', { name: /Lou/ })).toBeInTheDocument()
     expect(screen.queryByRole('menuitemradio', { name: /Maya/ })).not.toBeInTheDocument()
 
@@ -124,7 +128,7 @@ describe('AppSidebar profile switcher', () => {
     expect(invalidateSpy).toHaveBeenCalled()
     expect(await screen.findByText('Lou')).toBeInTheDocument()
 
-    openProfileMenu()
+    openAccountMenu()
     fireEvent.click(await screen.findByRole('menuitemradio', { name: /Chloe/ }))
 
     await waitFor(() => expect(useProfileStore.getState().activeMemberId).toBeNull())

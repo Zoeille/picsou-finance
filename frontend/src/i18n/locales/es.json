@@ -1125,5 +1125,10 @@
     "proceeds": "Ingresos",
     "avgCost": "Coste medio",
     "qtySold": "Cant. vendida"
+  },
+  "sidebarStylePrompt": {
+    "title": "Elige el estilo de tu barra lateral",
+    "description": "Dos diseños a elegir — puedes cambiarlo en cualquier momento.",
+    "hint": "Modificable en cualquier momento en Ajustes > Apariencia."
   }
 }
