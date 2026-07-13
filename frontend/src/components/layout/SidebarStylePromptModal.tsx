@@ -26,14 +26,14 @@ function SidebarPreview({ variant }: { variant: SidebarStyle }) {
   const navIcons = isClassic ? [...PREVIEW_NAV_ICONS, Settings] : PREVIEW_NAV_ICONS
 
   return (
-    <div className="flex h-36 w-full gap-1.5 rounded-lg bg-muted/40 p-2" aria-hidden="true">
+    <div className="flex h-44 w-full gap-1.5 rounded-lg bg-muted/40 p-2" aria-hidden="true">
       <div className={cn('flex flex-col rounded-md bg-background p-1.5', isClassic ? 'w-[46%] items-center' : 'w-1/2')}>
         <img
           src={picsouLogo}
           alt=""
           className={cn('h-2 w-auto opacity-70 brightness-0 dark:invert', isClassic ? 'mb-2' : 'mb-1.5 self-start')}
         />
-        <div className={cn('flex w-full flex-col gap-1', isClassic && 'flex-1 justify-evenly')}>
+        <div className="flex w-full flex-col gap-1">
           {navIcons.map((Icon, i) => (
             <div
               key={i}
