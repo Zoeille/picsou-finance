@@ -1590,5 +1590,10 @@
     "proceeds": "Produit",
     "avgCost": "PMP",
     "qtySold": "Qté vendue"
+  },
+  "sidebarStylePrompt": {
+    "title": "Choisis le style de ta sidebar",
+    "description": "Deux dispositions au choix — tu pourras en changer à tout moment.",
+    "hint": "Modifiable à tout moment dans Paramètres > Apparence."
   }
 }

@@ -1125,5 +1125,10 @@
     "proceeds": "Erlös",
     "avgCost": "Ø-Kosten",
     "qtySold": "Verk. Menge"
+  },
+  "sidebarStylePrompt": {
+    "title": "Wähle deinen Sidebar-Stil",
+    "description": "Zwei Layouts zur Auswahl — du kannst jederzeit wechseln.",
+    "hint": "Jederzeit änderbar unter Einstellungen > Erscheinungsbild."
   }
 }

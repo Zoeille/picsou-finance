@@ -1590,5 +1590,10 @@
     "proceeds": "Proceeds",
     "avgCost": "Avg cost",
     "qtySold": "Qty sold"
+  },
+  "sidebarStylePrompt": {
+    "title": "Pick your sidebar style",
+    "description": "Two layouts to choose from — you can switch anytime.",
+    "hint": "Changeable anytime in Settings > Appearance."
   }
 }

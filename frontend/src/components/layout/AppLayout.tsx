@@ -2,10 +2,13 @@ import { Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AppSidebar } from './AppSidebar'
 import { MobileBottomNav } from './MobileBottomNav'
+import { SidebarStylePromptModal } from './SidebarStylePromptModal'
 import { DegradedModeBanner } from '@/components/shared/DegradedModeBanner'
+import { useAppStore } from '@/stores/app-store'
 
 export function AppLayout() {
   const { t } = useTranslation()
+  const hasSeenSidebarStylePrompt = useAppStore((s) => s.hasSeenSidebarStylePrompt)
   return (
     <div className="flex h-screen md:p-4 md:gap-4">
       {/* Keyboard skip-link: first focusable element, jumps past the nav straight to <main>. */}
@@ -24,6 +27,7 @@ export function AppLayout() {
         </div>
       </main>
       <MobileBottomNav />
+      <SidebarStylePromptModal open={!hasSeenSidebarStylePrompt} onOpenChange={() => {}} />
     </div>
   )
 }
