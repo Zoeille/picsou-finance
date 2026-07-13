@@ -3,10 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ChevronDown,
-  LayoutDashboard,
   Settings,
-  Wallet,
-  Target,
   Users,
   LogOut,
   Shield,
@@ -33,6 +30,36 @@ import { useLogout } from '@/features/auth/hooks'
 import { useProfileStore } from '@/stores/profile-store'
 import { cn } from '@/lib/utils'
 import picsouLogo from '@/assets/horizontal-white-picsou.svg'
+import { NAV_ITEMS, CLASSIC_SETTINGS_NAV_ITEM } from './sidebar-nav-items'
+
+function AccountMenuFooterItems({
+  isAdmin,
+  onAdminClick,
+  onLogoutClick,
+  logoutPending,
+}: {
+  isAdmin: boolean
+  onAdminClick: () => void
+  onLogoutClick: () => void
+  logoutPending: boolean
+}) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {isAdmin && (
+        <DropdownMenuItem onClick={onAdminClick}>
+          <Shield className="size-4" aria-hidden="true" />
+          <span>{t('nav.admin')}</span>
+        </DropdownMenuItem>
+      )}
+
+      <DropdownMenuItem onClick={onLogoutClick} disabled={logoutPending}>
+        <LogOut className="size-4" aria-hidden="true" />
+        <span>{t('settings.logout')}</span>
+      </DropdownMenuItem>
+    </>
+  )
+}
 
 function NavItem({
   to,
@@ -79,22 +106,6 @@ function NavItem({
     </Item>
   )
 }
-
-const NAV_ITEMS = [
-  { path: '/', icon: LayoutDashboard, labelKey: 'nav.dashboard', descKey: 'nav.dashboard.desc' },
-  { path: '/accounts', icon: Wallet, labelKey: 'nav.accounts', descKey: 'nav.accounts.desc' },
-  { path: '/goals', icon: Target, labelKey: 'nav.goals', descKey: 'nav.goals.desc' },
-] as const
-
-// The "classic" sidebar style predates the /budget and /family additions and
-// used to carry Settings as its own nav item (moved into the profile menu
-// post-PR29) — restore that position when the classic style is selected.
-const CLASSIC_SETTINGS_NAV_ITEM = {
-  path: '/settings',
-  icon: Settings,
-  labelKey: 'nav.settings',
-  descKey: 'nav.settings.desc',
-} as const
 
 export function AppSidebar() {
   const { t } = useTranslation()
@@ -179,13 +190,13 @@ export function AppSidebar() {
           <DropdownMenuTrigger asChild>
             <Item
               asChild
-              variant={settingsActive ? 'muted' : 'default'}
-              className={cn(
-                'mt-3 min-h-[72px] rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted',
-                settingsActive && 'bg-muted ring-1 ring-border',
-              )}
+              variant="default"
+              className="mt-3 min-h-[72px] rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
             >
-              <button type="button" aria-label={t('nav.switchProfile')}>
+              <button
+                type="button"
+                aria-label={canSwitchProfile ? t('nav.switchProfile') : t('nav.account')}
+              >
                 <Avatar className="size-10 shrink-0 rounded-lg">
                   <AvatarFallback
                     className={cn(
@@ -210,7 +221,7 @@ export function AppSidebar() {
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col gap-0.5">
                 <p className="text-sm font-medium leading-none">{displayName}</p>
-                {demoMode && <p className="text-xs text-muted-foreground">Demo mode</p>}
+                {demoMode && <p className="text-xs text-muted-foreground">{t('auth.demoMode')}</p>}
               </div>
             </DropdownMenuLabel>
             {canSwitchProfile && switchableMembers.length > 0 && (
@@ -219,47 +230,37 @@ export function AppSidebar() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">
                   {t('nav.switchProfile')}
                 </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() => handleProfileValueChange('own')}
-                  className={cn(activeMemberId === null && 'bg-muted font-medium')}
-                >
-                  <Avatar className="size-6 shrink-0 rounded-md">
-                    <AvatarFallback className="bg-muted text-[10px] font-bold text-muted-foreground">
-                      {initial}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="truncate">{displayName}</span>
-                </DropdownMenuItem>
-                {switchableMembers.map((member) => (
-                  <DropdownMenuItem
-                    key={member.id}
-                    onClick={() => handleProfileValueChange(`member-${member.id}`)}
-                    className={cn(activeMemberId === member.id && 'bg-muted font-medium')}
-                  >
-                    <span
-                      className="size-6 shrink-0 rounded-md"
-                      style={{ backgroundColor: member.avatarColor }}
-                      aria-hidden="true"
-                    />
-                    <span className="truncate">{member.displayName}</span>
-                  </DropdownMenuItem>
-                ))}
+                <DropdownMenuRadioGroup value={activeProfileValue} onValueChange={handleProfileValueChange}>
+                  <DropdownMenuRadioItem value="own">
+                    <Avatar className="size-6 shrink-0 rounded-md">
+                      <AvatarFallback className="bg-muted text-[10px] font-bold text-muted-foreground">
+                        {initial}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate">{displayName}</span>
+                  </DropdownMenuRadioItem>
+                  {switchableMembers.map((member) => (
+                    <DropdownMenuRadioItem key={member.id} value={`member-${member.id}`}>
+                      <span
+                        className="size-6 shrink-0 rounded-md"
+                        style={{ backgroundColor: member.avatarColor }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{member.displayName}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
               </>
             )}
 
             <DropdownMenuSeparator />
 
-            {isAdmin && (
-              <DropdownMenuItem onClick={() => navigate('/admin')}>
-                <Shield className="size-4" aria-hidden="true" />
-                <span>{t('nav.admin')}</span>
-              </DropdownMenuItem>
-            )}
-
-            <DropdownMenuItem onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
-              <LogOut className="size-4" aria-hidden="true" />
-              <span>{t('settings.logout')}</span>
-            </DropdownMenuItem>
+            <AccountMenuFooterItems
+              isAdmin={isAdmin}
+              onAdminClick={() => navigate('/admin')}
+              onLogoutClick={() => logoutMutation.mutate()}
+              logoutPending={logoutMutation.isPending}
+            />
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
@@ -327,17 +328,12 @@ export function AppSidebar() {
                 </>
               )}
 
-              {isAdmin && (
-                <DropdownMenuItem onClick={() => navigate('/admin')}>
-                  <Shield className="size-4" aria-hidden="true" />
-                  <span>{t('nav.admin')}</span>
-                </DropdownMenuItem>
-              )}
-
-              <DropdownMenuItem onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
-                <LogOut className="size-4" aria-hidden="true" />
-                <span>{t('settings.logout')}</span>
-              </DropdownMenuItem>
+              <AccountMenuFooterItems
+                isAdmin={isAdmin}
+                onAdminClick={() => navigate('/admin')}
+                onLogoutClick={() => logoutMutation.mutate()}
+                logoutPending={logoutMutation.isPending}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
 

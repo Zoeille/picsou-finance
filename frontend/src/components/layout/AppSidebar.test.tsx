@@ -76,8 +76,8 @@ function renderSidebar(queryClient = makeClient()) {
   return queryClient
 }
 
-function openAccountMenu() {
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'nav.account' }), {
+function openAccountMenu(name = 'nav.account') {
+  fireEvent.pointerDown(screen.getByRole('button', { name }), {
     button: 0,
     ctrlKey: false,
   })
@@ -133,5 +133,44 @@ describe('AppSidebar profile switcher', () => {
 
     await waitFor(() => expect(useProfileStore.getState().activeMemberId).toBeNull())
     expect(invalidateSpy).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('AppSidebar classic style', () => {
+  beforeEach(() => {
+    listMembers.mockReset()
+    listMembers.mockResolvedValue([])
+    useAuthStore.getState().logout()
+    useAppStore.getState().setDemoMode(false)
+    useAppStore.getState().setSidebarStyle('classic')
+    useProfileStore.getState().reset()
+  })
+
+  it('labels the account trigger as the account (not profile switcher) for a non-admin, and hides profile switching', async () => {
+    useAuthStore.getState().login({ username: 'robin', role: 'MEMBER', memberId: 7, displayName: 'Robin' })
+
+    renderSidebar()
+
+    await screen.findByText('Robin')
+    expect(screen.getByRole('button', { name: 'nav.account' })).toBeInTheDocument()
+
+    openAccountMenu('nav.account')
+    expect(await screen.findByRole('menuitem', { name: 'settings.logout' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument()
+    expect(listMembers).not.toHaveBeenCalled()
+  })
+
+  it('labels the account trigger as the profile switcher for an admin, and exposes profile choices as radio items', async () => {
+    listMembers.mockResolvedValue([
+      member({ id: 2, displayName: 'Lou', managed: true, activated: false }),
+    ])
+    useAuthStore.getState().login({ username: 'chloe', role: 'ADMIN', memberId: 1, displayName: 'Chloe' })
+    renderSidebar()
+
+    await screen.findByText('Chloe')
+    expect(screen.getByRole('button', { name: 'nav.switchProfile' })).toBeInTheDocument()
+
+    openAccountMenu('nav.switchProfile')
+    expect(await screen.findByRole('menuitemradio', { name: /Lou/ })).toBeInTheDocument()
   })
 })
