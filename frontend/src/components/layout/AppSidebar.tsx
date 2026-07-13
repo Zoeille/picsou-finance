@@ -31,7 +31,6 @@ import { selectSwitchableMembers } from '@/features/family/members'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAppStore } from '@/stores/app-store'
 import { useLogout } from '@/features/auth/hooks'
-import { LanguageToggle } from './LanguageToggle'
 import { useProfileStore } from '@/stores/profile-store'
 import { cn } from '@/lib/utils'
 import picsouLogo from '@/assets/horizontal-white-picsou.svg'
@@ -176,14 +175,6 @@ export function AppSidebar() {
           description={t('nav.family.desc')}
         />
       </div>
-
-      {/* Language toggle — always visible, next to theme (in /settings > Appearance).
-          Not shown in classic style: language lives in the profile dropdown there, as it did pre-PR29. */}
-      {!isClassic && (
-        <div className="mt-3 flex justify-center">
-          <LanguageToggle />
-        </div>
-      )}
 
       {isClassic ? (
         <DropdownMenu>
