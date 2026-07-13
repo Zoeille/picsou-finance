@@ -53,6 +53,8 @@ export function RevolutTab() {
       setIsSyncing(false)
       const data = progress.data
       if (data?.error) {
+        // Reacting to the running → done transition detected above, not deriving render state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setErrorMsg(data.error)
       } else if (data && data.discovered.length > 0) {
         confirmSync.mutate(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Category, Transaction } from '@/types/api'
@@ -45,14 +45,19 @@ export function TransactionDetailSheet({
   const isMobile = useIsMobile()
   const [pendingCategoryId, setPendingCategoryId] = useState<number | ''>('')
 
-  useEffect(() => {
-    if (tx && categories) {
-      const match = categories.find(c => c.name === tx.category)
-      setPendingCategoryId(match ? match.id : '')
-    } else {
-      setPendingCategoryId('')
-    }
-  }, [tx, categories])
+  // Re-derive the pending category whenever `tx`/`categories` change, without
+  // discarding an in-progress edit on every re-render: adjust state during
+  // rendering (React's recommended alternative to an effect here) by tracking
+  // the (tx, categories) pair we last derived from.
+  const [derivedFrom, setDerivedFrom] = useState<{ tx: typeof tx | undefined; categories: typeof categories }>({
+    tx: undefined,
+    categories: undefined,
+  })
+  if (tx !== derivedFrom.tx || categories !== derivedFrom.categories) {
+    setDerivedFrom({ tx, categories })
+    const match = tx && categories ? categories.find(c => c.name === tx.category) : undefined
+    setPendingCategoryId(match ? match.id : '')
+  }
 
   if (!tx) return null
 
