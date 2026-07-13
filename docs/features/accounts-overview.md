@@ -93,7 +93,7 @@ AccountsPage
 - **`totalInvested` relies on the last invested point** — if an account has no snapshots at all, its invested amount is 0 and PnL equals its full balance. This is correct for newly created accounts where balance = invested.
 - **Cash accounts have `investedAmount = balance`** — set by `AccountService.calculateInvestedAmount()` which returns `currentBalance` for accounts without holdings. This means their PnL = 0.
 - **`useAllAccountsHistory` returns `AccountsHistoryData`** — not a flat array. Consumers must destructure `{ balances, invested }`.
-- **Demo mock history** — `generateHistory()` in `demo/index.ts` creates 12 monthly points. The last point should match the account's `currentBalance` to stay consistent.
+- **Demo mock history** — `generateHistory()` in `frontend/src/demo/index.ts` creates 12 monthly points. The last point should match the account's `currentBalance` to stay consistent.
 
 ## Tests
 

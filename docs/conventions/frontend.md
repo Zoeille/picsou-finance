@@ -51,7 +51,7 @@ export function useGoals() {
 }
 ```
 
-- Stale times configured in `lib/constants.ts`.
+- Stale times configured in `frontend/src/lib/constants.ts`.
 - No Redux, no Context for server data.
 
 ### Client state — Zustand
@@ -117,7 +117,7 @@ in `eslint.config.js` rather than hand-edited. Do not add disables inside those 
 
 ## API client
 
-Single Axios instance in `lib/api-client.ts`:
+Single Axios instance in `frontend/src/lib/api-client.ts`:
 
 ```typescript
 export const api = axios.create({
@@ -217,7 +217,7 @@ Top-level app pages should start flush with the main content column, not centere
 
 #### Color tokens — always semantic, never raw palette
 
-`shadcn/tailwind.css` remaps Tailwind's `gray` palette to a blue-tinted scale aligned with the primary hue. **Never use raw palette classes** (`text-gray-*`, `bg-gray-*`, etc.) — they will appear blue, not neutral.
+All theme color tokens are defined in the `@theme` block of `frontend/src/index.css`. **Never use raw palette classes** (`text-gray-*`, `bg-gray-*`, etc.) — they bypass the theme tokens and do not adapt to dark mode.
 
 | Intent | Use |
 |--------|-----|
@@ -238,15 +238,15 @@ Use icons from `lucide-react` as direct JSX components (e.g., `<Pencil className
 
 - react-i18next with FR (default), EN, DE, ES.
 - Translation files: `src/i18n/locales/{fr,en,de,es}.json` — identical key sets; when adding a key, add it to all four files.
-- Supported languages live in the `SUPPORTED_LOCALES` registry (`src/i18n/locales.ts`); selectors and `Intl` formatting derive from it — never hardcode language lists in components. Normalize raw tags with `resolveLocale()`.
+- Supported languages live in the `SUPPORTED_LOCALES` registry (`frontend/src/i18n/locales.ts`); selectors and `Intl` formatting derive from it — never hardcode language lists in components. Normalize raw tags with `resolveLocale()`.
 - Flat keys with feature-based grouping.
 - All user-visible text must use `useTranslation()` — no hardcoded strings in any language.
-- Currency/date/number formatting via `Intl.*` through the `lib/utils.ts` helpers (`formatCurrency`, `formatDate`…), which resolve the active locale via `getLocale()`.
+- Currency/date/number formatting via `Intl.*` through the `frontend/src/lib/utils.ts` helpers (`formatCurrency`, `formatDate`…), which resolve the active locale via `getLocale()`.
 - Full details: [`docs/features/i18n.md`](../features/i18n.md).
 
 ## Types
 
-`types/api.ts` mirrors backend DTO records exactly (e.g., `AccountResponse`, `GoalProgressResponse`). When a backend DTO changes, update this file to match.
+`frontend/src/types/api.ts` mirrors backend DTO records exactly (e.g., `AccountResponse`, `GoalProgressResponse`). When a backend DTO changes, update this file to match.
 
 ## Charts
 

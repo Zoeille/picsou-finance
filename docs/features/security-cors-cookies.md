@@ -68,13 +68,13 @@ access_token=...; Max-Age=900; Path=/; HttpOnly; SameSite=Lax[; Secure]
 
 | File | Role |
 |------|------|
-| `config/DynamicCorsConfigurationSource.java` | Per-request origin resolution (DB → env → fail closed), wildcard stripping |
-| `config/SecurityConfig.java` | `.cors()`, explicit `CorsFilter` bean, CSRF disabled, filter chain |
-| `config/LoggingCorsProcessor.java` | Logs origin on CORS rejection |
-| `config/AuthCookieWriter.java` / `SecureCookieProvider.java` | Cookie construction + `Secure` flag |
-| `resources/application.yml` | `server.forward-headers-strategy: framework`, `app.cors.allowed-origins`, `app.secure-cookies` |
+| `backend/src/main/java/com/picsou/config/DynamicCorsConfigurationSource.java` | Per-request origin resolution (DB → env → fail closed), wildcard stripping |
+| `backend/src/main/java/com/picsou/config/SecurityConfig.java` | `.cors()`, explicit `CorsFilter` bean, CSRF disabled, filter chain |
+| `backend/src/main/java/com/picsou/config/LoggingCorsProcessor.java` | Logs origin on CORS rejection |
+| `backend/src/main/java/com/picsou/config/AuthCookieWriter.java` / `SecureCookieProvider.java` | Cookie construction + `Secure` flag |
+| `backend/src/main/resources/application.yml` | `server.forward-headers-strategy: framework`, `app.cors.allowed-origins`, `app.secure-cookies` |
 | `docker/nginx.conf`, `frontend/nginx.conf` | Preserve upstream `X-Forwarded-Proto/Host/Port` |
-| `controller/SetupController.java` (`/api/setup/security`) | Persists wizard's allowed origins |
+| `backend/src/main/java/com/picsou/controller/SetupController.java` (`/api/setup/security`) | Persists wizard's allowed origins |
 
 ## Technical choices
 

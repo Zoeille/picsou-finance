@@ -99,11 +99,11 @@ The sidecar fetches the last 90 days per account. Java replaces the 90-day windo
 ## Key files
 
 - `services/bourso-auth/main.py` — sidecar: auth flow, accounts, positions, transactions
-- `backend/.../adapter/BoursoAdapter.java` — calls sidecar via WebClient
-- `backend/.../port/BoursoPort.java` — interface + data records (`InitiateResult`, `BoursoAccountData`, `BoursoPosition`, `BoursoTransaction`)
-- `backend/.../service/BoursoSyncService.java` — auth orchestration, account/holding/transaction upsert, scheduled sync
-- `backend/.../controller/BoursoController.java` — REST under `/api/bourso/`
-- `backend/.../model/BoursoSession.java` — session entity (encrypted cookies, expiresAt)
+- `backend/src/main/java/com/picsou/adapter/BoursoAdapter.java` — calls sidecar via WebClient
+- `backend/src/main/java/com/picsou/port/BoursoPort.java` — interface + data records (`InitiateResult`, `BoursoAccountData`, `BoursoPosition`, `BoursoTransaction`)
+- `backend/src/main/java/com/picsou/service/BoursoSyncService.java` — auth orchestration, account/holding/transaction upsert, scheduled sync
+- `backend/src/main/java/com/picsou/controller/BoursoController.java` — REST under `/api/bourso/`
+- `backend/src/main/java/com/picsou/model/BoursoSession.java` — session entity (encrypted cookies, expiresAt)
 - `frontend/src/pages/sync/BoursoTab.tsx` — dedicated sync page tab (auth form + sync controls)
 - `frontend/src/components/sync/SyncAllModal.tsx` — inline BoursoBank auth form inside the "Sync All" modal
 - `frontend/src/features/sync/api.ts` — `boursoApi` (initiateAuth, completeAuth, sync, getStatus, clearSession)

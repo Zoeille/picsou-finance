@@ -35,11 +35,11 @@ Both providers implement `PriceProviderPort` with `supports(ticker)` and `getPri
 
 ### Key files
 
-- `service/PriceService.java` -- Price routing, caching, conversion
-- `service/SchedulerService.java` -- Hourly price refresh cron
-- `adapter/CoinGeckoPriceProvider.java` -- CoinGecko `/simple/price` with ticker-to-ID mapping
-- `adapter/YahooFinancePriceProvider.java` -- Yahoo Finance `/v8/finance/chart/{ticker}`
-- `port/PriceProviderPort.java` -- Port interface with `supports()` and `getPricesEur()`
+- `backend/src/main/java/com/picsou/service/PriceService.java` -- Price routing, caching, conversion
+- `backend/src/main/java/com/picsou/service/SchedulerService.java` -- Hourly price refresh cron
+- `backend/src/main/java/com/picsou/adapter/CoinGeckoPriceProvider.java` -- CoinGecko `/simple/price` with ticker-to-ID mapping
+- `backend/src/main/java/com/picsou/adapter/YahooFinancePriceProvider.java` -- Yahoo Finance `/v8/finance/chart/{ticker}`
+- `backend/src/main/java/com/picsou/port/PriceProviderPort.java` -- Port interface with `supports()` and `getPricesEur()`
 
 ### Flow
 

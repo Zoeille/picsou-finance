@@ -119,17 +119,17 @@ After submit, `useAddTransaction` / `useDeleteTransaction` hooks invalidate the 
 
 | File | Role |
 |------|------|
-| `db/migration/V24__manual_transactions.sql` | Schema extension (is_manual, tx_type, ticker, quantity, price_per_unit) |
-| `db/migration/V36__transaction_security_name.sql` | Adds `transaction.name` (position label) |
-| `model/TransactionType.java` | Enum (DEPOSIT, WITHDRAWAL, BUY, SELL, DIVIDEND, FEE) |
-| `service/HoldingComputeService.java` | Derives holdings (qty, VWAP, **name**) from BUY/SELL transactions |
-| `service/ManualTransactionService.java` | Orchestrates add/edit/delete + re-derivation; persists `fees`; delegates ISIN/ticker/description to `InstrumentFieldResolver` |
-| `service/InstrumentFieldResolver.java` | Shared ISIN→ticker/name + BUY/SELL description builder (reused by the CSV importer) |
-| `imports/TransactionAmountCalculator.java` | Single source of truth for the signed `amount` incl. fees |
-| `db/migration/V53__transaction_fees.sql` | Adds `transaction.fees` (folds into the PMP) |
-| `adapter/OpenFigiIsinConverter.java` | `isIsin()` detection + `resolve()` ISIN→ticker+name (shared with bank sync) |
-| `controller/AccountController.java` | POST/DELETE `/accounts/{id}/transactions` |
-| `repository/TransactionRepository.java` | `deleteByAccountIdAndIsManualFalse`, `sumAmountByAccountId`, `findByAccountIdAndTxTypeInOrderByDateAsc` |
+| `backend/src/main/resources/db/migration/V24__manual_transactions.sql` | Schema extension (is_manual, tx_type, ticker, quantity, price_per_unit) |
+| `backend/src/main/resources/db/migration/V36__transaction_security_name.sql` | Adds `transaction.name` (position label) |
+| `backend/src/main/java/com/picsou/model/TransactionType.java` | Enum (DEPOSIT, WITHDRAWAL, BUY, SELL, DIVIDEND, FEE) |
+| `backend/src/main/java/com/picsou/service/HoldingComputeService.java` | Derives holdings (qty, VWAP, **name**) from BUY/SELL transactions |
+| `backend/src/main/java/com/picsou/service/ManualTransactionService.java` | Orchestrates add/edit/delete + re-derivation; persists `fees`; delegates ISIN/ticker/description to `InstrumentFieldResolver` |
+| `backend/src/main/java/com/picsou/service/InstrumentFieldResolver.java` | Shared ISIN→ticker/name + BUY/SELL description builder (reused by the CSV importer) |
+| `backend/src/main/java/com/picsou/imports/TransactionAmountCalculator.java` | Single source of truth for the signed `amount` incl. fees |
+| `backend/src/main/resources/db/migration/V53__transaction_fees.sql` | Adds `transaction.fees` (folds into the PMP) |
+| `backend/src/main/java/com/picsou/adapter/OpenFigiIsinConverter.java` | `isIsin()` detection + `resolve()` ISIN→ticker+name (shared with bank sync) |
+| `backend/src/main/java/com/picsou/controller/AccountController.java` | POST/DELETE `/accounts/{id}/transactions` |
+| `backend/src/main/java/com/picsou/repository/TransactionRepository.java` | `deleteByAccountIdAndIsManualFalse`, `sumAmountByAccountId`, `findByAccountIdAndTxTypeInOrderByDateAsc` |
 | `frontend/src/components/shared/AddTransactionModal.tsx` | Account-type-aware form modal |
 | `frontend/src/components/shared/TransactionsList.tsx` | Manuel badge + delete button |
 | `frontend/src/features/accounts/hooks.ts` | `useAddTransaction`, `useDeleteTransaction` |

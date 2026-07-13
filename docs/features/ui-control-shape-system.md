@@ -23,7 +23,7 @@ scale; they never hardcode a pixel radius or a pill shape:
 | Cards / large surfaces | `rounded-xl` … `rounded-4xl` | 14+ |
 | Circular by nature (avatar, switch thumb, badge, status dot, scrollbar) | `rounded-full` | — |
 
-Shape lives in the shadcn primitives (`components/ui/button.tsx`, `tabs.tsx`,
+Shape lives in the shadcn primitives (`frontend/src/components/ui/button.tsx`, `tabs.tsx`,
 `dropdown-menu.tsx`), so a page composes `<Button>` / `<Tabs>` and inherits the correct radius. App
 code must not re-shape a control with a local `rounded-*` className.
 

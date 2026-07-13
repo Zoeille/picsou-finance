@@ -12,10 +12,10 @@ The converter is shared by two callers: the **Trade Republic sync** (its origina
 
 ### Key files
 
-- `adapter/OpenFigiIsinConverter.java` — ISIN→ticker+name conversion via OpenFIGI `/v3/mapping` API; also exposes `public static boolean isIsin(String)`, the 12-char ISIN detector reused by callers to decide whether to resolve
-- `service/TradeRepublicSyncService.java` — calls `resolve()` during sync, stores ticker and name
-- `service/ManualTransactionService.java` — calls `isIsin()` + `resolve()` when a user enters an instrument by ISIN in the *Add transaction* form (`applyInstrumentFields`)
-- `adapter/YahooFinancePriceProvider.java` — rejects unconvertible ISINs via regex in `supports()`
+- `backend/src/main/java/com/picsou/adapter/OpenFigiIsinConverter.java` — ISIN→ticker+name conversion via OpenFIGI `/v3/mapping` API; also exposes `public static boolean isIsin(String)`, the 12-char ISIN detector reused by callers to decide whether to resolve
+- `backend/src/main/java/com/picsou/service/TradeRepublicSyncService.java` — calls `resolve()` during sync, stores ticker and name
+- `backend/src/main/java/com/picsou/service/ManualTransactionService.java` — calls `isIsin()` + `resolve()` when a user enters an instrument by ISIN in the *Add transaction* form (`applyInstrumentFields`)
+- `backend/src/main/java/com/picsou/adapter/YahooFinancePriceProvider.java` — rejects unconvertible ISINs via regex in `supports()`
 - `frontend/src/components/shared/HoldingsCard.tsx` — displays name in title, ticker in square badge
 
 ### Flow

@@ -44,16 +44,16 @@ The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses
 
 ### Key files
 
-- `service/CryptoExchangeSyncService.java` -- Exchange connection management, holding sync
-- `service/WalletSyncService.java` -- On-chain wallet management, balance sync
-- `config/CryptoEncryption.java` -- AES-256-GCM encrypt/decrypt for API secrets
-- `adapter/BinanceAdapter.java` -- Binance REST API with HMAC-SHA256
-- `adapter/BitcoinWalletAdapter.java` -- Blockstream Esplora, BIP32 key derivation
-- `adapter/EthereumWalletAdapter.java` -- Cloudflare ETH RPC
-- `adapter/SolanaWalletAdapter.java` -- Solana mainnet RPC
-- `adapter/util/BitcoinKeyUtils.java` -- BIP32 derivation, Base58Check, Bech32
-- `port/CryptoExchangePort.java` -- Exchange port interface
-- `port/WalletPort.java` -- Wallet port interface
+- `backend/src/main/java/com/picsou/service/CryptoExchangeSyncService.java` -- Exchange connection management, holding sync
+- `backend/src/main/java/com/picsou/service/WalletSyncService.java` -- On-chain wallet management, balance sync
+- `backend/src/main/java/com/picsou/config/CryptoEncryption.java` -- AES-256-GCM encrypt/decrypt for API secrets
+- `backend/src/main/java/com/picsou/adapter/BinanceAdapter.java` -- Binance REST API with HMAC-SHA256
+- `backend/src/main/java/com/picsou/adapter/BitcoinWalletAdapter.java` -- Blockstream Esplora, BIP32 key derivation
+- `backend/src/main/java/com/picsou/adapter/EthereumWalletAdapter.java` -- Cloudflare ETH RPC
+- `backend/src/main/java/com/picsou/adapter/SolanaWalletAdapter.java` -- Solana mainnet RPC
+- `backend/src/main/java/com/picsou/adapter/util/BitcoinKeyUtils.java` -- BIP32 derivation, Base58Check, Bech32
+- `backend/src/main/java/com/picsou/port/CryptoExchangePort.java` -- Exchange port interface
+- `backend/src/main/java/com/picsou/port/WalletPort.java` -- Wallet port interface
 
 ### Flow
 

@@ -67,11 +67,11 @@ CSV fallback imports balances only and therefore does not replace holdings.
 
 ### Key files
 
-- `adapter/TradeRepublicAdapter.java` -- WebSocket data fetching + sidecar auth delegation
-- `port/TradeRepublicPort.java` -- Port interface with `TrTokens`, `TrAccountData`, `TrPosition` records
-- `service/TradeRepublicSyncService.java` -- Auth flow, sync orchestration, CSV import, session management
-- `controller/TradeRepublicController.java` -- REST endpoints under `/api/tr/`
-- `model/TradeRepublicSession.java` -- Session entity with token storage
+- `backend/src/main/java/com/picsou/adapter/TradeRepublicAdapter.java` -- WebSocket data fetching + sidecar auth delegation
+- `backend/src/main/java/com/picsou/port/TradeRepublicPort.java` -- Port interface with `TrTokens`, `TrAccountData`, `TrPosition` records
+- `backend/src/main/java/com/picsou/service/TradeRepublicSyncService.java` -- Auth flow, sync orchestration, CSV import, session management
+- `backend/src/main/java/com/picsou/controller/TradeRepublicController.java` -- REST endpoints under `/api/tr/`
+- `backend/src/main/java/com/picsou/model/TradeRepublicSession.java` -- Session entity with token storage
 
 ### Flow
 

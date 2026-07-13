@@ -53,19 +53,19 @@ DashboardPage renders NetWorthChart with intraday prop
 ### Key files
 
 **Backend:**
-- `adapter/CoinGeckoPriceProvider.java` — `getIntradayPricesEur()`: fetches hourly crypto prices via `market_chart/range`
-- `adapter/YahooFinancePriceProvider.java` — `getIntradayPricesEur()`: fetches hourly stock prices via `interval=1h`
-- `service/PriceService.java` — `getIntradayPricesEur()`: routes to CoinGecko or Yahoo based on ticker
-- `service/HistoryService.java` — `buildIntradayHistory()`: assembles hourly net worth points
-- `controller/HistoryController.java` — `GET /api/history/net-worth/intraday`
-- `dto/DashboardResponse.java` — `NetWorthIntradayPoint(timestamp, total, invested)`
+- `backend/src/main/java/com/picsou/adapter/CoinGeckoPriceProvider.java` — `getIntradayPricesEur()`: fetches hourly crypto prices via `market_chart/range`
+- `backend/src/main/java/com/picsou/adapter/YahooFinancePriceProvider.java` — `getIntradayPricesEur()`: fetches hourly stock prices via `interval=1h`
+- `backend/src/main/java/com/picsou/service/PriceService.java` — `getIntradayPricesEur()`: routes to CoinGecko or Yahoo based on ticker
+- `backend/src/main/java/com/picsou/service/HistoryService.java` — `buildIntradayHistory()`: assembles hourly net worth points
+- `backend/src/main/java/com/picsou/controller/HistoryController.java` — `GET /api/history/net-worth/intraday`
+- `backend/src/main/java/com/picsou/dto/DashboardResponse.java` — `NetWorthIntradayPoint(timestamp, total, invested)`
 
 **Frontend:**
-- `components/shared/TimeRangeSelector.tsx` — `1D` replaced with `24H`
-- `components/shared/NetWorthChart.tsx` — dynamic X-axis formatting, dots for short ranges, intraday data source
-- `features/dashboard/api.ts` — `getIntraday()` API call
-- `features/dashboard/hooks.ts` — `useNetWorthIntraday()` hook
-- `pages/dashboard/DashboardPage.tsx` — wires intraday fetch when range is 24H
+- `frontend/src/components/shared/TimeRangeSelector.tsx` — `1D` replaced with `24H`
+- `frontend/src/components/shared/NetWorthChart.tsx` — dynamic X-axis formatting, dots for short ranges, intraday data source
+- `frontend/src/features/dashboard/api.ts` — `getIntraday()` API call
+- `frontend/src/features/dashboard/hooks.ts` — `useNetWorthIntraday()` hook
+- `frontend/src/pages/dashboard/DashboardPage.tsx` — wires intraday fetch when range is 24H
 
 ## Technical choices
 

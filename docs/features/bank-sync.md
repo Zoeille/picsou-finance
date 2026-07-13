@@ -35,12 +35,12 @@ Both providers implement the `BankConnectorPort` interface with four operations:
 
 ### Key files
 
-- `adapter/EnableBankingBankConnector.java` -- PSD2 adapter (RSA JWT, async account linking)
-- `adapter/PowensBankConnector.java` -- Scraping adapter (experimental, OAuth webview; `@Primary` removed in 1.0.0)
-- `port/BankConnectorPort.java` -- Port interface with `AccountData`, `InstitutionData` records
-- `service/SyncService.java` -- Orchestration: initiate, complete, retry, resync, type detection
-- `controller/SyncController.java` -- REST endpoints under `/api/sync/`
-- `model/Requisition.java` -- Tracks connection lifecycle (CREATED/LINKED/FAILED)
+- `backend/src/main/java/com/picsou/adapter/EnableBankingBankConnector.java` -- PSD2 adapter (RSA JWT, async account linking)
+- `backend/src/main/java/com/picsou/adapter/PowensBankConnector.java` -- Scraping adapter (experimental, OAuth webview; `@Primary` removed in 1.0.0)
+- `backend/src/main/java/com/picsou/port/BankConnectorPort.java` -- Port interface with `AccountData`, `InstitutionData` records
+- `backend/src/main/java/com/picsou/service/SyncService.java` -- Orchestration: initiate, complete, retry, resync, type detection
+- `backend/src/main/java/com/picsou/controller/SyncController.java` -- REST endpoints under `/api/sync/`
+- `backend/src/main/java/com/picsou/model/Requisition.java` -- Tracks connection lifecycle (CREATED/LINKED/FAILED)
 
 ### Flow
 

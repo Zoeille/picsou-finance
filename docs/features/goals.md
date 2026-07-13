@@ -53,17 +53,17 @@ Users often start a goal in Picsou after they've already been saving for it. The
 
 ### Key files
 
-- `service/GoalService.java` -- Business logic: CRUD, progress calculation, monthly tracking, overrides
-- `controller/GoalController.java` -- REST endpoints under `/api/goals/`
-- `model/Goal.java` -- JPA entity: name, targetAmount, deadline, M:N accounts, `historyStartMonth`
-- `db/migration/V32__goal_history_start.sql` -- adds the nullable `history_start_month` column
-- `model/GoalMonthOverride.java` -- Per-month objective override (goal_id, yearMonth, amount)
-- `model/GoalManualContribution.java` -- Per-month actual override (goal_id, yearMonth, amount)
-- `repository/GoalRepository.java` -- `findAllWithAccounts()` for eager fetching
-- `repository/GoalMonthOverrideRepository.java` -- Override lookup by goal + month
-- `repository/GoalManualContributionRepository.java` -- Contribution lookup by goal + month
-- `pages/goals/GoalsPage.tsx` -- Goal list with cards, CRUD dialog, status badges, account chips
-- `pages/goals/GoalCalendarPage.tsx` -- Monthly calendar view with donut rings, overrides, manual contributions
+- `backend/src/main/java/com/picsou/service/GoalService.java` -- Business logic: CRUD, progress calculation, monthly tracking, overrides
+- `backend/src/main/java/com/picsou/controller/GoalController.java` -- REST endpoints under `/api/goals/`
+- `backend/src/main/java/com/picsou/model/Goal.java` -- JPA entity: name, targetAmount, deadline, M:N accounts, `historyStartMonth`
+- `backend/src/main/resources/db/migration/V32__goal_history_start.sql` -- adds the nullable `history_start_month` column
+- `backend/src/main/java/com/picsou/model/GoalMonthOverride.java` -- Per-month objective override (goal_id, yearMonth, amount)
+- `backend/src/main/java/com/picsou/model/GoalManualContribution.java` -- Per-month actual override (goal_id, yearMonth, amount)
+- `backend/src/main/java/com/picsou/repository/GoalRepository.java` -- `findAllWithAccounts()` for eager fetching
+- `backend/src/main/java/com/picsou/repository/GoalMonthOverrideRepository.java` -- Override lookup by goal + month
+- `backend/src/main/java/com/picsou/repository/GoalManualContributionRepository.java` -- Contribution lookup by goal + month
+- `frontend/src/pages/goals/GoalsPage.tsx` -- Goal list with cards, CRUD dialog, status badges, account chips
+- `frontend/src/pages/goals/GoalCalendarPage.tsx` -- Monthly calendar view with donut rings, overrides, manual contributions
 
 ### Flow
 

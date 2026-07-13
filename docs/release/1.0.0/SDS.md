@@ -215,7 +215,7 @@ Order  Filter                              Role
 
 ## 4. Frontend module contracts
 
-### 4.1 `lib/api-client.ts`
+### 4.1 `frontend/src/lib/api-client.ts`
 
 ```ts
 fetchJson<T>(path: string, init?: RequestInit): Promise<T>
