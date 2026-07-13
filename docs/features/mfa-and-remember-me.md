@@ -362,7 +362,7 @@ All UIs are mobile-responsive (per repo convention).
 - `frontend/src/pages/settings/SettingsPage.tsx` — add Security section.
 - `frontend/src/pages/admin/sections/MembersSection.tsx` — "Disable 2FA" action when target has it enabled.
 - `App.tsx` / router — add `/login/mfa` route (anonymous-accessible).
-- `frontend/src/i18n/locales/fr.json`, `frontend/src/i18n/locales/en.json` — all MFA strings.
+- `frontend/src/i18n/locales/{fr,en,de,es}.json` — all MFA strings (every locale kept in sync).
 
 ## Technical choices
 

@@ -21,7 +21,7 @@ Theme is stored in `localStorage` under the key `'theme'` (`'light' | 'dark' | '
 
 ### Flow
 
-```
+```text
 Page load
   └─ theme-init.js (external script loaded from index.html)
        └─ reads localStorage('theme')
@@ -58,9 +58,9 @@ Two classes of UI need explicit handling beyond the `.dark` token swap:
 
 ## Gotchas / Pitfalls
 
-- **The inline script must stay in `<head>` before any stylesheet link.** Moving it to `<body>` or after stylesheets causes a brief flash in dark mode on page load.
+- **The external script must stay in `<head>` before any stylesheet link.** Moving it to `<body>` or after stylesheets causes a brief flash in dark mode on page load.
 - **`initSystemThemeListener` registers a persistent event listener** — it must only be called once (currently in `main.tsx`). Calling it inside a component would add a new listener on every mount.
-- **`localStorage.getItem('theme')` can return `null`** (first visit) — `getStoredTheme` defaults to `'system'` in that case, matching the inline script which also defaults to system.
+- **`localStorage.getItem('theme')` can return `null`** (first visit) — `getStoredTheme` defaults to `'system'` in that case, matching the external script which also defaults to system.
 - Tailwind dark mode is configured via the `dark` class on the root element (not `media` strategy) — if this changes, `theme-init.js` and `applyTheme` need to be updated.
 - **Never hardcode a literal `dark` (or `light`) class in a `className`/`cn()` string.** Tailwind v4's `@custom-variant dark (&:is(.dark *))` makes any element *carrying* `dark` resolve the dark token palette regardless of the active theme. This caused the My Account dropdown to render black in light mode (`bg-popover` pinned to the near-black dark value). Use `dark:` *variants* for per-theme overrides, never the bare class. As of 1.0.0 the dropdown was the only offender; the remaining absolute colours (`bg-black/80` modal overlays, `text-white` labels over coloured chart segments, the 2FA QR's `bg-white`) are intentionally theme-agnostic.
 - **The logo assets are white-filled**, so a logo dropped into a *light* surface without the `brightness-0 dark:invert` filter will be invisible. Any new logo placement must carry that filter (or be a `bg-background`/`text-foreground`-driven element).

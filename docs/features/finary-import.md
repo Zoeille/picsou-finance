@@ -70,7 +70,7 @@ Possible status values: `OK`, `NEEDS_MAPPING`, `TOTP_REQUIRED`, `NOT_CONNECTED`.
 - `backend/src/main/java/com/picsou/finary/FinaryPersistenceHelper.java` -- Shared helper: account creation, snapshot reconstruction, transaction import (preserves manual transactions), type suggestion
 - `backend/src/main/java/com/picsou/controller/FinaryImportController.java` -- REST endpoints for xlsx upload
 - `backend/src/main/java/com/picsou/controller/FinaryApiSyncController.java` -- REST endpoints for API sync (`/preview`, `/execute`, `/auto`)
-- `finary/dto/` -- 14 DTOs for Finary API responses (incl. `FinaryLoanDto`)
+- `backend/src/main/java/com/picsou/finary/dto/` -- 14 DTOs for Finary API responses (incl. `FinaryLoanDto`)
 - `backend/src/main/java/com/picsou/finary/SyncSessionData.java` -- Cache record for API sync session
 - `backend/src/main/java/com/picsou/dto/FinaryAutoSyncResponse.java` -- Response DTO for `/api/finary/api-sync/auto`
 

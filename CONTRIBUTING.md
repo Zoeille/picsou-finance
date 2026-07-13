@@ -11,12 +11,16 @@ side of getting a change merged.
 
 ## Build & run
 
+Run each process in its own terminal (the backend stays in the foreground):
+
 ```bash
-# Backend (http://localhost:8080)
+# Terminal 1 — backend (http://localhost:8080)
 cd backend
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
 
-# Frontend (http://localhost:5173, proxies /api/* to the backend)
+```bash
+# Terminal 2 — frontend (http://localhost:5173, proxies /api/* to the backend)
 cd frontend
 bun install
 bun run dev
@@ -26,16 +30,18 @@ bun run dev
 
 Run the relevant suites before opening a PR:
 
+Each command is wrapped in a subshell, so it runs from the repository root
+without leaving you in a subdirectory:
+
 ```bash
 # Backend
-cd backend && mvn test
+(cd backend && mvn test)
 
 # Frontend
-cd frontend
-bun run typecheck     # TypeScript
-bun run lint          # ESLint (zero-warning policy)
-bunx vitest run       # Unit tests
-bun run test:e2e      # Playwright E2E (needs the dev server)
+(cd frontend && bun run typecheck)   # TypeScript
+(cd frontend && bun run lint)        # ESLint (zero-warning policy)
+(cd frontend && bunx vitest run)     # Unit tests
+(cd frontend && bun run test:e2e)    # Playwright E2E (needs the dev server)
 ```
 
 `bun run build` must pass — it runs `tsc` and fails on type errors.

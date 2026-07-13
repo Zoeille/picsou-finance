@@ -84,7 +84,7 @@ Frontend:
   Both share the `Others` remainder; both translate country/sector keys (`labelNs`) and render company names verbatim. A `source · asOf` footnote sits below. View state is component-local (resets when the modal closes).
 - `frontend/src/components/shared/HoldingDetailModal.tsx` — renders `<HoldingInsightSection>` after the stats grid; gated on the modal being open.
 - `frontend/src/features/accounts/api.ts` (`securityInsight`) and `frontend/src/features/accounts/hooks.ts` (`useSecurityInsight`).
-- `i18n/locales/{en,fr}.json` — `holdings.insight.sectorNames` + `holdings.insight.countryNames` key maps.
+- `frontend/src/i18n/locales/{en,fr}.json` — `holdings.insight.sectorNames` + `holdings.insight.countryNames` key maps.
 - `frontend/src/demo/index.ts` — mock handlers for the demo holdings (stocks, crypto, and two ETFs whose countries/sectors use the same keys, `source: 'Boursorama'`).
 
 ### Flow

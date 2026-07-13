@@ -56,7 +56,7 @@ code must not re-shape a control with a local `rounded-*` className.
   Reverted 2026-07-12. This is why the convention-integrity rule exists in `CODING_RULES.md`.
 - **`rounded-4xl` on cards is intentional**, not drift — it predates #29. Do not "fix" card radius to
   match controls; cards are deliberately rounder than controls.
-- **Don't hand-edit `components/ui/`** to change radius/sizing. Shape comes from the `--radius` theme
+- **Don't hand-edit `frontend/src/components/ui/`** to change radius/sizing. Shape comes from the `--radius` theme
   token; adjust the token, not the primitives.
 
 ## Tests

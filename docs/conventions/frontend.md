@@ -237,7 +237,7 @@ Use icons from `lucide-react` as direct JSX components (e.g., `<Pencil className
 ## Internationalization
 
 - react-i18next with FR (default), EN, DE, ES.
-- Translation files: `src/i18n/locales/{fr,en,de,es}.json` — identical key sets; when adding a key, add it to all four files.
+- Translation files: `frontend/src/i18n/locales/{fr,en,de,es}.json` — identical key sets; when adding a key, add it to all four files.
 - Supported languages live in the `SUPPORTED_LOCALES` registry (`frontend/src/i18n/locales.ts`); selectors and `Intl` formatting derive from it — never hardcode language lists in components. Normalize raw tags with `resolveLocale()`.
 - Flat keys with feature-based grouping.
 - All user-visible text must use `useTranslation()` — no hardcoded strings in any language.

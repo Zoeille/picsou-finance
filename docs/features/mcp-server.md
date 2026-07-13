@@ -47,14 +47,14 @@ Three security properties are guaranteed structurally (not by per-call checks):
 
 **Backend — MCP surface**
 - `backend/src/main/java/com/picsou/config/McpToolConfig.java` — the single `ToolCallbackProvider` bean; the one place tools are wired.
-- `mcp/tools/{Account,Transaction,Goal,Insight,Sync}Tools.java` — the `@Tool` methods, each gated by `@RequiresScope`.
+- `backend/src/main/java/com/picsou/mcp/tools/{Account,Transaction,Goal,Insight,Sync}Tools.java` — the `@Tool` methods, each gated by `@RequiresScope`.
 - `backend/src/main/java/com/picsou/mcp/RequiresScope.java` + `backend/src/main/java/com/picsou/mcp/ScopeEnforcementAspect.java` + `backend/src/main/java/com/picsou/exception/MissingScopeException.java` — scope enforcement (AOP) and its clean error.
 - `backend/src/main/java/com/picsou/controller/AccessKeyController.java` + `dto/AccessKey{CreateRequest,Response,CreatedResponse}.java` — self-service management REST API under `/api/access-keys`.
 - `backend/src/main/java/com/picsou/config/RateLimitConfig.java` — `mcpKeyBuckets`, `accessKeyCreateBuckets`, and the bucket factories.
 - `backend/src/main/resources/application.yml` — `spring.ai.mcp.server.*` (HTTP+SSE, `SYNC`, `/mcp` + `/mcp/message`, `MCP_ENABLED` gate, instructions string).
 
 **Frontend**
-- `features/accessKeys/{api,hooks,scopes,status}.ts` — TanStack Query layer + scope/status helpers.
+- `frontend/src/features/accessKeys/{api,hooks,scopes,status}.ts` — TanStack Query layer + scope/status helpers.
 - `frontend/src/pages/settings/sections/AccessKeysSection.tsx` — the Settings UI (list, create dialog, one-time secret reveal, connect-your-client block, revoke).
 - `i18n/locales/{en,fr}.json` — the `accessKeys.*` namespace.
 
