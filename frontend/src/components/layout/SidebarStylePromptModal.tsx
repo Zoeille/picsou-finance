@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Wallet, Target, PieChart, Users, Settings } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { Users, Settings } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -11,15 +10,17 @@ import {
 import { useAppStore, type SidebarStyle } from '@/stores/app-store'
 import { cn } from '@/lib/utils'
 import picsouLogo from '@/assets/horizontal-white-picsou.svg'
+import { NAV_ITEMS } from './sidebar-nav-items'
 
 const OPTIONS: { value: SidebarStyle; labelKey: string }[] = [
   { value: 'current', labelKey: 'settings.sidebarStyleCurrent' },
   { value: 'classic', labelKey: 'settings.sidebarStyleClassic' },
 ]
 
-// Mirrors AppSidebar's own NAV_ITEMS order so the miniature reads as "the real
-// thing, shrunk down" rather than a generic skeleton.
-const PREVIEW_NAV_ICONS: LucideIcon[] = [LayoutDashboard, Wallet, Target, PieChart, Users]
+// Derived from AppSidebar's real NAV_ITEMS so the miniature can't drift out of
+// sync with the actual sidebar. The Family item isn't in NAV_ITEMS (it's
+// rendered separately in AppSidebar), so its icon (Users) is appended by hand.
+const PREVIEW_NAV_ICONS = [...NAV_ITEMS.map((item) => item.icon), Users]
 
 function SidebarPreview({ variant }: { variant: SidebarStyle }) {
   const isClassic = variant === 'classic'
@@ -73,6 +74,7 @@ interface SidebarStylePromptModalProps {
  */
 export function SidebarStylePromptModal({ open, onOpenChange }: SidebarStylePromptModalProps) {
   const { t } = useTranslation()
+  const sidebarStyle = useAppStore((s) => s.sidebarStyle)
   const setSidebarStyle = useAppStore((s) => s.setSidebarStyle)
   const setHasSeenSidebarStylePrompt = useAppStore((s) => s.setHasSeenSidebarStylePrompt)
 
@@ -94,11 +96,13 @@ export function SidebarStylePromptModal({ open, onOpenChange }: SidebarStyleProm
           <DialogDescription>{t('sidebarStylePrompt.description')}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label={t('sidebarStylePrompt.title')}>
           {OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
+              role="radio"
+              aria-checked={sidebarStyle === option.value}
               onClick={() => choose(option.value)}
               className="flex flex-col gap-2 rounded-lg border border-border p-2 text-left transition-colors hover:border-primary/60 hover:bg-muted/40"
             >
