@@ -8,7 +8,6 @@ import {
   Wallet,
   Target,
   Users,
-  Languages,
   LogOut,
   Shield,
 } from 'lucide-react'
@@ -98,7 +97,7 @@ const CLASSIC_SETTINGS_NAV_ITEM = {
 } as const
 
 export function AppSidebar() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -135,10 +134,6 @@ export function AppSidebar() {
 
     setActiveMember(nextMemberId)
     void queryClient.invalidateQueries()
-  }
-
-  function toggleLanguage() {
-    i18n.changeLanguage(i18n.language === 'fr' ? 'en' : 'fr')
   }
 
   return (
@@ -218,13 +213,6 @@ export function AppSidebar() {
                 {demoMode && <p className="text-xs text-muted-foreground">Demo mode</p>}
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem onClick={toggleLanguage}>
-              <Languages className="size-4" aria-hidden="true" />
-              <span>{t('settings.language')}</span>
-            </DropdownMenuItem>
-
             {canSwitchProfile && switchableMembers.length > 0 && (
               <>
                 <DropdownMenuSeparator />
