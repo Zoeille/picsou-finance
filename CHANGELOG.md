@@ -7,8 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CSV transaction import for investment accounts (PEA/CTO)** and **realized
+  P&L on closed positions**, computed on the fly with the average-cost method
+  (#38, #43).
+- **German and Spanish translations.** Supported languages are centralized in a
+  locale registry (`SUPPORTED_LOCALES`); selectors and `Intl` formatting derive
+  from it (#32).
+- **Build version surfaced** in Settings → About and `/actuator/info`.
+
 ### Changed
 
+- **UI controls realigned to the shadcn theme radius.** Pill-shape overrides on
+  buttons, chips, and tabs were reverted to the theme tokens; Mira
+  design-system pass completed with a sidebar style toggle (#46).
 - **PnL no longer counts outstanding debt as an investment loss (#18).** Loans
   contribute 0 to `pnl` in every aggregation path (history points, live PnL,
   MCP `get_profit_and_loss`); `rangePnl` compares only holdings priced on both
@@ -18,6 +31,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart is now titled by wealth mode instead of "Gain / Loss", its tooltip
   shows the backend's debt-neutral gain/loss, and a new Liabilities card lists
   loans separately.
+
+## [1.0.13] — 2026-07-07
+
+### Changed
+
+- **Setup, sync, and family safeguards improved (#29).** Hardening pass across
+  the setup wizard, sync flows, and family management.
+
+## [1.0.12] — 2026-07-07
+
+### Fixed
+
+- **Finary sync differentiates error types and retries transient failures
+  (#27).**
+- **Docker zero-config first boot works without a `.env` file** — the compose
+  `env_file` entries are marked optional.
+
+## [1.0.11] — 2026-07-05
+
+### Added
+
+- **Bank logos on account cards.** Enable Banking institution logos are shown
+  as circular avatars, falling back to the account color when absent.
+
+### Fixed
+
+- **Remember Me hardening.** Persistent-session revocation is honored on
+  `/auth/refresh`; sessions survive tab/browser restarts; security regressions
+  in session restore closed; logout failures surface a toast instead of
+  failing silently.
+- **Trade Republic tickers.** Centralized XF000 crypto detection with legacy
+  ticker backfill, generalized ISIN parsing (crypto exchange suffixes),
+  resolved ticker `FORBIDDEN` errors and null Bitcoin ISIN names.
+
+### Changed
+
+- **Flyway `out-of-order` enabled** so cross-branch migrations apply cleanly.
+
+## [1.0.10] — 2026-06-29
+
+### Fixed
+
+- **Enable Banking `FAILED` sessions auto-retry** on the next sync instead of
+  staying stuck; Trade Republic `compactPortfolioByType` fixed.
+
+## [1.0.9] — 2026-06-27
+
+### Fixed
+
+- **Finary import mapping** type dropdown includes `LOAN` and `REAL_ESTATE`.
 
 ## [1.0.8] — 2026-06-27
 
