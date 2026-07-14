@@ -499,6 +499,19 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 
 ---
 
+#### `GET /api/sync/countries`
+
+- **Auth:** Required
+
+Countries the active bank-sync provider has institutions for, for the "which country" search filter/UI selector above. Derived live from the provider (Enable Banking: `GET /application`'s `countries` field) rather than a hardcoded list.
+
+**Response `200` — `string[]`:**
+```json
+["AT", "BE", "DE", "EE", "FR", "..."]
+```
+
+---
+
 #### `POST /api/sync/initiate`
 
 - **Auth:** Required

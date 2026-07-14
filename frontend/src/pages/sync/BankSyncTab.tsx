@@ -20,7 +20,7 @@ import {
   CheckCircle,
   AlertTriangle,
 } from 'lucide-react'
-import { extractErrorMessage } from '@/lib/errors'
+import { extractErrorMessage, formatApiError } from '@/lib/errors'
 
 type CallbackStatus = 'completing' | 'done' | 'error'
 
@@ -215,7 +215,7 @@ export function BankSyncTab() {
 
         {searchEnabled && searchFailed && !searchLoading && (
           <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <span className="flex-1">{extractErrorMessage(searchError, t('sync.banks.searchError'))}</span>
+            <span className="flex-1">{formatApiError(searchError, t, 'sync.banks.searchError')}</span>
           </div>
         )}
 
