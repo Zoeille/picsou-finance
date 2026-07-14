@@ -37,9 +37,14 @@ public class SyncController {
     @GetMapping("/institutions")
     public List<BankConnectorPort.InstitutionData> searchInstitutions(
         @RequestParam(required = false, defaultValue = "") String query,
-        @RequestParam(required = false, defaultValue = "FR") String country
+        @RequestParam(required = false, defaultValue = BankConnectorPort.DEFAULT_COUNTRY) String country
     ) {
         return syncService.searchInstitutions(query, country);
+    }
+
+    @GetMapping("/countries")
+    public List<String> listCountries() {
+        return syncService.listCountries();
     }
 
     @PostMapping("/initiate")

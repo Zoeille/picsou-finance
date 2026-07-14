@@ -1,6 +1,6 @@
 # Feature: Bank Sync
 
-> Last updated: 2026-06-03 (Enable Banking: single Application ID field, Key ID derived)
+> Last updated: 2026-07-14 (bank search country picker: `listCountries`, `GET /api/sync/countries`, `DEFAULT_COUNTRY`)
 
 > **Status (1.0.0).** Enable Banking is the only enabled provider. The Powens
 > adapter ships in the codebase but is **experimental and untested** —
@@ -11,17 +11,25 @@
 
 ## Context
 
-Picsou syncs bank accounts from French banks. In 1.0.0 the active provider is Enable Banking (PSD2, open banking). A second provider — Powens / Budget Insight (screen scraping) — is implemented behind `BankConnectorPort` but disabled because it has not been tested against a real Powens tenant. The scheduler runs daily auto-sync at 08:00 for all linked requisitions.
+Picsou syncs bank accounts from Enable Banking's ~29-country EEA coverage — bank search and connection are not restricted to France (see [Country selection](#country-selection)), though France remains the default/primary market. In 1.0.0 the active provider is Enable Banking (PSD2, open banking). A second provider — Powens / Budget Insight (screen scraping) — is implemented behind `BankConnectorPort` but disabled because it has not been tested against a real Powens tenant. The scheduler runs daily auto-sync at 08:00 for all linked requisitions.
 
 ## How it works
 
 ### Provider architecture
 
-Both providers implement the `BankConnectorPort` interface with four operations: `initiateConnection`, `exchangeCode`, `fetchBalances`, and `searchInstitutions`. The service layer (`SyncService`) never imports adapters directly -- it depends only on the port.
+Both providers implement the `BankConnectorPort` interface with five operations: `initiateConnection`, `exchangeCode`, `fetchBalances`, `searchInstitutions`, and `listCountries`. The service layer (`SyncService`) never imports adapters directly -- it depends only on the port.
 
 **Enable Banking** (`EnableBankingBankConnector`): Uses the PSD2 Bank Account Data API. Auth is JWT-based (RS256 signed with an RSA private key). Sessions are created via OAuth redirect. After the user authorizes, accounts are linked asynchronously and polled up to 3 times with 1.5-second delays (≤ 4.5 s total). If the session still has no accounts, the adapter returns an empty list rather than throwing; `SyncService` keeps the requisition in `FAILED` so the user can retry from the UI without losing the session id. The previous 24 s blocking poll caused 502 errors at the reverse proxy.
 
 **Powens** (`PowensBankConnector`) — ⚠ experimental, disabled in 1.0.0. Uses screen scraping via the Budget Insight API. Auth is an OAuth webview that handles bank selection and credential entry. The OAuth code is exchanged for a permanent access token. Gated behind `@ConditionalOnExpression` (so it only registers when `POWENS_CLIENT_ID` is set), but `@Primary` was removed for 1.0.0, so Enable Banking remains injected even when the bean is registered.
+
+### Country selection
+
+Bank search is not restricted to France — `GET /api/sync/institutions?query=...&country=CC` accepts any ISO 3166-1 alpha-2 code. The frontend's `BankCountrySelect` (`frontend/src/components/shared/BankCountrySelect.tsx`) populates its options live from `GET /api/sync/countries` rather than a hardcoded list, so it never drifts from what the active provider actually covers; it snaps back to the first available option if the current selection isn't in the loaded list (e.g. a provider without France coverage). `BankConnectorPort.DEFAULT_COUNTRY` ("FR") is the single named fallback used both by the controller's `@RequestParam defaultValue` and by `EnableBankingBankConnector`'s institution-id parsing (`parseInstitutionId`) — previously these were two independent `"FR"` string literals, one of which could silently mis-resolve a bank with a blank country field. `parseInstitutionId` splits at the *last* `"::"` (not the first), since an institution name could itself contain that substring and the country is always the appended final segment.
+
+`EnableBankingBankConnector.listCountries()` calls Enable Banking's `GET /application`, which returns the countries this specific application is registered/active for — a small, near-static payload, and more correct than deriving coverage from the full ASPSP catalog (which could list countries this particular app isn't licensed for). The result is cached in-memory for 6 hours (`CachedCountries`, a single-record TTL cache in the same spirit as `PriceService.CachedPrice`, though simpler — no invalidation hook, since app-country coverage essentially never changes at runtime). `PowensBankConnector.listCountries()` fetches its `/connectors` catalog uncached (Powens is disabled by default in 1.0.0; revisit if it's ever re-enabled).
+
+**Aside, found and fixed while building this:** `EnableBankingBankConnector`'s `WebClient` used the default 256 KB in-memory buffer limit, which `searchInstitutions()` could already exceed on a single large country (Germany alone is ~1.4 MB across ~1100 institutions) — a latent bug independent of the country picker. Both Enable Banking's and Powens' `WebClient`s now raise this to 8 MB.
 
 ### Requisition lifecycle
 
@@ -33,6 +41,8 @@ Both providers implement the `BankConnectorPort` interface with four operations:
 
 `SyncService.detectType()` maps provider metadata (product name, cash account type) to the `AccountType` enum. Keywords like "pea", "lep", "livret", "titre" in the product string are matched case-insensitively. The `cashAccountType` field (e.g. "SVGS") is used as a fallback. Default is `CHECKING`.
 
+> **Known gap (pre-existing, not addressed by the country picker above):** as of this writing, no `detectType()` method actually exists in `SyncService` — `upsertAccount()` hardcodes `AccountType.CHECKING` for every new account. This section (and the matching description in `docs/ARCHITECTURE.md` / the dual-bank-providers ADR) describes intended/previous behavior that doesn't currently match the code. Flagging it here since widening bank search to more countries makes correct type detection more relevant, not less — but fixing it is a separate task from this one.
+
 ### Key files
 
 - `backend/src/main/java/com/picsou/adapter/EnableBankingBankConnector.java` -- PSD2 adapter (RSA JWT, async account linking)
@@ -41,6 +51,7 @@ Both providers implement the `BankConnectorPort` interface with four operations:
 - `backend/src/main/java/com/picsou/service/SyncService.java` -- Orchestration: initiate, complete, retry, resync, type detection
 - `backend/src/main/java/com/picsou/controller/SyncController.java` -- REST endpoints under `/api/sync/`
 - `backend/src/main/java/com/picsou/model/Requisition.java` -- Tracks connection lifecycle (CREATED/LINKED/FAILED)
+- `frontend/src/components/shared/BankCountrySelect.tsx` -- Country picker, populated from `GET /api/sync/countries`
 
 ### Flow
 
@@ -127,7 +138,7 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 
 - `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow
 - `EnableBankingConfigProviderTest` -- DB/env resolution precedence, and `keyId()` falling back to the Application ID vs honoring an explicitly-configured value
-- `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider
+- `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider; `parseInstitutionId` cases (name+country, blank country segment, no separator, name containing `"::"`)
 - `AdminControllerTest` -- `getSettings` reads the resolved provider; `updateEnableBanking` delegates the 2-arg writer
 - `IntegrationsServiceTest` -- `isEffectivelyEnabled` = stored flag OR detected config (env/DB/session presence)
 - Manual integration testing against real provider APIs

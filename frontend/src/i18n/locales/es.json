@@ -404,6 +404,7 @@
     "banks": {
       "title": "Bancos",
       "search": "Buscar un banco",
+      "country": "País",
       "searchPlaceholder": "p. ej. BNP Paribas...",
       "searchError": "No se pueden buscar bancos en este momento.",
       "connected": "Conexiones activas",

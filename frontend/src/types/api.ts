@@ -177,14 +177,6 @@ export interface DashboardData {
   goalSummaries: GoalProgress[]
 }
 
-export interface Institution {
-  id: string
-  name: string
-  bic: string | null
-  logoUrl: string | null
-  country: string
-}
-
 export interface HoldingResponse {
   ticker: string
   name: string | null

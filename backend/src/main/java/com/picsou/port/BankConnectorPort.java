@@ -9,6 +9,9 @@ import java.util.List;
  */
 public interface BankConnectorPort {
 
+    /** Fallback country when none is specified — Picsou's primary market. */
+    String DEFAULT_COUNTRY = "FR";
+
     /** Create an authorization link to connect a bank account. */
     InitiateResult initiateConnection(String institutionId);
 
@@ -20,6 +23,9 @@ public interface BankConnectorPort {
 
     /** Search institutions by name/country. */
     List<InstitutionData> searchInstitutions(String query, String country);
+
+    /** Distinct country codes this provider has institutions for, for a "which country" selector. */
+    List<String> listCountries();
 
     record InitiateResult(String requisitionId, String authLink) {}
 

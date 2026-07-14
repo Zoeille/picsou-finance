@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -33,9 +34,13 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
     private static final Logger log = LoggerFactory.getLogger(EnableBankingBankConnector.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    // Bank coverage per country changes rarely; this avoids re-fetching the full
+    // ~2400-institution catalog (no country filter) on every "Add Account" open.
+    private static final long COUNTRIES_CACHE_TTL_SECONDS = 21_600; // 6 hours
 
     private final EnableBankingConfigProvider configProvider;
     private final WebClient webClient;
+    private volatile CachedCountries countriesCache;
 
     public EnableBankingBankConnector(
         EnableBankingConfigProvider configProvider,
@@ -46,6 +51,12 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             .baseUrl(baseUrl)
             .defaultHeader("Accept", "application/json")
             .defaultHeader("Content-Type", "application/json")
+            // WebClient's default in-memory buffer limit is 256 KB — too small for
+            // searchInstitutions() on a large single-country result (e.g. Germany alone is
+            // ~1.4 MB across ~1100 institutions), a latent bug independent of this change.
+            .exchangeStrategies(ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
+                .build())
             .build();
     }
 
@@ -88,10 +99,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
     @Override
     public InitiateResult initiateConnection(String institutionId) {
-        // institutionId format: "BankName::FR" (name::country)
-        String[] parts = institutionId.split("::");
-        String bankName = parts[0];
-        String country = parts.length > 1 ? parts[1] : "FR";
+        ParsedInstitutionId parsed = parseInstitutionId(institutionId);
+        String bankName = parsed.name();
+        String country = parsed.country();
 
         var body = Map.of(
             "access", Map.of("valid_until", Instant.now().plus(90, ChronoUnit.DAYS).toString()),
@@ -242,7 +252,65 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             .toList();
     }
 
+    /**
+     * {@code GET /application} returns the countries this application is actually
+     * registered/active for — a small, static-ish payload, and more correct than
+     * deriving coverage from the full ASPSP catalog (which could list countries this
+     * particular app isn't licensed for, or omit the distinction entirely).
+     */
+    @Override
+    public List<String> listCountries() {
+        CachedCountries cached = countriesCache;
+        if (cached != null && !cached.isExpired()) {
+            return cached.countries();
+        }
+
+        ApplicationResponse response = webClient.get()
+            .uri("/application")
+            .header("Authorization", "Bearer " + buildJwt())
+            .retrieve()
+            .bodyToMono(ApplicationResponse.class)
+            .timeout(TIMEOUT)
+            .onErrorMap(WebClientResponseException.class,
+                ex -> new SyncException("Failed to fetch application countries: [" + ex.getStatusCode() + "] " + ex.getResponseBodyAsString(), ex))
+            .onErrorMap(ex -> !(ex instanceof SyncException),
+                ex -> new SyncException("Failed to fetch application countries: " + ex.getMessage(), ex))
+            .block();
+
+        List<String> countries = (response != null && response.countries() != null)
+            ? response.countries().stream().sorted().toList()
+            : List.of();
+
+        countriesCache = new CachedCountries(countries, Instant.now());
+        return countries;
+    }
+
     // ─── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Parses the "BankName::CC" institution id built by {@link #searchInstitutions}.
+     * Splits at the LAST "::" — the country is always the appended final segment, and
+     * an institution name could itself legitimately contain "::" (e.g. a name with a
+     * literal separator-like substring), which a first-occurrence split would corrupt.
+     * A blank country segment (e.g. {@code "BankName::"}) falls back to
+     * {@link BankConnectorPort#DEFAULT_COUNTRY} via an explicit check rather than by
+     * accident of {@code split}'s default trailing-empty-removal.
+     */
+    ParsedInstitutionId parseInstitutionId(String institutionId) {
+        int sep = institutionId.lastIndexOf("::");
+        String name = sep >= 0 ? institutionId.substring(0, sep) : institutionId;
+        String countryPart = sep >= 0 ? institutionId.substring(sep + 2) : "";
+        String country = countryPart.isBlank() ? DEFAULT_COUNTRY : countryPart;
+        return new ParsedInstitutionId(name, country);
+    }
+
+    record ParsedInstitutionId(String name, String country) {}
+
+    private record CachedCountries(List<String> countries, Instant cachedAt) {
+        boolean isExpired() {
+            return Instant.now().isAfter(cachedAt.plusSeconds(COUNTRIES_CACHE_TTL_SECONDS));
+        }
+    }
 
     private AccountData fetchAccountData(String accountId) {
         BalancesResponse balances = webClient.get()
@@ -326,6 +394,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record AspspsResponse(List<AspspResponse> aspsps) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ApplicationResponse(List<String> countries) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record AspspResponse(String name, String bic, String logo, String country) {}

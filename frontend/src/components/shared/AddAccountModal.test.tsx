@@ -19,6 +19,7 @@ vi.mock('@/features/accounts/hooks', () => ({
 
 vi.mock('@/features/sync/hooks', () => ({
   useSearchInstitutions: () => ({ data: undefined, isError: false, isLoading: false, error: null }),
+  useBankCountries: () => ({ data: undefined }),
   useInitiateBankSync: () => ({ mutate: vi.fn(), isPending: false }),
   useInitiateTrAuth: () => ({ mutate: initiateTrAuth, isPending: false }),
   useCompleteTrAuth: () => ({ mutate: completeTrAuth, isPending: false }),

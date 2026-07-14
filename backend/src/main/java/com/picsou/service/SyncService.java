@@ -126,6 +126,12 @@ public class SyncService {
         return bankConnector.searchInstitutions(query, country);
     }
 
+    /** Countries the active provider has institutions for, for the "which country" selector. */
+    @Transactional(readOnly = true)
+    public List<String> listCountries() {
+        return bankConnector.listCountries();
+    }
+
     /** Get all requisitions for a member ordered by date. */
     @Transactional(readOnly = true)
     public List<Requisition> getAllRequisitions(Long memberId) {

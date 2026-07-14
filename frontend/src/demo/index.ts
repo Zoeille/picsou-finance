@@ -306,11 +306,19 @@ handlers.set(key('DELETE', '/goals/2'), () => null)
 handlers.set(key('DELETE', '/goals/3'), () => null)
 
 // Sync
-handlers.set(key('GET', '/sync/status'), () => mockRequisitions)
-handlers.set(key('GET', '/sync/institutions'), () => [
+const DEMO_INSTITUTIONS = [
   { id: 'BNP_PARIBAS', name: 'BNP Paribas', bic: 'BNPAFRPP', logoUrl: null, country: 'FR' },
   { id: 'BOURSOBANK', name: 'BoursoBank', bic: 'BNPAFRPP', logoUrl: null, country: 'FR' },
-])
+  { id: 'DEUTSCHE_BANK', name: 'Deutsche Bank', bic: 'DEUTDEFF', logoUrl: null, country: 'DE' },
+  { id: 'LHV_PANK', name: 'LHV Pank', bic: 'LHVBEE22', logoUrl: null, country: 'EE' },
+]
+handlers.set(key('GET', '/sync/status'), () => mockRequisitions)
+handlers.set(key('GET', '/sync/institutions'), (config) => {
+  const params = (config.params ?? {}) as { country?: string }
+  const country = params.country || 'FR'
+  return DEMO_INSTITUTIONS.filter((inst) => inst.country === country)
+})
+handlers.set(key('GET', '/sync/countries'), () => ['FR', 'DE', 'EE'])
 
 // Crypto exchange
 handlers.set(key('GET', '/crypto/exchange/status'), () => mockExchangeStatuses)
