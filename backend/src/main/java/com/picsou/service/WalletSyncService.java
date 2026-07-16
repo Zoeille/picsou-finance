@@ -125,7 +125,7 @@ public class WalletSyncService {
 
         } catch (Exception ex) {
             log.warn("Wallet sync failed for {} {}: {}", wallet.getChain(), wallet.getAddress(), ex.getMessage());
-            throw new SyncException("Could not sync your " + wallet.getChain() + " wallet. Please try again later.");
+            throw new SyncException("Could not sync your " + wallet.getChain() + " wallet. Please try again later.", ex);
         }
     }
 

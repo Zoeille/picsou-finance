@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   RPC was deprecated and started returning an HTTP 200 JSON-RPC error for
   `eth_getBalance`, which the adapter read as a 0 balance — wallets appeared to
   sync but showed nothing. Switched to `ethereum-rpc.publicnode.com`.
+- **On-chain wallet adapters no longer report a false 0 on RPC failure.** Both
+  the Ethereum and Solana adapters read the JSON-RPC `result` with `path(...)`,
+  which turned an `error` payload (rate-limit, deprecated method, node outage)
+  into a silent 0 balance rather than a sync error. They now validate the
+  envelope — a present `error`, a missing `result`, or an empty response throws
+  and surfaces as a `422` sync failure instead of corrupting the balance. A
+  genuinely empty wallet still reads 0. On Solana this covers both the native
+  SOL and the SPL-token call, and sync failures now preserve their root cause in
+  the logs.
 
 ## [1.0.13] — 2026-07-07
 

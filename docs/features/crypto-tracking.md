@@ -40,7 +40,11 @@ The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses
 
 ### Solana wallet adapter
 
-`SolanaWalletAdapter` calls `getBalance` on the Solana mainnet RPC (`api.mainnet-beta.solana.com`). Returns balance converted from lamports to SOL (9 decimals).
+`SolanaWalletAdapter` calls `getBalance` on the Solana mainnet RPC (`api.mainnet-beta.solana.com`). Returns balance converted from lamports to SOL (9 decimals). It also calls `getTokenAccountsByOwner` to pick up known SPL stablecoins (USDC/EURC/USDT).
+
+### JSON-RPC error handling
+
+Both on-chain adapters validate the JSON-RPC envelope through `JsonRpcResponse.requireResult(response, context)` (`adapter/util/`) before reading a balance. A present `error` field, a missing `result`, or an empty response throws `WalletRpcException`, which `WalletSyncService` surfaces as a `422` sync failure. This is deliberate: reading `result` with `path(...)` returns a non-null `MissingNode`, so an error payload would otherwise default to a **silent 0 balance** — indistinguishable from a genuinely empty wallet. A real `0x0` / `value:0` result still returns 0. On Solana, an error on the SPL-token call fails the whole sync rather than silently dropping stablecoin holdings.
 
 ### Key files
 
@@ -51,6 +55,8 @@ The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses
 - `backend/src/main/java/com/picsou/adapter/BitcoinWalletAdapter.java` -- Blockstream Esplora, BIP32 key derivation
 - `backend/src/main/java/com/picsou/adapter/EthereumWalletAdapter.java` -- PublicNode ETH RPC
 - `backend/src/main/java/com/picsou/adapter/SolanaWalletAdapter.java` -- Solana mainnet RPC
+- `backend/src/main/java/com/picsou/adapter/util/JsonRpcResponse.java` -- JSON-RPC envelope validation shared by the wallet adapters
+- `backend/src/main/java/com/picsou/exception/WalletRpcException.java` -- thrown on a JSON-RPC error/missing result
 - `backend/src/main/java/com/picsou/adapter/util/BitcoinKeyUtils.java` -- BIP32 derivation, Base58Check, Bech32
 - `backend/src/main/java/com/picsou/port/CryptoExchangePort.java` -- Exchange port interface
 - `backend/src/main/java/com/picsou/port/WalletPort.java` -- Wallet port interface
@@ -115,6 +121,7 @@ Upsert Account (type=CRYPTO, no ticker)
 - **Bitcoin xpub vs zpub**: Both are supported. `BitcoinKeyUtils.normalizeToXpub()` converts zpub to xpub before derivation. The derivation always produces P2WPKH (native segwit) addresses.
 - **Output descriptor parsing**: Descriptors are parsed by extracting the xpub between brackets. The checksum after `#` is ignored. Complex descriptors (multisig, P2SH-wrapped) are not supported.
 - **Exchange holdings use PriceService**: Holdings are converted to EUR at sync time using `PriceService.refreshPrices()`. If the price cache is stale (older than 15 min), prices are refreshed on demand.
+- **Wallet RPC errors must not read as 0**: When parsing a blockchain JSON-RPC response, always go through `JsonRpcResponse.requireResult(...)` — never `response.path("result")` directly. `path(...)` returns a `MissingNode` for an error payload, which silently becomes a 0 balance (this caused the July 2026 Ethereum outage). `requireResult` uses `get(...)` to reject a missing/error result while still allowing a legitimate `0x0` / `value:0`.
 
 ## Tests
 
@@ -122,6 +129,8 @@ Upsert Account (type=CRYPTO, no ticker)
 - `BitcoinKeyUtilsTest` -- unit tests for BIP32 derivation, address generation
 - `CryptoExchangeSyncServiceTest` -- unit tests for exchange management
 - `WalletSyncServiceTest` -- unit tests for wallet sync
+- `EthereumWalletAdapterTest` -- valid/zero/error/missing-result JSON-RPC parsing
+- `SolanaWalletAdapterTest` -- SOL + SPL parsing, unknown-mint drop, RPC-error fails sync
 
 ## Links
 

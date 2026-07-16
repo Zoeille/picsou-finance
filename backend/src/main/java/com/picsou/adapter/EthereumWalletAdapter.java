@@ -1,6 +1,7 @@
 package com.picsou.adapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.picsou.adapter.util.JsonRpcResponse;
 import com.picsou.port.WalletPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,10 +26,15 @@ public class EthereumWalletAdapter implements WalletPort {
     private final WebClient webClient;
 
     public EthereumWalletAdapter() {
-        this.webClient = WebClient.builder()
+        this(WebClient.builder()
             .baseUrl(RPC_URL)
             .defaultHeader("Content-Type", "application/json")
-            .build();
+            .build());
+    }
+
+    // Package-private seam for tests: inject a WebClient backed by an ExchangeFunction.
+    EthereumWalletAdapter(WebClient webClient) {
+        this.webClient = webClient;
     }
 
     @Override
@@ -52,12 +58,8 @@ public class EthereumWalletAdapter implements WalletPort {
             .timeout(Duration.ofSeconds(10))
             .block();
 
-        if (response == null) {
-            log.warn("Ethereum RPC returned null for address {}", address);
-            return List.of(new WalletBalance("ETH", BigDecimal.ZERO));
-        }
-
-        String hexBalance = response.path("result").asText("0x0");
+        JsonNode result = JsonRpcResponse.requireResult(response, "Ethereum eth_getBalance");
+        String hexBalance = result.asText();
         BigInteger wei = new BigInteger(hexBalance.substring(2), 16);
         BigDecimal eth = new BigDecimal(wei).divide(WEI_PER_ETH, 18, RoundingMode.HALF_UP);
 
