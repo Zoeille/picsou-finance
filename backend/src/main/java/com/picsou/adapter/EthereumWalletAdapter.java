@@ -19,7 +19,7 @@ import java.util.Map;
 public class EthereumWalletAdapter implements WalletPort {
 
     private static final Logger log = LoggerFactory.getLogger(EthereumWalletAdapter.class);
-    private static final String RPC_URL = "https://cloudflare-eth.com";
+    private static final String RPC_URL = "https://ethereum-rpc.publicnode.com";
     private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
 
     private final WebClient webClient;

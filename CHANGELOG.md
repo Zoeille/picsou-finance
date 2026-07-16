@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows the backend's debt-neutral gain/loss, and a new Liabilities card lists
   loans separately.
 
+### Fixed
+
+- **Ethereum wallet balances sync again.** The hard-coded `cloudflare-eth.com`
+  RPC was deprecated and started returning an HTTP 200 JSON-RPC error for
+  `eth_getBalance`, which the adapter read as a 0 balance — wallets appeared to
+  sync but showed nothing. Switched to `ethereum-rpc.publicnode.com`.
+
 ## [1.0.13] — 2026-07-07
 
 ### Changed

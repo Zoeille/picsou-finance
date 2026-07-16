@@ -1,6 +1,6 @@
 # Feature: Crypto Tracking
 
-> Last updated: 2026-04-08
+> Last updated: 2026-07-16
 
 ## Context
 
@@ -36,7 +36,7 @@ The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses
 
 ### Ethereum wallet adapter
 
-`EthereumWalletAdapter` calls `eth_getBalance` on the Cloudflare Ethereum RPC (`cloudflare-eth.com`). Returns balance converted from wei to ETH (18 decimals).
+`EthereumWalletAdapter` calls `eth_getBalance` on a public Ethereum RPC (`ethereum-rpc.publicnode.com`). Returns balance converted from wei to ETH (18 decimals).
 
 ### Solana wallet adapter
 
@@ -49,7 +49,7 @@ The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses
 - `backend/src/main/java/com/picsou/config/CryptoEncryption.java` -- AES-256-GCM encrypt/decrypt for API secrets
 - `backend/src/main/java/com/picsou/adapter/BinanceAdapter.java` -- Binance REST API with HMAC-SHA256
 - `backend/src/main/java/com/picsou/adapter/BitcoinWalletAdapter.java` -- Blockstream Esplora, BIP32 key derivation
-- `backend/src/main/java/com/picsou/adapter/EthereumWalletAdapter.java` -- Cloudflare ETH RPC
+- `backend/src/main/java/com/picsou/adapter/EthereumWalletAdapter.java` -- PublicNode ETH RPC
 - `backend/src/main/java/com/picsou/adapter/SolanaWalletAdapter.java` -- Solana mainnet RPC
 - `backend/src/main/java/com/picsou/adapter/util/BitcoinKeyUtils.java` -- BIP32 derivation, Base58Check, Bech32
 - `backend/src/main/java/com/picsou/port/CryptoExchangePort.java` -- Exchange port interface
