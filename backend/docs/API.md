@@ -503,11 +503,11 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 
 - **Auth:** Required
 
-Countries the active bank-sync provider has institutions for, for the "which country" search filter/UI selector above. Derived live from the provider (Enable Banking: `GET /application`'s `countries` field) rather than a hardcoded list.
+Countries the active bank-sync provider supports, for the "which country" search filter/UI selector above — sourced from the provider (Enable Banking: `GET /application`'s `countries` field) rather than a hardcoded list. Enable Banking's result is cached in-memory for up to 6 hours.
 
-**Response `200` — `string[]`:**
+**Response `200` — `string[]`** (ISO 3166-1 alpha-2 codes, ~29 entries for Enable Banking):
 ```json
-["AT", "BE", "DE", "EE", "FR", "..."]
+["AT", "BE", "DE", "EE", "FR"]
 ```
 
 ---

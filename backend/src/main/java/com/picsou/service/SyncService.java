@@ -329,11 +329,17 @@ public class SyncService {
                 .findFirst());
     }
 
-    /** institutionId format: "BankName::FR" (name::country) — see EnableBankingBankConnector. */
+    /**
+     * institutionId format: "BankName::FR" (name::country) — see
+     * {@link BankConnectorPort#parseInstitutionId}. Blank/absent country returns {@code null}
+     * (not {@link BankConnectorPort#DEFAULT_COUNTRY}) so the logo-backfill search below stays
+     * unfiltered across all countries when the country truly isn't known, rather than narrowing
+     * to France and possibly missing the real (non-French) institution.
+     */
     private static String parseCountry(String institutionId) {
         if (institutionId == null) return null;
-        String[] parts = institutionId.split("::");
-        return parts.length > 1 ? parts[1] : null;
+        String country = BankConnectorPort.parseInstitutionId(institutionId).country();
+        return country.isBlank() ? null : country;
     }
 
     /**

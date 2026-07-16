@@ -314,9 +314,12 @@ const DEMO_INSTITUTIONS = [
 ]
 handlers.set(key('GET', '/sync/status'), () => mockRequisitions)
 handlers.set(key('GET', '/sync/institutions'), (config) => {
-  const params = (config.params ?? {}) as { country?: string }
+  const params = (config.params ?? {}) as { query?: string; country?: string }
   const country = params.country || 'FR'
-  return DEMO_INSTITUTIONS.filter((inst) => inst.country === country)
+  const query = (params.query ?? '').toLowerCase()
+  return DEMO_INSTITUTIONS.filter((inst) =>
+    inst.country === country && (query === '' || inst.name.toLowerCase().includes(query)),
+  )
 })
 handlers.set(key('GET', '/sync/countries'), () => ['FR', 'DE', 'EE'])
 

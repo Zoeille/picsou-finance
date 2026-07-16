@@ -43,8 +43,13 @@ public class SyncController {
     }
 
     @GetMapping("/countries")
-    public List<String> listCountries() {
-        return syncService.listCountries();
+    public ResponseEntity<?> listCountries(HttpServletRequest httpReq) {
+        if (!checkSyncRateLimit(httpReq)) {
+            ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
+            detail.setDetail("Too many sync requests. Please wait a moment.");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(detail);
+        }
+        return ResponseEntity.ok(syncService.listCountries());
     }
 
     @PostMapping("/initiate")

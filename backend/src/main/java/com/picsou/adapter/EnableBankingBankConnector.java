@@ -99,9 +99,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
     @Override
     public InitiateResult initiateConnection(String institutionId) {
-        ParsedInstitutionId parsed = parseInstitutionId(institutionId);
+        BankConnectorPort.ParsedInstitutionId parsed = BankConnectorPort.parseInstitutionId(institutionId);
         String bankName = parsed.name();
-        String country = parsed.country();
+        String country = parsed.country().isBlank() ? DEFAULT_COUNTRY : parsed.country();
 
         var body = Map.of(
             "access", Map.of("valid_until", Instant.now().plus(90, ChronoUnit.DAYS).toString()),
@@ -286,25 +286,6 @@ public class EnableBankingBankConnector implements BankConnectorPort {
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
-
-    /**
-     * Parses the "BankName::CC" institution id built by {@link #searchInstitutions}.
-     * Splits at the LAST "::" — the country is always the appended final segment, and
-     * an institution name could itself legitimately contain "::" (e.g. a name with a
-     * literal separator-like substring), which a first-occurrence split would corrupt.
-     * A blank country segment (e.g. {@code "BankName::"}) falls back to
-     * {@link BankConnectorPort#DEFAULT_COUNTRY} via an explicit check rather than by
-     * accident of {@code split}'s default trailing-empty-removal.
-     */
-    ParsedInstitutionId parseInstitutionId(String institutionId) {
-        int sep = institutionId.lastIndexOf("::");
-        String name = sep >= 0 ? institutionId.substring(0, sep) : institutionId;
-        String countryPart = sep >= 0 ? institutionId.substring(sep + 2) : "";
-        String country = countryPart.isBlank() ? DEFAULT_COUNTRY : countryPart;
-        return new ParsedInstitutionId(name, country);
-    }
-
-    record ParsedInstitutionId(String name, String country) {}
 
     private record CachedCountries(List<String> countries, Instant cachedAt) {
         boolean isExpired() {

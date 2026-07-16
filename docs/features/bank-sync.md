@@ -25,7 +25,9 @@ Both providers implement the `BankConnectorPort` interface with five operations:
 
 ### Country selection
 
-Bank search is not restricted to France — `GET /api/sync/institutions?query=...&country=CC` accepts any ISO 3166-1 alpha-2 code. The frontend's `BankCountrySelect` (`frontend/src/components/shared/BankCountrySelect.tsx`) populates its options live from `GET /api/sync/countries` rather than a hardcoded list, so it never drifts from what the active provider actually covers; it snaps back to the first available option if the current selection isn't in the loaded list (e.g. a provider without France coverage). `BankConnectorPort.DEFAULT_COUNTRY` ("FR") is the single named fallback used both by the controller's `@RequestParam defaultValue` and by `EnableBankingBankConnector`'s institution-id parsing (`parseInstitutionId`) — previously these were two independent `"FR"` string literals, one of which could silently mis-resolve a bank with a blank country field. `parseInstitutionId` splits at the *last* `"::"` (not the first), since an institution name could itself contain that substring and the country is always the appended final segment.
+Bank search is not restricted to France — `GET /api/sync/institutions?query=...&country=CC` accepts any ISO 3166-1 alpha-2 code, and `GET /api/sync/countries` (rate-limited the same as `POST /api/sync/initiate`) lists what the active provider actually supports. The frontend's `BankCountrySelect` (`frontend/src/components/shared/BankCountrySelect.tsx`) populates its options live from that endpoint rather than a hardcoded list, so it never drifts from real coverage; it snaps back to the first available option if the current selection isn't in the loaded list (e.g. a provider without France coverage). `BankConnectorPort.DEFAULT_COUNTRY` ("FR") is the single named fallback used by the controller's `@RequestParam defaultValue` and by every caller that needs a concrete country — previously this was scattered across independent `"FR"` string literals, one of which could silently mis-resolve a bank with a blank country field.
+
+`BankConnectorPort.parseInstitutionId()` is the single shared parser for the "BankName::CC" institution id format (used by `EnableBankingBankConnector.initiateConnection` and `SyncService.parseCountry`, the latter backing logo backfill) — it splits at the *last* `"::"` (not the first), since an institution name could itself contain that substring and the country is always the appended final segment. Each caller decides its own fallback for a blank/absent country: `initiateConnection` needs a concrete value to send upstream, so it falls back to `DEFAULT_COUNTRY`; `parseCountry` returns `null` instead, so an unknown-country logo lookup searches unfiltered across all countries rather than narrowing to France and possibly missing the real institution.
 
 `EnableBankingBankConnector.listCountries()` calls Enable Banking's `GET /application`, which returns the countries this specific application is registered/active for — a small, near-static payload, and more correct than deriving coverage from the full ASPSP catalog (which could list countries this particular app isn't licensed for). The result is cached in-memory for 6 hours (`CachedCountries`, a single-record TTL cache in the same spirit as `PriceService.CachedPrice`, though simpler — no invalidation hook, since app-country coverage essentially never changes at runtime). `PowensBankConnector.listCountries()` fetches its `/connectors` catalog uncached (Powens is disabled by default in 1.0.0; revisit if it's ever re-enabled).
 
@@ -47,7 +49,7 @@ Bank search is not restricted to France — `GET /api/sync/institutions?query=..
 
 - `backend/src/main/java/com/picsou/adapter/EnableBankingBankConnector.java` -- PSD2 adapter (RSA JWT, async account linking)
 - `backend/src/main/java/com/picsou/adapter/PowensBankConnector.java` -- Scraping adapter (experimental, OAuth webview; `@Primary` removed in 1.0.0)
-- `backend/src/main/java/com/picsou/port/BankConnectorPort.java` -- Port interface with `AccountData`, `InstitutionData` records
+- `backend/src/main/java/com/picsou/port/BankConnectorPort.java` -- Port interface with `AccountData`, `InstitutionData` records, `DEFAULT_COUNTRY`, and the shared `parseInstitutionId()` static parser
 - `backend/src/main/java/com/picsou/service/SyncService.java` -- Orchestration: initiate, complete, retry, resync, type detection
 - `backend/src/main/java/com/picsou/controller/SyncController.java` -- REST endpoints under `/api/sync/`
 - `backend/src/main/java/com/picsou/model/Requisition.java` -- Tracks connection lifecycle (CREATED/LINKED/FAILED)
@@ -138,7 +140,8 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 
 - `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow
 - `EnableBankingConfigProviderTest` -- DB/env resolution precedence, and `keyId()` falling back to the Application ID vs honoring an explicitly-configured value
-- `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider; `parseInstitutionId` cases (name+country, blank country segment, no separator, name containing `"::"`)
+- `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider
+- `BankConnectorPortTest` -- `parseInstitutionId` cases (name+country, blank country segment, no separator, name containing `"::"`)
 - `AdminControllerTest` -- `getSettings` reads the resolved provider; `updateEnableBanking` delegates the 2-arg writer
 - `IntegrationsServiceTest` -- `isEffectivelyEnabled` = stored flag OR detected config (env/DB/session presence)
 - Manual integration testing against real provider APIs

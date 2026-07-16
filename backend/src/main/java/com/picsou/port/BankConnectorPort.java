@@ -27,6 +27,23 @@ public interface BankConnectorPort {
     /** Distinct country codes this provider has institutions for, for a "which country" selector. */
     List<String> listCountries();
 
+    /**
+     * Splits an institution id of the form "BankName::CC" (built by adapters' {@code
+     * searchInstitutions}) into name and country parts. Splits at the LAST "::" — a bank name
+     * could itself legitimately contain that substring, and the country is always the appended
+     * final segment. {@code country()} is an empty string when absent/blank; callers decide their
+     * own fallback (e.g. {@link #DEFAULT_COUNTRY} where a concrete country is required, or
+     * treating blank as "unknown" for a broad, unfiltered institution search).
+     */
+    static ParsedInstitutionId parseInstitutionId(String institutionId) {
+        int sep = institutionId.lastIndexOf("::");
+        String name = sep >= 0 ? institutionId.substring(0, sep) : institutionId;
+        String country = sep >= 0 ? institutionId.substring(sep + 2) : "";
+        return new ParsedInstitutionId(name, country);
+    }
+
+    record ParsedInstitutionId(String name, String country) {}
+
     record InitiateResult(String requisitionId, String authLink) {}
 
     record AccountData(
