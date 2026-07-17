@@ -13,6 +13,7 @@ import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.WalletAddressRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,8 +25,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +70,46 @@ class WalletSyncServiceTest {
 
         // Failure surfaced before the wallet was persisted as synced.
         verify(walletRepository, never()).save(any());
+    }
+
+    @Test
+    void sync_persistsHoldingsAndSnapshot_onSuccess() {
+        WalletAddress wallet = wallet(1L, Chain.SOLANA, "SoLaNa");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn("SOLANA");
+        when(adapter.fetchBalances(any())).thenReturn(List.of(
+            new WalletBalance("SOL", BigDecimal.ONE),
+            new WalletBalance("USDC", new BigDecimal("50"))));
+
+        // 1 SOL @ 20 EUR + 50 USDC @ 1 EUR = 70.00 EUR.
+        when(priceService.refreshPrices(any()))
+            .thenReturn(Map.of("SOL", new BigDecimal("20"), "USDC", new BigDecimal("1")));
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account savedAccount = mock(Account.class);
+        when(savedAccount.getId()).thenReturn(100L);
+        when(accountRepository.save(any())).thenReturn(savedAccount);
+
+        WalletSyncService service = serviceWith(adapter);
+
+        service.sync(1L, MEMBER_ID);
+
+        // The response is built from the resolved account.
+        verify(accountService).toResponse(savedAccount);
+
+        // One holding per priced, positive balance.
+        verify(accountService, times(2)).upsertHolding(eq(100L), eq(MEMBER_ID), any(), any(), any(), any());
+
+        // Snapshot balance is the summed EUR value -- guards the conversion math.
+        ArgumentCaptor<BigDecimal> balanceEur = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(accountService).upsertSnapshot(eq(savedAccount), balanceEur.capture(), any());
+        assertThat(balanceEur.getValue()).isEqualByComparingTo("70.00");
+
+        // lastSyncedAt was stamped and the wallet persisted.
+        verify(walletRepository).save(wallet);
+        assertThat(wallet.getLastSyncedAt()).isNotNull();
     }
 
     @Test

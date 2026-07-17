@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails the sync with a clear message instead of an opaque error. Batch resync
   (`resyncAll`) reports per-wallet outcomes, so the scheduler logs which wallets
   failed and the MCP wallet-sync tool answers with the real success count.
+  `WalletRpcException` now also has a dedicated `GlobalExceptionHandler` mapping
+  (generic `422`) as defense-in-depth, so a bad RPC response can never surface as a
+  raw `500` even on an unwrapped call path.
 
 ## [1.0.13] — 2026-07-07
 

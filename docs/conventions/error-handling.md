@@ -5,7 +5,8 @@
 ```
 RuntimeException
   +-- ResourceNotFoundException      404 NOT_FOUND
-  +-- SyncException                  502 BAD_GATEWAY
+  +-- SyncException                  422 UNPROCESSABLE_ENTITY
+  +-- WalletRpcException             422 UNPROCESSABLE_ENTITY (adapter-level, see below)
   +-- BadCredentialsException        401 UNAUTHORIZED   (Spring Security)
   +-- IllegalArgumentException       400 BAD_REQUEST
   +-- MethodArgumentNotValidException 422 UNPROCESSABLE_ENTITY (via @Valid)
@@ -32,7 +33,8 @@ A `@RestControllerAdvice` that extends `ResponseEntityExceptionHandler`. Returns
 | Handler method | Exception | Status | Detail |
 |---------------|-----------|--------|--------|
 | `handleNotFound` | `ResourceNotFoundException` | 404 | `ex.getMessage()` |
-| `handleSync` | `SyncException` | 502 | `ex.getMessage()` (logged at WARN) |
+| `handleSync` | `SyncException` | 422 | `ex.getMessage()` (logged at WARN) |
+| `handleWalletRpc` | `WalletRpcException` | 422 | generic `"Could not reach the blockchain network…"` (logged at WARN) |
 | `handleBadCredentials` | `BadCredentialsException` | 401 | `"Invalid credentials"` |
 | `handleIllegalArgument` | `IllegalArgumentException` | 400 | `ex.getMessage()` |
 | `handleMethodArgumentNotValid` | `MethodArgumentNotValidException` | 422 | Field map under `"errors"` key |
@@ -95,6 +97,12 @@ Logged at WARN level so upstream flakiness is trackable without alert fatigue.
 - **Never create an `AppException` base class** — each exception type extends `RuntimeException` directly.
 - **Never expose stack traces to clients** — the generic 500 handler returns "An unexpected error occurred".
 - **Never throw business exceptions from adapters** — wrap external errors in `SyncException`.
+  The one sanctioned exception is `WalletRpcException`: a *technical* signal (no user-facing
+  message) a wallet adapter throws when a blockchain JSON-RPC response is an error / missing
+  its `result`, so it can't silently report a 0 balance. `WalletSyncService.sync()` catches
+  it and wraps it in a friendly `SyncException`; `GlobalExceptionHandler` maps it to a generic
+  `422` as defense-in-depth. The business rule still holds — this is a technical, not a
+  business, exception. See [`docs/features/crypto-tracking.md`](../features/crypto-tracking.md).
 
 ## Frontend display
 

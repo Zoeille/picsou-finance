@@ -78,7 +78,9 @@ public class WalletSyncService {
 
         try {
             List<WalletBalance> balances = adapter.fetchBalances(wallet.getAddress());
-            if (balances == null || balances.isEmpty()) {
+            // WalletPort.fetchBalances contracts a non-null list with at least the native
+            // asset; isEmpty() stays only as a cheap guard against a misbehaving adapter.
+            if (balances.isEmpty()) {
                 throw new SyncException("Adapter returned no balances for " + wallet.getChain());
             }
 
