@@ -412,6 +412,7 @@
       "title": "Banques",
       "search": "Rechercher une banque",
       "country": "Pays",
+      "countriesLoadError": "Impossible de charger tous les pays — France uniquement.",
       "searchPlaceholder": "Ex: BNP Paribas...",
       "searchError": "Impossible de rechercher les banques pour le moment.",
       "connected": "Connexions actives",

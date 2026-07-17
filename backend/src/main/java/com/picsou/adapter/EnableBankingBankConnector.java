@@ -277,6 +277,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
                 ex -> new SyncException("Failed to fetch application countries: " + ex.getMessage(), ex))
             .block();
 
+        if (response == null || response.countries() == null) {
+            log.warn("Enable Banking /application returned no countries (response={})", response);
+        }
         List<String> countries = (response != null && response.countries() != null)
             ? response.countries().stream().sorted().toList()
             : List.of();

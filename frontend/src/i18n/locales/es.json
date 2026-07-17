@@ -405,6 +405,7 @@
       "title": "Bancos",
       "search": "Buscar un banco",
       "country": "País",
+      "countriesLoadError": "No se pudieron cargar todos los países — solo Francia disponible.",
       "searchPlaceholder": "p. ej. BNP Paribas...",
       "searchError": "No se pueden buscar bancos en este momento.",
       "connected": "Conexiones activas",

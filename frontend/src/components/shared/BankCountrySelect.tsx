@@ -21,7 +21,7 @@ const FALLBACK_COUNTRIES = [DEFAULT_BANK_COUNTRY]
  */
 export function BankCountrySelect({ value, onChange }: BankCountrySelectProps) {
   const { t } = useTranslation()
-  const { data: countries } = useBankCountries()
+  const { data: countries, isError } = useBankCountries()
 
   const options = useMemo(() => {
     const codes = countries && countries.length > 0 ? countries : FALLBACK_COUNTRIES
@@ -34,6 +34,8 @@ export function BankCountrySelect({ value, onChange }: BankCountrySelectProps) {
   // If the current value isn't in the loaded list (e.g. the active provider has no
   // DEFAULT_BANK_COUNTRY coverage), the native <select> would render blank while searches
   // silently kept filtering by the invisible stale value — snap to the first real option.
+  // `onChange` is a useState setter from both call sites (referentially stable across
+  // renders), so including it here doesn't risk a thrashing loop.
   useEffect(() => {
     if (options.length > 0 && !options.some((o) => o.code === value)) {
       onChange(options[0].code)
@@ -41,15 +43,20 @@ export function BankCountrySelect({ value, onChange }: BankCountrySelectProps) {
   }, [options, value, onChange])
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={t('sync.banks.country')}
-      className="h-10 shrink-0 rounded-md border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
-    >
-      {options.map((o) => (
-        <option key={o.code} value={o.code}>{o.label}</option>
-      ))}
-    </select>
+    <div className="flex shrink-0 flex-col gap-1">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={t('sync.banks.country')}
+        className="h-10 rounded-md border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+      >
+        {options.map((o) => (
+          <option key={o.code} value={o.code}>{o.label}</option>
+        ))}
+      </select>
+      {isError && (
+        <span className="text-xs text-destructive">{t('sync.banks.countriesLoadError')}</span>
+      )}
+    </div>
   )
 }
