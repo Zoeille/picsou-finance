@@ -48,12 +48,8 @@ class SyncControllerTest {
     void listCountries_rateLimitExceeded_returns429_withoutCallingService() {
         when(httpRequest.getRemoteAddr()).thenReturn("10.0.0.1");
         Map<String, Bucket> buckets = new ConcurrentHashMap<>();
-        // Pre-seed an already-exhausted, single-token bucket for this IP.
-        Bucket oneTokenBucket = Bucket.builder()
-            .addLimit(Bandwidth.builder().capacity(1).refillIntervally(1, Duration.ofMinutes(1)).build())
-            .build();
-        oneTokenBucket.tryConsume(1);
-        buckets.put("10.0.0.1", oneTokenBucket);
+        // Pre-seed an already-exhausted, single-token bucket for this IP's "countries" key.
+        buckets.put("10.0.0.1:countries", exhaustedOneTokenBucket());
         SyncController ctrl = controller(buckets);
 
         ResponseEntity<?> response = ctrl.listCountries(httpRequest);
@@ -62,5 +58,29 @@ class SyncControllerTest {
         assertThat(response.getBody()).isInstanceOf(ProblemDetail.class);
         assertThat(((ProblemDetail) response.getBody()).getDetail()).contains("Too many sync requests");
         verifyNoInteractions(syncService);
+    }
+
+    @Test
+    void listCountries_usesItsOwnBucket_separateFromInitiate() {
+        // A passive picker load shouldn't be blocked by an exhausted "initiate" budget —
+        // each endpoint gets its own bucket keyed by ip + endpoint name.
+        when(httpRequest.getRemoteAddr()).thenReturn("10.0.0.2");
+        when(syncService.listCountries()).thenReturn(List.of("FR"));
+        Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+        buckets.put("10.0.0.2:initiate", exhaustedOneTokenBucket());
+        SyncController ctrl = controller(buckets);
+
+        ResponseEntity<?> response = ctrl.listCountries(httpRequest);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(List.of("FR"));
+    }
+
+    private static Bucket exhaustedOneTokenBucket() {
+        Bucket bucket = Bucket.builder()
+            .addLimit(Bandwidth.builder().capacity(1).refillIntervally(1, Duration.ofMinutes(1)).build())
+            .build();
+        bucket.tryConsume(1);
+        return bucket;
     }
 }

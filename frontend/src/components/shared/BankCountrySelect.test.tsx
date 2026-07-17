@@ -15,18 +15,19 @@ vi.mock('@/features/sync/hooks', () => ({
 const mockedUseBankCountries = vi.mocked(useBankCountries)
 
 describe('BankCountrySelect', () => {
-  it('falls back to the default country only while loading (no data yet)', () => {
-    mockedUseBankCountries.mockReturnValue({ data: undefined, isError: false } as ReturnType<typeof useBankCountries>)
+  it('falls back to the default country only while loading (no data yet), with no error message', () => {
+    mockedUseBankCountries.mockReturnValue({ data: undefined, isError: false, isSuccess: false } as ReturnType<typeof useBankCountries>)
 
     render(<BankCountrySelect value={DEFAULT_BANK_COUNTRY} onChange={vi.fn()} />)
 
     const options = screen.getAllByRole('option')
     expect(options).toHaveLength(1)
     expect(options[0]).toHaveValue('FR')
+    expect(screen.queryByText('sync.banks.countriesLoadError')).not.toBeInTheDocument()
   })
 
   it('renders live options with the default country pinned first', () => {
-    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE', 'FR'], isError: false } as ReturnType<typeof useBankCountries>)
+    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE', 'FR'], isError: false, isSuccess: true } as ReturnType<typeof useBankCountries>)
 
     render(<BankCountrySelect value={DEFAULT_BANK_COUNTRY} onChange={vi.fn()} />)
 
@@ -35,7 +36,7 @@ describe('BankCountrySelect', () => {
   })
 
   it('calls onChange when the user picks a different option', () => {
-    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE', 'FR'], isError: false } as ReturnType<typeof useBankCountries>)
+    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE', 'FR'], isError: false, isSuccess: true } as ReturnType<typeof useBankCountries>)
     const onChange = vi.fn()
 
     render(<BankCountrySelect value={DEFAULT_BANK_COUNTRY} onChange={onChange} />)
@@ -44,8 +45,8 @@ describe('BankCountrySelect', () => {
     expect(onChange).toHaveBeenCalledWith('EE')
   })
 
-  it('shows a visible error message when the countries request fails, without disabling the select', () => {
-    mockedUseBankCountries.mockReturnValue({ data: undefined, isError: true } as ReturnType<typeof useBankCountries>)
+  it('shows a visible error message when the countries request fails with no prior data, without disabling the select', () => {
+    mockedUseBankCountries.mockReturnValue({ data: undefined, isError: true, isSuccess: false } as ReturnType<typeof useBankCountries>)
 
     render(<BankCountrySelect value={DEFAULT_BANK_COUNTRY} onChange={vi.fn()} />)
 
@@ -53,8 +54,26 @@ describe('BankCountrySelect', () => {
     expect(screen.getByRole('combobox')).toBeEnabled()
   })
 
+  it('shows the error message when the request succeeds but returns an empty list', () => {
+    mockedUseBankCountries.mockReturnValue({ data: [] as string[], isError: false, isSuccess: true } as ReturnType<typeof useBankCountries>)
+
+    render(<BankCountrySelect value={DEFAULT_BANK_COUNTRY} onChange={vi.fn()} />)
+
+    expect(screen.getByText('sync.banks.countriesLoadError')).toBeInTheDocument()
+  })
+
+  it('does not show the error message when a background refetch fails but prior data is still available', () => {
+    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE', 'FR'], isError: true, isSuccess: false } as ReturnType<typeof useBankCountries>)
+
+    render(<BankCountrySelect value={DEFAULT_BANK_COUNTRY} onChange={vi.fn()} />)
+
+    // The full list is still shown — claiming "showing France only" here would be false.
+    expect(screen.queryByText('sync.banks.countriesLoadError')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+  })
+
   it('snaps to the first available option when the current value is not in the loaded list', () => {
-    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE'], isError: false } as ReturnType<typeof useBankCountries>)
+    mockedUseBankCountries.mockReturnValue({ data: ['DE', 'EE'], isError: false, isSuccess: true } as ReturnType<typeof useBankCountries>)
     const onChange = vi.fn()
 
     // Current value 'FR' isn't in the loaded (non-FR) list — the effect should correct it.

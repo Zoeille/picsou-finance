@@ -277,15 +277,23 @@ public class EnableBankingBankConnector implements BankConnectorPort {
                 ex -> new SyncException("Failed to fetch application countries: " + ex.getMessage(), ex))
             .block();
 
+        List<String> countries;
         if (response == null || response.countries() == null) {
-            log.warn("Enable Banking /application returned no countries (response={})", response);
+            log.warn("Enable Banking /application returned {} — not caching this result",
+                response == null ? "an empty body" : "no countries field");
+            countries = List.of();
+        } else {
+            countries = response.countries().stream().sorted().toList();
         }
-        List<String> countries = (response != null && response.countries() != null)
-            ? response.countries().stream().sorted().toList()
-            : List.of();
 
-        countriesCache = new CachedCountries(countries, Instant.now());
-        return countries;
+        // Don't cache a null/empty result for the full 6h TTL — a transient blip would
+        // otherwise silently pin the country picker to the France-only fallback for hours.
+        // Serve (and keep) the last good cached value a little longer instead, if we have one.
+        if (!countries.isEmpty()) {
+            countriesCache = new CachedCountries(countries, Instant.now());
+            return countries;
+        }
+        return cached != null ? cached.countries() : countries;
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────

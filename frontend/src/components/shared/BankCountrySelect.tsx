@@ -21,15 +21,23 @@ const FALLBACK_COUNTRIES = [DEFAULT_BANK_COUNTRY]
  */
 export function BankCountrySelect({ value, onChange }: BankCountrySelectProps) {
   const { t } = useTranslation()
-  const { data: countries, isError } = useBankCountries()
+  const { data: countries, isError, isSuccess } = useBankCountries()
+  const hasCountries = !!countries && countries.length > 0
+
+  // Show the "couldn't load" message whenever we're genuinely stuck on the France-only
+  // fallback (the request failed, or it succeeded but came back empty) — but NOT while the
+  // query is still loading, and NOT if we still have real (possibly stale) data from a prior
+  // success, since the message would then be false ("showing France only" while the full
+  // list is actually rendered).
+  const showLoadError = !hasCountries && (isError || isSuccess)
 
   const options = useMemo(() => {
-    const codes = countries && countries.length > 0 ? countries : FALLBACK_COUNTRIES
+    const codes = hasCountries ? countries : FALLBACK_COUNTRIES
     const ordered = codes.includes(DEFAULT_BANK_COUNTRY)
       ? [DEFAULT_BANK_COUNTRY, ...codes.filter((c) => c !== DEFAULT_BANK_COUNTRY)]
       : codes
     return ordered.map((code) => ({ code, label: formatCountryName(code) }))
-  }, [countries])
+  }, [countries, hasCountries])
 
   // If the current value isn't in the loaded list (e.g. the active provider has no
   // DEFAULT_BANK_COUNTRY coverage), the native <select> would render blank while searches
@@ -54,7 +62,7 @@ export function BankCountrySelect({ value, onChange }: BankCountrySelectProps) {
           <option key={o.code} value={o.code}>{o.label}</option>
         ))}
       </select>
-      {isError && (
+      {showLoadError && (
         <span className="text-xs text-destructive">{t('sync.banks.countriesLoadError')}</span>
       )}
     </div>

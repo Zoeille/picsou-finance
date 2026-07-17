@@ -42,4 +42,12 @@ class BankConnectorPortTest {
         assertThat(parsed.name()).isEqualTo("Foo::Bar");
         assertThat(parsed.country()).isEqualTo("EE");
     }
+
+    @Test
+    void parseInstitutionId_nullInput_returnsBlankNameAndCountry_ratherThanThrowing() {
+        var parsed = BankConnectorPort.parseInstitutionId(null);
+
+        assertThat(parsed.name()).isEmpty();
+        assertThat(parsed.country()).isEmpty();
+    }
 }

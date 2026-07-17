@@ -315,7 +315,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
             <Button variant="ghost" size="sm" onClick={() => setError(null)}>x</Button>
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-start gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input

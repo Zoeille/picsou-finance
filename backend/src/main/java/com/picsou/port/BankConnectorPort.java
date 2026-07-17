@@ -33,9 +33,13 @@ public interface BankConnectorPort {
      * could itself legitimately contain that substring, and the country is always the appended
      * final segment. {@code country()} is an empty string when absent/blank; callers decide their
      * own fallback (e.g. {@link #DEFAULT_COUNTRY} where a concrete country is required, or
-     * treating blank as "unknown" for a broad, unfiltered institution search).
+     * treating blank as "unknown" for a broad, unfiltered institution search). A {@code null}
+     * input returns an empty name and country rather than throwing — request-body validation
+     * (see {@code SyncController.InitiateRequest}) is the primary guard against a missing id,
+     * but this parser stays safe on its own regardless of caller diligence.
      */
     static ParsedInstitutionId parseInstitutionId(String institutionId) {
+        if (institutionId == null) return new ParsedInstitutionId("", "");
         int sep = institutionId.lastIndexOf("::");
         String name = sep >= 0 ? institutionId.substring(0, sep) : institutionId;
         String country = sep >= 0 ? institutionId.substring(sep + 2) : "";
