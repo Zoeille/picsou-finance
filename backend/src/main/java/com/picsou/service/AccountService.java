@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
@@ -191,6 +192,27 @@ public class AccountService {
                 .build();
         }
         return holdingRepository.save(holding);
+    }
+
+    /**
+     * Removes holdings of {@code account} whose ticker is not in {@code keepTickers}
+     * — i.e. assets the latest sync no longer reports as <em>held</em> (keyed on the
+     * balances the adapter returned, never on which prices happened to resolve, so a
+     * transient price outage cannot delete a still-held asset). Without this, a sold
+     * or moved-out holding lingers at its last quantity and inflates the account's
+     * live balance ({@link #liveBalanceEur}) and invested basis forever. An empty
+     * {@code keepTickers} clears all holdings (the wallet holds nothing priced/known).
+     *
+     * <p>Takes the already-resolved {@link Account} (the caller has just loaded and
+     * member-scoped it), so no extra ownership lookup is issued on the sync path.
+     */
+    @Transactional
+    public void pruneHoldings(Account account, Set<String> keepTickers) {
+        if (keepTickers.isEmpty()) {
+            holdingRepository.deleteByAccountId(account.getId());
+        } else {
+            holdingRepository.deleteByAccountIdAndTickerNotIn(account.getId(), keepTickers);
+        }
     }
 
     // ─── Package-private helpers used by other services ──────────────────────

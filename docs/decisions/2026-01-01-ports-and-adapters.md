@@ -18,7 +18,7 @@ The 5 port interfaces:
 | `BankConnectorPort` | `EnableBankingBankConnector`, `PowensBankConnector` |
 | `TradeRepublicPort` | `TradeRepublicAdapter` |
 | `CryptoExchangePort` | `BinanceAdapter` |
-| `WalletPort` | `BitcoinWalletAdapter`, `EthereumWalletAdapter`, `SolanaWalletAdapter` |
+| `WalletPort` | `BitcoinWalletAdapter`, `EvmWalletAdapter`, `SolanaWalletAdapter` |
 | `PriceProviderPort` | `CoinGeckoPriceProvider`, `YahooFinancePriceProvider` |
 
 Swapping a provider means implementing the port and swapping the `@Primary` bean.

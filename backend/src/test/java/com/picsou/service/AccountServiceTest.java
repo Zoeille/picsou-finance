@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,6 +54,24 @@ class AccountServiceTest {
             .type(AccountType.COMPTE_TITRES)
             .currency("EUR")
             .build();
+    }
+
+    @Test
+    void pruneHoldings_deletesOnlyTickersNotKept() {
+        accountService.pruneHoldings(ownedAccount(), Set.of("BTC", "ETH"));
+
+        verify(holdingRepository).deleteByAccountIdAndTickerNotIn(1L, Set.of("BTC", "ETH"));
+        verify(holdingRepository, never()).deleteByAccountId(any());
+    }
+
+    @Test
+    void pruneHoldings_emptyKeepSet_clearsAllHoldings() {
+        // No asset survived (empty wallet) -> remove every holding, but never issue
+        // a NOT IN () against an empty set.
+        accountService.pruneHoldings(ownedAccount(), Set.of());
+
+        verify(holdingRepository).deleteByAccountId(1L);
+        verify(holdingRepository, never()).deleteByAccountIdAndTickerNotIn(any(), any());
     }
 
     @Test

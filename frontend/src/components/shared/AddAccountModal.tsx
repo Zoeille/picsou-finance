@@ -485,7 +485,7 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
 
 function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
   const { t } = useTranslation()
-  const [chain, setChain] = useState<ChainType>('ETHEREUM')
+  const [chain, setChain] = useState<ChainType>('EVM')
   const [address, setAddress] = useState('')
   const [label, setLabel] = useState('')
   const [done, setDone] = useState(false)
@@ -529,7 +529,7 @@ function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
         <div className="space-y-2">
           <Label>{t('sync.wallets.chain')}</Label>
           <div className="flex gap-2">
-            {(['BITCOIN', 'ETHEREUM', 'SOLANA'] as ChainType[]).map((c) => (
+            {(['BITCOIN', 'EVM', 'SOLANA'] as ChainType[]).map((c) => (
               <Button
                 key={c}
                 type="button"
@@ -541,6 +541,9 @@ function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
               </Button>
             ))}
           </div>
+          {chain === 'EVM' && (
+            <p className="text-xs text-muted-foreground">{t('sync.wallets.evmHint')}</p>
+          )}
         </div>
 
         <div className="space-y-2">

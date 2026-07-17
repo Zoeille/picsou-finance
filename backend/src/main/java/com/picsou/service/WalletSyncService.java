@@ -20,6 +20,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,14 +94,23 @@ public class WalletSyncService {
                 .collect(Collectors.toSet());
             Map<String, BigDecimal> prices = priceService.refreshPrices(tickers);
 
+            // Resolve each balance's ticker + price once, then reuse it for both the
+            // EUR total and the holding upserts (one pass, one price lookup).
+            record Priced(String ticker, BigDecimal amount, BigDecimal priceEur) {}
+            List<Priced> priced = balances.stream()
+                .map(b -> {
+                    String ticker = b.symbol().toUpperCase();
+                    return new Priced(ticker, b.amount(), prices.get(ticker));
+                })
+                .toList();
+
             BigDecimal balanceEur = BigDecimal.ZERO;
-            for (WalletBalance b : balances) {
-                BigDecimal priceEur = prices.get(b.symbol().toUpperCase());
-                if (priceEur != null) {
+            for (Priced p : priced) {
+                if (p.priceEur() != null) {
                     balanceEur = balanceEur.add(
-                        b.amount().multiply(priceEur).setScale(2, RoundingMode.HALF_UP));
-                } else {
-                    log.warn("No EUR price for {} -- skipping in wallet total", b.symbol());
+                        p.amount().multiply(p.priceEur()).setScale(2, RoundingMode.HALF_UP));
+                } else if (p.amount().signum() > 0) {
+                    log.warn("No EUR price for {} -- skipping in wallet total", p.ticker());
                 }
             }
 
@@ -114,14 +124,24 @@ public class WalletSyncService {
 
             Account account = resolveAccount(externalId, name, balanceEur, nativeSymbol, memberId);
 
-            for (WalletBalance b : balances) {
-                BigDecimal priceEur = prices.get(b.symbol().toUpperCase());
-                if (priceEur != null && b.amount().signum() > 0) {
+            // Keep every asset actually held on-chain (positive balance), regardless
+            // of whether its price resolved this cycle — a transient CoinGecko outage
+            // must never delete a still-held holding (and its cost basis). Only priced
+            // assets get their quantity/price refreshed; unpriced-but-held ones keep
+            // their last row untouched.
+            Set<String> keptTickers = new HashSet<>();
+            for (Priced p : priced) {
+                if (p.amount().signum() <= 0) continue;
+                keptTickers.add(p.ticker());
+                if (p.priceEur() != null) {
                     accountService.upsertHolding(account.getId(), memberId,
-                        b.symbol().toUpperCase(), b.symbol().toUpperCase(),
-                        b.amount(), priceEur);
+                        p.ticker(), p.ticker(), p.amount(), p.priceEur());
                 }
             }
+            // Drop holdings for assets no longer held (sold, moved to an exchange, or
+            // a chain that dropped to zero) so stale rows don't keep inflating the
+            // account's live balance. Keyed on held balances, never on prices.
+            accountService.pruneHoldings(account, keptTickers);
 
             accountService.upsertSnapshot(account, balanceEur, LocalDate.now());
 

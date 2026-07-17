@@ -1,10 +1,10 @@
 # Feature: Crypto Tracking
 
-> Last updated: 2026-07-16
+> Last updated: 2026-07-17
 
 ## Context
 
-Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (Binance) and on-chain wallets (Bitcoin, Ethereum, Solana). Exchange credentials are encrypted at rest with AES-256-GCM. On-chain wallets query public blockchain RPCs. All crypto balances are converted to EUR via the `PriceService`.
+Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (Binance) and on-chain wallets (Bitcoin, EVM, Solana). The `EVM` chain is a **multichain fan-out**: a single `0x` address is tracked across every enabled EVM network (Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche C-Chain) — see the [EVM multichain wallets ADR](../decisions/2026-07-17-evm-multichain-wallets.md). Exchange credentials are encrypted at rest with AES-256-GCM. On-chain wallets query public blockchain RPCs (no API key). All crypto balances are converted to EUR via the `PriceService`.
 
 ## How it works
 
@@ -12,7 +12,7 @@ Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (B
 
 1. **CryptoExchangeSyncService** -- Manages exchange connections. Stores encrypted API key + encrypted secret in `CryptoExchangeSession`. Both fields are encrypted with AES-256-GCM. Fetches holdings, converts to EUR via `PriceService.refreshPrices()`, and upserts a single account per exchange with per-coin holdings in `AccountHolding`.
 
-2. **WalletSyncService** -- Manages on-chain wallet addresses. Stores chain type + address in `WalletAddress`. Fetches native balance via `WalletPort`, converts to EUR, and upserts an account. Does NOT store a ticker on the account to prevent double price conversion (balance is already in EUR).
+2. **WalletSyncService** -- Manages on-chain wallet addresses. Stores chain type + address in `WalletAddress`. Fetches balances via `WalletPort` (a list — native asset plus any tokens), prices each ticker, sums to EUR, and upserts one account with a per-ticker `AccountHolding`. Does NOT store a ticker on the account itself to prevent double price conversion (the account balance is already in EUR).
 
 3. **PriceService** -- Provides EUR prices for crypto tickers via CoinGecko. See [price-service.md](./price-service.md).
 
@@ -34,9 +34,23 @@ Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (B
 
 The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses are found (BIP44 standard). `BitcoinKeyUtils` provides BIP32 key derivation, Base58Check decoding, and Bech32 encoding.
 
-### Ethereum wallet adapter
+### EVM wallet adapter (multichain fan-out)
 
-`EthereumWalletAdapter` calls `eth_getBalance` on a public Ethereum RPC (`ethereum-rpc.publicnode.com`). Returns balance converted from wei to ETH (18 decimals).
+`EvmWalletAdapter` handles the `EVM` chain — one `0x` address, every enabled EVM network. It iterates a registry of networks (`EvmNetwork{ displayName, nativeSymbol, rpcUrl, tokens }`), all keyless PublicNode RPCs:
+
+| Network | Native | RPC |
+|---|---|---|
+| Ethereum | ETH | `ethereum-rpc.publicnode.com` |
+| BNB Chain | BNB | `bsc-rpc.publicnode.com` |
+| Polygon | POL | `polygon-bor-rpc.publicnode.com` |
+| Arbitrum | ETH | `arbitrum-one-rpc.publicnode.com` |
+| Optimism | ETH | `optimism-rpc.publicnode.com` |
+| Base | ETH | `base-rpc.publicnode.com` |
+| Avalanche C-Chain | AVAX | `avalanche-c-chain-rpc.publicnode.com` |
+
+For each network it calls `eth_getBalance` for the native coin (wei→coin, 18 decimals on all these chains) and one `eth_call` `balanceOf(address)` per curated ERC-20/BEP-20 token. `eth_getBalance`/`eth_call` are byte-identical across EVM chains — only the RPC URL, native symbol and token list differ. The networks are queried **concurrently** (a reactive `Flux` fan-out, not a sequential loop), each call bounded by a 10s timeout and a small backoff retry, so total latency is roughly the slowest chain rather than the sum of ~20 calls. The raw transport is a thin `EvmRpc` seam (`(rpcUrl, request) → Mono<JsonNode>`); the adapter layers timeout, retry, error-classification and envelope validation around it, which also lets tests stub it by request content.
+
+Balances are **aggregated by symbol** before returning: ETH held on Ethereum + Arbitrum + Optimism + Base rolls into one `ETH` entry, and a stablecoin held on two chains sums into one — which also keeps `WalletSyncService`'s per-ticker holding upsert (unique on `account_id, ticker`) collision-free. Token coverage is a **curated** contract list per network (only tokens `PriceService` can price and whose contract is verified), mirroring Solana's `KNOWN_MINTS` — full auto-discovery would need an API-key explorer (see the ADR).
 
 ### Solana wallet adapter
 
@@ -44,7 +58,7 @@ The adapter scans each chain until `GAP_LIMIT` (20) consecutive unused addresses
 
 ### JSON-RPC error handling
 
-Both on-chain adapters validate the JSON-RPC envelope through `JsonRpcResponse.requireResult(response, context)` (`adapter/util/`) before reading a balance. A present `error` field, a missing `result`, or an empty response throws `WalletRpcException`, which `WalletSyncService` surfaces as a `422` sync failure. This is deliberate: reading `result` with `path(...)` returns a non-null `MissingNode`, so an error payload would otherwise default to a **silent 0 balance** — indistinguishable from a genuinely empty wallet. A real `0x0` / `value:0` result still returns 0. On Solana, an error on the SPL-token call fails the whole sync rather than silently dropping stablecoin holdings.
+The on-chain adapters (EVM, Solana) validate the JSON-RPC envelope through `JsonRpcResponse.requireResult(response, context)` (`adapter/util/`) before reading a balance. A present `error` field, a missing `result`, or an empty response throws `WalletRpcException`, which `WalletSyncService` surfaces as a `422` sync failure. This is deliberate: reading `result` with `path(...)` returns a non-null `MissingNode`, so an error payload would otherwise default to a **silent 0 balance** — indistinguishable from a genuinely empty wallet. A real `0x0` / `value:0` result still returns 0. On Solana, an error on the SPL-token call fails the whole sync rather than silently dropping stablecoin holdings.
 
 `WalletSyncService.sync()` splits its catch: **expected** failures (`WalletRpcException`, `SyncException`) log at `WARN` and become the friendly `422`; **unexpected** ones (NPE, `ClassCastException`, …) log at `ERROR` with the full stacktrace so a real bug can't hide as a transient sync. `WalletRpcException` has no dedicated `@ExceptionHandler` — it stays wrapped in `SyncException`, which keeps the `422` mapping. Two per-item cases inside the Solana adapter are **not** fatal, to avoid one bad field hiding the rest of the wallet: a non-array token `value` and a malformed `uiAmountString` are logged (WARN / ERROR respectively) and that one entry is skipped, while SOL and every parseable token still come through. `resyncAll()` returns a `ResyncSummary(total, succeeded, failed)` so its callers (the daily scheduler and the `trigger_crypto_wallet_sync` MCP tool) can report per-wallet outcomes instead of a blanket "done".
 
@@ -55,7 +69,7 @@ Both on-chain adapters validate the JSON-RPC envelope through `JsonRpcResponse.r
 - `backend/src/main/java/com/picsou/config/CryptoEncryption.java` -- AES-256-GCM encrypt/decrypt for API secrets
 - `backend/src/main/java/com/picsou/adapter/BinanceAdapter.java` -- Binance REST API with HMAC-SHA256
 - `backend/src/main/java/com/picsou/adapter/BitcoinWalletAdapter.java` -- Blockstream Esplora, BIP32 key derivation
-- `backend/src/main/java/com/picsou/adapter/EthereumWalletAdapter.java` -- PublicNode ETH RPC
+- `backend/src/main/java/com/picsou/adapter/EvmWalletAdapter.java` -- EVM multichain fan-out (native + curated ERC-20 across all enabled networks), keyless PublicNode RPCs
 - `backend/src/main/java/com/picsou/adapter/SolanaWalletAdapter.java` -- Solana mainnet RPC
 - `backend/src/main/java/com/picsou/adapter/util/JsonRpcResponse.java` -- JSON-RPC envelope validation shared by the wallet adapters
 - `backend/src/main/java/com/picsou/exception/WalletRpcException.java` -- thrown on a JSON-RPC error/missing result
@@ -114,6 +128,8 @@ Upsert Account (type=CRYPTO, no ticker)
 | No ticker on wallet accounts | Balance is already converted to EUR at sync time; storing a ticker would cause `PriceService.toEur()` to multiply a second time | Store ticker and handle conversion in dashboard (risk of double conversion) |
 | BIP32 key derivation in Java | Full control over derivation; no native library dependency | Use a separate Bitcoin library (unnecessary complexity) |
 | Blockstream Esplora (public) | Free, no API key needed, reliable | Run own Electrum server (too much for self-hosted) |
+| EVM multichain fan-out over keyless RPC | One `0x` address = many chains; `eth_getBalance`/`eth_call` are identical across EVM chains, so one adapter covers all with no API key | Per-chain wallet entries (re-typed address); Etherscan/BscScan API-key explorer (breaks keyless convention) — see ADR |
+| Curated ERC-20 contract list per chain | Only tokens `PriceService` can price and whose contract is verified; keyless `balanceOf` needs the contract up front | Auto-discover every token via an indexer/explorer (needs API key + rate limits) |
 | GAP_LIMIT=20 | BIP44 standard; covers the vast majority of HD wallets | Custom gap limit (not configurable, hardcoded) |
 
 ## Gotchas / Pitfalls
@@ -126,6 +142,13 @@ Upsert Account (type=CRYPTO, no ticker)
 - **Wallet RPC errors must not read as 0**: When parsing a blockchain JSON-RPC response, always go through `JsonRpcResponse.requireResult(...)` — never `response.path("result")` directly. `path(...)` returns a `MissingNode` for an error payload, which silently becomes a 0 balance (this caused the July 2026 Ethereum outage). `requireResult` uses `get(...)` to reject a missing/error result while still allowing a legitimate `0x0` / `value:0`.
 - **Don't re-throw `WalletRpcException` raw from `sync()`**: it has no `@ExceptionHandler`, so a raw re-throw becomes a `500`, not the friendly `422`. Keep it wrapped in `SyncException`. The split catch is only about **log level** — unexpected errors log at ERROR with a stacktrace; the user-facing status/message is unchanged.
 - **Per-token Solana failures are logged, not fatal**: a malformed `uiAmountString` or a non-array token `value` is logged and skipped so the SOL balance and other tokens survive. Only an envelope-level RPC `error`/missing-`result` (via `requireResult`) fails the whole sync. Loud (logged) ≠ fatal (thrown) — pick per blast radius.
+- **EVM fan-out failure isolation is asymmetric**: a network whose native `eth_getBalance` probe fails **fails the whole sync** — it propagates as `WalletRpcException` → `422`, leaving the wallet un-synced with its last balance. Silently dropping a chain would understate net worth while still marking the wallet synced, the same "never read a failed RPC as 0" rule as the July 2026 outage. A single `balanceOf` error, by contrast, skips just that one token (a token call only runs *after* the network's native probe succeeded, so it's a per-asset problem — a reverting/non-standard contract — not a down chain), consistent with Solana's per-token handling. Loud (logged) ≠ fatal (thrown), chosen per blast radius.
+- **Transport failures must classify as `WalletRpcException`, not bugs**: the shared `rpc(...)` helper wraps any non-`WalletRpcException` (connection reset, HTTP 5xx, timeout, retries exhausted) into a `WalletRpcException` before it leaves the reactive chain. Otherwise a raw `WebClientException`/`TimeoutException` would (a) hit `WalletSyncService`'s `catch (Exception)` **ERROR-as-genuine-bug** branch instead of the friendly WARN/422, and (b) escape the per-token `onErrorResume(WalletRpcException)` and abort the whole multi-chain sync. An empty body is turned into a failure via `switchIfEmpty` so it isn't read as a 0 balance.
+- **EVM balances aggregate by symbol**: the same symbol across chains (ETH on L2s, USDC on several chains) is summed into one `WalletBalance`. This is intentional (net-worth total) **and** required — the caller upserts holdings unique on `(account_id, ticker)`, so un-aggregated duplicates would clobber each other.
+- **EVM display ticker is a seeded native**: `fetchBalances` seeds the primary network's native (ETH) at zero so it always leads the returned list — `WalletSyncService` reads `balances.get(0)` as the account's display ticker, and a token-only or empty wallet must still read as the native, not whichever token was found first. The zero seed is dropped by the caller's positive-amount guard, so it never becomes a holding.
+- **Wallet sync prunes stale holdings — keyed on *held*, never on *priced***: after upserting current balances, `WalletSyncService` calls `AccountService.pruneHoldings(account, keptTickers)` to delete `AccountHolding` rows for assets no longer held. `keptTickers` is built from the adapter's **positive on-chain balances**, deliberately *not* from which prices resolved this cycle. This distinction is load-bearing: `CoinGeckoPriceProvider.getPricesEur` swallows errors and returns an empty map on an outage, so keying prune on priced tickers would empty the set during a transient CoinGecko blip and `deleteByAccountId` would wipe **every** holding (and its `averageBuyIn` cost basis). A held-but-unpriced asset keeps its last row untouched. An empty `keptTickers` (genuinely empty wallet) clears all holdings. Without any pruning, a sold/moved-out token lingers and inflates `liveBalanceEur` forever — a real hazard now that the multi-token EVM fan-out makes disappearing tickers routine.
+- **BSC stablecoins are 18-decimal**: USDT/USDC on BNB Chain use 18 decimals, unlike the 6-decimal versions on Ethereum/Polygon/Arbitrum/Optimism/Base. Decimals live per-token in the `EvmNetwork` registry; get them right or the amount is off by orders of magnitude.
+- **New EVM token/network = two edits**: add the `Erc20Token`/`EvmNetwork` row in `EvmWalletAdapter` **and** ensure its symbol maps to a CoinGecko id in `CoinGeckoPriceProvider.TICKER_TO_ID`, or the balance is fetched but dropped from the EUR total.
 
 ## Tests
 
@@ -134,12 +157,13 @@ Upsert Account (type=CRYPTO, no ticker)
 - `CryptoExchangeSyncServiceTest` -- unit tests for exchange management
 - `WalletSyncServiceTest` -- unit tests for wallet sync
 - `JsonRpcResponseTest` -- envelope validation: valid/zero/empty-array results returned; null/error/missing/explicit-null throw
-- `WalletSyncServiceTest` -- RPC error wrapped as `SyncException` (wallet not marked synced), empty balances throw, `resyncAll` summary reports failed chains
-- `EthereumWalletAdapterTest` -- valid/zero/error/missing-result parsing, null body, malformed hex
+- `WalletSyncServiceTest` -- RPC error wrapped as `SyncException` (wallet not marked synced), empty balances throw, `resyncAll` summary reports failed chains, holdings pruned to the currently-held tickers
+- `EvmWalletAdapterTest` -- concurrent multi-network fan-out via a content-routed `EvmRpc` stub: aggregation by symbol (native across chains, token across chains), token `balanceOf` at correct decimals, native probe failure fails the whole sync for both JSON-RPC-error and **transport** errors (never read as 0), transport error on a token skipped (not fatal), malformed-hex / missing-`result` / null-body all throw, empty-`0x` call as zero, seeded native leads for a token-only/empty wallet, malformed address rejected before any RPC call
 - `SolanaWalletAdapterTest` -- SOL + SPL parsing, unknown-mint drop, RPC-error fails sync, non-array/malformed token skipped (non-fatal)
 
 ## Links
 
+- Related ADR: [EVM multichain wallets](../decisions/2026-07-17-evm-multichain-wallets.md)
 - Related ADR: [AES-256-GCM for crypto secrets](../decisions/2026-03-01-aes-gcm-crypto-secrets.md)
 - Related ADR: [Ports and adapters](../decisions/2026-01-01-ports-and-adapters.md)
 - Related feature: [Encryption at rest](./encryption-at-rest.md)

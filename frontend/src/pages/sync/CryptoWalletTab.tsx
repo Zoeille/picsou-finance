@@ -22,7 +22,7 @@ import { extractErrorMessage } from '@/lib/errors'
 
 const CHAIN_COLORS: Record<ChainType, string> = {
   BITCOIN: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
-  ETHEREUM: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  EVM: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
   SOLANA: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
 }
 
@@ -84,7 +84,7 @@ export function CryptoWalletTab() {
   const removeMutation = useRemoveWallet()
 
   const [showAddForm, setShowAddForm] = useState(false)
-  const [chain, setChain] = useState<ChainType>('ETHEREUM')
+  const [chain, setChain] = useState<ChainType>('EVM')
   const [address, setAddress] = useState('')
   const [label, setLabel] = useState('')
   const [removingId, setRemovingId] = useState<number | null>(null)
@@ -157,7 +157,7 @@ export function CryptoWalletTab() {
               <div className="space-y-2">
                 <Label>{t('sync.wallets.chain')}</Label>
                 <div className="flex gap-2">
-                  {(['BITCOIN', 'ETHEREUM', 'SOLANA'] as ChainType[]).map(c => (
+                  {(['BITCOIN', 'EVM', 'SOLANA'] as ChainType[]).map(c => (
                     <Button
                       key={c}
                       type="button"
@@ -169,6 +169,9 @@ export function CryptoWalletTab() {
                     </Button>
                   ))}
                 </div>
+                {chain === 'EVM' && (
+                  <p className="text-xs text-muted-foreground">{t('sync.wallets.evmHint')}</p>
+                )}
               </div>
 
               <div className="space-y-2">

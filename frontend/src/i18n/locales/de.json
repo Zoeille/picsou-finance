@@ -393,7 +393,7 @@
     "desc": {
       "banks": "Verbinde deine Banken per OAuth",
       "exchanges": "Binance, Kraken...",
-      "wallets": "Bitcoin, Ethereum, Solana...",
+      "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen"
@@ -470,7 +470,8 @@
       "remove": "Entfernen",
       "removeConfirm": "Dieses Wallet entfernen?",
       "noWallets": "Keine Wallets im Blick",
-      "lastSync": "Letzte Synchronisierung"
+      "lastSync": "Letzte Synchronisierung",
+      "evmHint": "Eine Adresse, alle EVM-Chains — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base und Avalanche."
     },
     "finary": {
       "title": "Finary",

@@ -221,7 +221,7 @@ export interface SecurityInsight {
 }
 
 export type ExchangeType = 'BINANCE' | 'KRAKEN'
-export type ChainType = 'SOLANA' | 'ETHEREUM' | 'BITCOIN'
+export type ChainType = 'SOLANA' | 'EVM' | 'BITCOIN'
 export type FinaryMappingAction = 'SKIP' | 'MAP_EXISTING' | 'CREATE_NEW'
 
 export interface ExchangeStatus {

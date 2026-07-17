@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,11 +56,11 @@ class WalletSyncServiceTest {
 
     @Test
     void sync_wrapsRpcErrorInSyncException_andDoesNotMarkWalletSynced() {
-        WalletAddress wallet = wallet(1L, Chain.ETHEREUM, "0xabc");
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("ETHEREUM");
+        when(adapter.chain()).thenReturn("EVM");
         when(adapter.fetchBalances(any())).thenThrow(new WalletRpcException("Ethereum eth_getBalance: RPC error"));
 
         WalletSyncService service = serviceWith(adapter);
@@ -102,6 +103,10 @@ class WalletSyncServiceTest {
         // One holding per priced, positive balance.
         verify(accountService, times(2)).upsertHolding(eq(100L), eq(MEMBER_ID), any(), any(), any(), any());
 
+        // Stale holdings pruned to exactly the tickers still held -- a token that
+        // later disappears from the sync must not linger and inflate net worth.
+        verify(accountService).pruneHoldings(eq(savedAccount), eq(Set.of("SOL", "USDC")));
+
         // Snapshot balance is the summed EUR value -- guards the conversion math.
         ArgumentCaptor<BigDecimal> balanceEur = ArgumentCaptor.forClass(BigDecimal.class);
         verify(accountService).upsertSnapshot(eq(savedAccount), balanceEur.capture(), any());
@@ -113,12 +118,43 @@ class WalletSyncServiceTest {
     }
 
     @Test
-    void sync_throwsSyncException_whenAdapterReturnsNoBalances() {
-        WalletAddress wallet = wallet(1L, Chain.ETHEREUM, "0xabc");
+    void sync_keepsHeldAssets_whenPricesUnavailable() {
+        // CoinGecko outage: refreshPrices returns an empty map. Held assets must
+        // still be kept (pruneHoldings is keyed on held balances, not on which
+        // prices resolved), so a transient price failure can't wipe holdings and
+        // their cost basis.
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("ETHEREUM");
+        when(adapter.chain()).thenReturn("EVM");
+        when(adapter.fetchBalances(any())).thenReturn(List.of(
+            new WalletBalance("ETH", BigDecimal.ONE),
+            new WalletBalance("USDC", new BigDecimal("50"))));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of()); // price outage
+
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account savedAccount = mock(Account.class);
+        when(accountRepository.save(any())).thenReturn(savedAccount);
+
+        WalletSyncService service = serviceWith(adapter);
+
+        service.sync(1L, MEMBER_ID);
+
+        // No prices -> nothing upserted, but the held tickers are kept: this must
+        // NOT be an empty-set prune (which would delete every holding row).
+        verify(accountService, never()).upsertHolding(any(), any(), any(), any(), any(), any());
+        verify(accountService).pruneHoldings(eq(savedAccount), eq(Set.of("ETH", "USDC")));
+    }
+
+    @Test
+    void sync_throwsSyncException_whenAdapterReturnsNoBalances() {
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn("EVM");
         when(adapter.fetchBalances(any())).thenReturn(List.of());
 
         WalletSyncService service = serviceWith(adapter);
@@ -129,15 +165,15 @@ class WalletSyncServiceTest {
 
     @Test
     void resyncAll_reportsFailedChain_andKeepsSyncingOthers() {
-        WalletAddress eth = wallet(1L, Chain.ETHEREUM, "0xabc");
+        WalletAddress eth = wallet(1L, Chain.EVM, "0xabc");
         WalletAddress sol = wallet(2L, Chain.SOLANA, "SoLaNa");
         when(walletRepository.findAllByMemberId(MEMBER_ID)).thenReturn(List.of(eth, sol));
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(eth));
         when(walletRepository.findByIdAndMemberId(2L, MEMBER_ID)).thenReturn(Optional.of(sol));
 
-        // ETH adapter succeeds; SOL adapter errors.
+        // EVM adapter succeeds; SOL adapter errors.
         WalletPort ethAdapter = mock(WalletPort.class);
-        when(ethAdapter.chain()).thenReturn("ETHEREUM");
+        when(ethAdapter.chain()).thenReturn("EVM");
         when(ethAdapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
         WalletPort solAdapter = mock(WalletPort.class);
         when(solAdapter.chain()).thenReturn("SOLANA");

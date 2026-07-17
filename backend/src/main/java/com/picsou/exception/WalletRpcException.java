@@ -19,4 +19,13 @@ public class WalletRpcException extends RuntimeException {
     public WalletRpcException(String message) {
         super(message);
     }
+
+    /**
+     * Wraps a transport-level failure (connection refused, HTTP 5xx, timeout,
+     * retries exhausted) so callers treat it as an expected sync failure — a
+     * {@code WARN} + {@code 422} — rather than an unexpected bug.
+     */
+    public WalletRpcException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

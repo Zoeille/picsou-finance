@@ -48,7 +48,7 @@ com.picsou/
 │   ├── OpenFigiIsinConverter (ISIN → Yahoo ticker)
 │   ├── TradeRepublicAdapter (broker)
 │   ├── BinanceAdapter (crypto exchange)
-│   ├── BitcoinWalletAdapter, EthereumWalletAdapter, SolanaWalletAdapter (on-chain)
+│   ├── BitcoinWalletAdapter, EvmWalletAdapter, SolanaWalletAdapter (on-chain)
 │   └── util/BitcoinKeyUtils (BIP32 key derivation, Base58Check, Bech32)
 ├── finary/         Finary import + API-sync subsystem (client, DTOs, SyncSessionData,
 │                   FinaryPersistenceHelper, FinaryApiSyncService)
@@ -124,7 +124,7 @@ Binance API credentials encrypted at rest with AES-256-GCM (`CryptoEncryption`).
 Client → WalletController → WalletSyncService → WalletPort → blockchain RPCs
 ```
 
-Three adapters: Bitcoin (mempool.space/Esplora, BIP32 xpub/zpub/descriptors), Ethereum (Cloudflare RPC), Solana (RPC).
+Three adapters: Bitcoin (Blockstream Esplora, BIP32 xpub/zpub/descriptors), EVM (keyless PublicNode RPCs — one `0x` address fanned out across Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche; native + curated ERC-20 tokens), Solana (RPC + curated SPL tokens). See the [EVM multichain wallets ADR](./decisions/2026-07-17-evm-multichain-wallets.md).
 
 ### 6. Dashboard
 
@@ -208,9 +208,9 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 | Binance | Crypto exchange balances | Via CryptoExchangePort |
 | CoinGecko | Crypto prices (free) | No config |
 | Yahoo Finance | Stock/ETF prices (free) | No config |
-| Cloudflare ETH RPC | Ethereum wallet balances | No config |
+| PublicNode EVM RPCs | EVM wallet balances (Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche) — native + curated ERC-20 | No config (keyless) |
 | Solana RPC | Solana wallet balances | No config |
-| mempool.space (Blockstream) | Bitcoin wallet balances | No config |
+| Blockstream Esplora | Bitcoin wallet balances | No config |
 | Finary | Import xlsx or API sync (optional) | `FINARY_*` |
 
 ## Key constraints

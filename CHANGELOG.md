@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **BNB Chain support and EVM multichain wallets.** On-chain wallets gained an
+  `EVM` chain that tracks a single `0x` address across every enabled EVM network
+  — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche —
+  reporting each native coin (ETH, BNB, POL, AVAX…) plus curated ERC-20/BEP-20
+  stablecoins, all over keyless public RPCs (no API key). Balances aggregate by
+  symbol across chains. Existing Ethereum wallets are migrated to `EVM`
+  automatically, keeping their history. See
+  [ADR](docs/decisions/2026-07-17-evm-multichain-wallets.md).
 - **CSV transaction import for investment accounts (PEA/CTO)** and **realized
   P&L on closed positions**, computed on the fly with the average-cost method
   (#38, #43).
