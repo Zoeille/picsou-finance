@@ -64,6 +64,8 @@ class SyncToolsTest {
     @Test
     void triggerCryptoWalletSync_resyncsWalletsForCurrentMember() {
         when(userContext.currentMemberId()).thenReturn(MID);
+        when(walletSyncService.resyncAll(MID))
+            .thenReturn(new WalletSyncService.ResyncSummary(1, 1, java.util.List.of()));
 
         tools.triggerCryptoWalletSync();
 

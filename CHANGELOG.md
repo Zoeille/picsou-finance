@@ -47,6 +47,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   genuinely empty wallet still reads 0. On Solana this covers both the native
   SOL and the SPL-token call, and sync failures now preserve their root cause in
   the logs.
+- **Wallet sync distinguishes bugs from routine RPC failures.** `WalletSyncService`
+  now logs unexpected errors (NPE, etc.) at `ERROR` with a full stacktrace instead
+  of a one-line `WARN`, so a real bug can't hide as a transient sync; the friendly
+  `422` shown to the user is unchanged. A malformed SPL token balance or an
+  unexpected token-list shape is logged and skipped (SOL and other tokens still
+  sync) rather than silently dropped, and a malformed Ethereum hex balance now
+  fails the sync with a clear message instead of an opaque error. Batch resync
+  (`resyncAll`) reports per-wallet outcomes, so the scheduler logs which wallets
+  failed and the MCP wallet-sync tool answers with the real success count.
 
 ## [1.0.13] — 2026-07-07
 

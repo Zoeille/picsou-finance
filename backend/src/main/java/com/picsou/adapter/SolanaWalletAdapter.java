@@ -112,6 +112,7 @@ public class SolanaWalletAdapter implements WalletPort {
             .requireResult(response, "Solana getTokenAccountsByOwner")
             .path("value");
         if (!accounts.isArray()) {
+            log.warn("Solana getTokenAccountsByOwner returned non-array 'value': {}", accounts);
             return List.of();
         }
 
@@ -127,6 +128,11 @@ public class SolanaWalletAdapter implements WalletPort {
             try {
                 amount = new BigDecimal(uiAmount);
             } catch (NumberFormatException ex) {
+                // Corrupt balance from the RPC: skip this one token but log
+                // loudly rather than dropping it silently. Failing the whole
+                // sync over one bad field would also hide the SOL balance and
+                // every other token.
+                log.error("Failed to parse SPL token balance for mint {}: '{}'", mint, uiAmount, ex);
                 continue;
             }
             if (amount.signum() <= 0) continue;

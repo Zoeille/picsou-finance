@@ -99,7 +99,11 @@ public class SchedulerService {
             }
 
             try {
-                walletSyncService.resyncAll(memberId);
+                WalletSyncService.ResyncSummary walletSummary = walletSyncService.resyncAll(memberId);
+                if (!walletSummary.failed().isEmpty()) {
+                    log.warn("Daily wallet sync for member {}: {}/{} succeeded, failed chains: {}",
+                        memberId, walletSummary.succeeded(), walletSummary.total(), walletSummary.failed());
+                }
             } catch (Exception ex) {
                 log.error("Daily wallet sync failed for member {}", memberId, ex);
             }

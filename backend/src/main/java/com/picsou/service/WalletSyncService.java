@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.picsou.dto.AccountResponse;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.exception.SyncException;
+import com.picsou.exception.WalletRpcException;
 import com.picsou.model.*;
 import com.picsou.port.WalletPort;
 import com.picsou.port.WalletPort.WalletBalance;
@@ -18,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -123,8 +125,15 @@ public class WalletSyncService {
 
             return accountService.toResponse(account);
 
-        } catch (Exception ex) {
+        } catch (WalletRpcException | SyncException ex) {
+            // Expected external failure (bad RPC response, no balances): a routine
+            // sync problem, not a bug. Keep the friendly 422 the user sees.
             log.warn("Wallet sync failed for {} {}: {}", wallet.getChain(), wallet.getAddress(), ex.getMessage());
+            throw new SyncException("Could not sync your " + wallet.getChain() + " wallet. Please try again later.", ex);
+        } catch (Exception ex) {
+            // Anything else (NPE, ClassCastException...) is a genuine bug -- log it
+            // at ERROR with the full stacktrace so it doesn't hide as a transient sync.
+            log.error("Unexpected error during wallet sync for {} {}", wallet.getChain(), wallet.getAddress(), ex);
             throw new SyncException("Could not sync your " + wallet.getChain() + " wallet. Please try again later.", ex);
         }
     }
@@ -140,15 +149,20 @@ public class WalletSyncService {
         log.info("Removed wallet {} and associated account", walletId);
     }
 
-    public void resyncAll(Long memberId) {
+    public ResyncSummary resyncAll(Long memberId) {
         List<WalletAddress> wallets = walletRepository.findAllByMemberId(memberId);
+        int succeeded = 0;
+        List<Chain> failed = new ArrayList<>();
         for (WalletAddress wallet : wallets) {
             try {
                 sync(wallet.getId(), memberId);
+                succeeded++;
             } catch (Exception ex) {
-                log.warn("Wallet resync failed for {} {}: {}", wallet.getChain(), wallet.getAddress(), ex.getMessage());
+                log.error("Wallet resync failed for {} {}", wallet.getChain(), wallet.getAddress(), ex);
+                failed.add(wallet.getChain());
             }
         }
+        return new ResyncSummary(wallets.size(), succeeded, failed);
     }
 
     @Transactional(readOnly = true)
@@ -197,4 +211,7 @@ public class WalletSyncService {
 
     public record WalletStatusResponse(
         Long id, Chain chain, String address, String label, java.time.Instant lastSyncedAt) {}
+
+    /** Outcome of a batch resync: how many wallets were tried, how many synced, and which chains failed. */
+    public record ResyncSummary(int total, int succeeded, List<Chain> failed) {}
 }

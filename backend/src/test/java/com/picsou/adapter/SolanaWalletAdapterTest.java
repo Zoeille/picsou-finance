@@ -44,6 +44,25 @@ class SolanaWalletAdapterTest {
     private static final String RPC_ERROR = """
         {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"rate limited"}}""";
 
+    // getBalance result present but without a 'value' field.
+    private static final String SOL_NO_VALUE = """
+        {"jsonrpc":"2.0","id":1,"result":{}}""";
+
+    // 'value' is an object, not the expected array (malformed structure).
+    private static final String TOKENS_NON_ARRAY = """
+        {"jsonrpc":"2.0","id":2,"result":{"value":{"unexpected":"shape"}}}""";
+
+    // One good USDC account plus a known-mint (USDT) account with a garbage balance.
+    private static final String TOKENS_USDC_AND_MALFORMED = """
+        {"jsonrpc":"2.0","id":2,"result":{"value":[
+          {"account":{"data":{"parsed":{"info":{
+            "mint":"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "tokenAmount":{"uiAmountString":"50"}}}}}},
+          {"account":{"data":{"parsed":{"info":{
+            "mint":"Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+            "tokenAmount":{"uiAmountString":"not-a-number"}}}}}}
+        ]}}""";
+
     /**
      * {@code fetchBalances} issues two sequential POSTs to the same URL
      * (getBalance, then getTokenAccountsByOwner), so responses are returned in
@@ -108,5 +127,49 @@ class SolanaWalletAdapterTest {
         assertThatThrownBy(() -> adapter.fetchBalances(ADDRESS))
             .isInstanceOf(WalletRpcException.class)
             .hasMessageContaining("rate limited");
+    }
+
+    @Test
+    void fetchBalances_returnsSolOnly_whenTokenValueNotArray() {
+        // Malformed (non-array) token 'value' is logged and treated as no tokens,
+        // but the SOL balance still comes through -- non-fatal.
+        var adapter = adapterReturning(SOL_1, TOKENS_NON_ARRAY);
+
+        List<WalletBalance> balances = adapter.fetchBalances(ADDRESS);
+
+        assertThat(balances).singleElement().satisfies(b -> {
+            assertThat(b.symbol()).isEqualTo("SOL");
+            assertThat(b.amount()).isEqualByComparingTo(BigDecimal.ONE);
+        });
+    }
+
+    @Test
+    void fetchBalances_skipsMalformedToken_keepsSolAndGoodTokens() {
+        // A garbage uiAmountString on one known-mint token is skipped (logged),
+        // not fatal: SOL and the other valid token still come back.
+        var adapter = adapterReturning(SOL_1, TOKENS_USDC_AND_MALFORMED);
+
+        List<WalletBalance> balances = adapter.fetchBalances(ADDRESS);
+
+        assertThat(balances).hasSize(2);
+        assertThat(balances).anySatisfy(b -> assertThat(b.symbol()).isEqualTo("SOL"));
+        assertThat(balances).anySatisfy(b -> {
+            assertThat(b.symbol()).isEqualTo("USDC");
+            assertThat(b.amount()).isEqualByComparingTo(new BigDecimal("50"));
+        });
+        assertThat(balances).noneSatisfy(b -> assertThat(b.symbol()).isEqualTo("USDT"));
+    }
+
+    @Test
+    void fetchBalances_returnsZeroSol_whenResultHasNoValueField() {
+        // A present result object missing 'value' is not an error -- defaults to 0.
+        var adapter = adapterReturning(SOL_NO_VALUE, TOKENS_EMPTY);
+
+        List<WalletBalance> balances = adapter.fetchBalances(ADDRESS);
+
+        assertThat(balances).singleElement().satisfies(b -> {
+            assertThat(b.symbol()).isEqualTo("SOL");
+            assertThat(b.amount()).isEqualByComparingTo(BigDecimal.ZERO);
+        });
     }
 }
