@@ -131,7 +131,7 @@ app:
   enablebanking:
     application-id: ${ENABLEBANKING_APPLICATION_ID:}
     key-id: ${ENABLEBANKING_KEY_ID:}
-    redirect-uri: ${ENABLEBANKING_REDIRECT_URI:http://localhost:5173/sync/callback}
+    redirect-uri: ${ENABLEBANKING_REDIRECT_URI:https://localhost:5173/sync/callback}
     private-key: ${ENABLEBANKING_PRIVATE_KEY:}
     private-key-path: ${ENABLEBANKING_PRIVATE_KEY_PATH:/data/keys/enablebanking-private.pem}
     base-url: ${ENABLEBANKING_BASE_URL:https://api.enablebanking.com}

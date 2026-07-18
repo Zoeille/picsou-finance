@@ -1,6 +1,6 @@
 # Feature: Bank Sync
 
-> Last updated: 2026-06-03 (Enable Banking: single Application ID field, Key ID derived)
+> Last updated: 2026-07-18 (HTTPS local-development callback default)
 
 > **Status (1.0.0).** Enable Banking is the only enabled provider. The Powens
 > adapter ships in the codebase but is **experimental and untested** —
@@ -117,7 +117,7 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 - **Powens is disabled in 1.0.0**: `@Primary` was removed from `PowensBankConnector`, so even setting `POWENS_CLIENT_ID` will NOT activate Powens — Enable Banking stays injected. To re-enable after validating the adapter, restore `@Primary` on `PowensBankConnector` and set `POWENS_CLIENT_ID`.
 - **Enable Banking RSA key**: The private key must be PKCS8 PEM format. The `ENABLEBANKING_PRIVATE_KEY` env var can contain literal `\n` characters -- both formats are handled in `parsePem()`. The key lives on disk, **not** in the DB — see "Enable Banking configuration" above; setting only the text fields (Application ID + Redirect URI) leaves searches failing until a key is generated/imported.
 - **Local dev key path**: the `dev` Spring profile stores the generated key under `backend/.local/keys/enablebanking-private.pem` so bare-metal macOS/Linux runs do not try to create Docker's `/data/keys` directory at filesystem root.
-- **Enable Banking redirect URI must be registered**: `ENABLEBANKING_REDIRECT_URI` defaults to `http://localhost:5173/sync/callback` (dev only). In production, set it to `http://<host>:8080/sync/callback` in `.env`. The same URL must be registered in the Enable Banking developer portal under the application's Redirect URIs. A mismatch causes a `REDIRECT_URI_NOT_ALLOWED` 400 error at auth initiation — it surfaces in the Add Account modal bank wizard.
+- **Enable Banking redirect URI must be registered**: `ENABLEBANKING_REDIRECT_URI` defaults to `https://localhost:5173/sync/callback` for local development, matching Vite's HTTPS dev server. In production, set it to the public frontend callback URL (for example, `https://picsou.example.com/sync/callback` behind a TLS-terminating reverse proxy, or `http://<host>:8080/sync/callback` for a direct HTTP deployment). The exact same URL must be registered in the Enable Banking developer portal under the application's Redirect URIs. A mismatch causes a `REDIRECT_URI_NOT_ALLOWED` 400 error at auth initiation — it surfaces in the Add Account modal bank wizard.
 - **ALREADY_AUTHORIZED**: If the OAuth code is reused (e.g. browser back button), `SyncService.completeConnection()` catches the error and falls back to refreshing the latest linked session instead of failing.
 - **Type upgrade on resync**: If the user has not customized an account's type, `upsertAccount()` will upgrade it from CHECKING to the detected type on the next sync. Manual user changes are preserved (only CHECKING is auto-upgraded).
 - **Both providers are optional**: The app starts fine without either. No `BankConnectorPort` bean is required at startup.

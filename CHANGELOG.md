@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatically, keeping their history — including their display name, which is
   relabelled from "ETHEREUM Wallet" to "EVM Wallet" (custom labels untouched). See
   [ADR](docs/decisions/2026-07-17-evm-multichain-wallets.md).
+- **HTTPS frontend development mode.** Vite uses trusted local `mkcert`
+  certificates from `frontend/.local/certs/` when present and otherwise falls
+  back to a generated self-signed certificate. Local Enable Banking callbacks
+  and Playwright URL examples now default to `https://localhost:5173`.
 - **CSV transaction import for investment accounts (PEA/CTO)** and **realized
   P&L on closed positions**, computed on the fly with the average-cost method
   (#38, #43).

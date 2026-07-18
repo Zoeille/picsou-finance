@@ -57,7 +57,7 @@
 | Theme (dark / light / system) + theme-adaptive rendering | 2026-06-02 | [theme-persistence.md](./features/theme-persistence.md) |
 | Dashboard — Time range isolation | 2026-04-13 | [dashboard-time-range-isolation.md](./features/dashboard-time-range-isolation.md) |
 | Dashboard — Liabilities separated from performance | 2026-07-08 | [dashboard-liabilities-separation.md](./features/dashboard-liabilities-separation.md) |
-| Bank sync | 2026-06-03 | [bank-sync.md](./features/bank-sync.md) |
+| Bank sync | 2026-07-18 | [bank-sync.md](./features/bank-sync.md) |
 | Trade Republic | 2026-07-07 | [trade-republic.md](./features/trade-republic.md) |
 | Trade Republic — Holdings deduplication | 2026-05-18 | [trade-republic-holding-deduplication.md](./features/trade-republic-holding-deduplication.md) |
 | ISIN → Ticker conversion | 2026-04-13 | [ISIN_TO_TICKER_CONVERSION.md](./features/ISIN_TO_TICKER_CONVERSION.md) |
