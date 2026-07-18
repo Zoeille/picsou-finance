@@ -384,6 +384,40 @@ class EvmWalletAdapterTest {
     }
 
     @Test
+    void summarisesTokenFailuresPerNetwork() {
+        // Individually each skipped token logs its own line, which is easy to lose among
+        // seven concurrently-queried chains. The shape that matters is the ratio: the sync
+        // still succeeds on the native balance, so without this a user could conclude their
+        // tokens are gone when the calls merely failed.
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(EvmWalletAdapter.class);
+        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            var adapter = adapter(
+                List.of(net("poly", "POL", List.of(
+                    new Erc20Token("0xA", "USDT", 6),
+                    new Erc20Token("0xB", "USDC", 6)))),
+                Map.of(
+                    nativeKey("poly"), ONE_COIN,
+                    tokenKey("poly", "0xA"), RPC_ERROR,
+                    tokenKey("poly", "0xB"), RPC_ERROR));
+
+            List<WalletBalance> balances = adapter.fetchBalances(ADDRESS);
+
+            // Native still reported -- the sync does not fail over tokens.
+            assertThat(balances).singleElement()
+                .satisfies(b -> assertThat(b.symbol()).isEqualTo("POL"));
+
+            assertThat(logs.list)
+                .anySatisfy(e -> assertThat(e.getFormattedMessage())
+                    .contains("2 of 2 tokens failed"));
+        } finally {
+            logger.detachAppender(logs);
+        }
+    }
+
+    @Test
     void emptyCallResult_treatedAsZeroToken() {
         // A "0x" result (call to a non-contract) is not an error -- just no balance.
         var adapter = adapter(

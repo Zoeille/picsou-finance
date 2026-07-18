@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -194,16 +195,31 @@ public class EvmWalletAdapter implements WalletPort {
     }
 
     private Flux<WalletBalance> fetchNetwork(EvmNetwork net, String address) {
+        // Counts this network's token failures so they can be summarised. Individually the
+        // warnings below are easy to lose among the other chains' output, and the shape that
+        // matters — "most of this network's tokens failed" — is only visible in aggregate:
+        // the sync still succeeds on the native balance, so a user could otherwise conclude
+        // their tokens are gone when the calls merely failed.
+        AtomicInteger tokenFailures = new AtomicInteger();
+
         Flux<WalletBalance> tokens = Flux.fromIterable(net.tokens())
             .flatMap(token -> fetchToken(net, token, address)
                 .onErrorResume(WalletRpcException.class, ex -> {
                     // One bad token (a reverting/non-standard contract, or a
                     // transient token-call failure) must not drop the network's
                     // native or its other tokens — log and skip.
+                    tokenFailures.incrementAndGet();
                     log.warn("EVM token {} on {} failed for {}: {} -- skipping token",
                         token.symbol(), net.displayName(), address, ex.getMessage());
                     return Mono.empty();
-                }));
+                }))
+            .doOnComplete(() -> {
+                int failed = tokenFailures.get();
+                if (failed > 0) {
+                    log.warn("EVM {}: {} of {} tokens failed for {} -- balance reported without them",
+                        net.displayName(), failed, net.tokens().size(), address);
+                }
+            });
         // Native first: if it fails, concat never reaches the tokens and the error
         // propagates, aborting the sync rather than under-reporting this chain.
         return Flux.concat(fetchNative(net, address), tokens);
