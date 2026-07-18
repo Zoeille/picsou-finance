@@ -45,7 +45,7 @@ public class PriceService {
             return BigDecimal.ONE;
         }
 
-        String upper = ticker.toUpperCase();
+        String upper = ticker.toUpperCase(Locale.ROOT);
 
         // Check cache
         CachedPrice cached = priceCache.get(upper);
@@ -82,7 +82,7 @@ public class PriceService {
         Set<String> stockTickers = new HashSet<>();
 
         for (String ticker : tickers) {
-            String upper = ticker.toUpperCase();
+            String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) {
                 result.put(upper, BigDecimal.ONE);
             } else if (coinGecko.supports(upper)) {
@@ -160,28 +160,34 @@ public class PriceService {
         int saved = 0;
 
         for (String ticker : tickers) {
-            String upper = ticker.toUpperCase();
+            String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) continue;
 
-            Map<LocalDate, BigDecimal> prices;
-            if (coinGecko.supports(upper)) {
-                prices = coinGecko.getHistoricalPricesEur(upper, from, to);
-            } else {
-                prices = yahoo.getHistoricalPricesEur(upper, from, to);
-            }
-
-            for (var entry : prices.entrySet()) {
-                if (priceSnapshotRepository.findByTickerAndDate(upper, entry.getKey()).isEmpty()) {
-                    priceSnapshotRepository.save(PriceSnapshot.builder()
-                        .ticker(upper)
-                        .date(entry.getKey())
-                        .priceEur(entry.getValue())
-                        .build());
-                    saved++;
+            // Guard per ticker: this runs from PriceBackfillRunner, an ApplicationRunner, so
+            // an unguarded throw here would fail Spring Boot startup outright.
+            try {
+                Map<LocalDate, BigDecimal> prices;
+                if (coinGecko.supports(upper)) {
+                    prices = coinGecko.getHistoricalPricesEur(upper, from, to);
+                } else {
+                    prices = yahoo.getHistoricalPricesEur(upper, from, to);
                 }
-            }
 
-            log.info("Backfilled {} prices for {}", prices.size(), upper);
+                for (var entry : prices.entrySet()) {
+                    if (priceSnapshotRepository.findByTickerAndDate(upper, entry.getKey()).isEmpty()) {
+                        priceSnapshotRepository.save(PriceSnapshot.builder()
+                            .ticker(upper)
+                            .date(entry.getKey())
+                            .priceEur(entry.getValue())
+                            .build());
+                        saved++;
+                    }
+                }
+
+                log.info("Backfilled {} prices for {}", prices.size(), upper);
+            } catch (Exception ex) {
+                log.warn("Historical price backfill failed for {} -- skipping it", upper, ex);
+            }
         }
 
         return saved;
@@ -207,7 +213,7 @@ public class PriceService {
             return Map.of();
         }
 
-        String upper = ticker.toUpperCase();
+        String upper = ticker.toUpperCase(Locale.ROOT);
 
         if (coinGecko.supports(upper)) {
             return coinGecko.getIntradayPricesEur(upper, from, to);

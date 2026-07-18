@@ -466,6 +466,8 @@
       "label": "Bezeichnung",
       "track": "Verfolgen",
       "connectError": "Wallet konnte nicht hinzugefügt werden. Prüfe die Adresse und versuche es erneut.",
+      "syncError": "Synchronisierung fehlgeschlagen. Prüfe die Adresse oder versuche es später erneut.",
+      "removeError": "Wallet konnte nicht entfernt werden. Bitte versuche es erneut.",
       "sync": "Synchronisieren",
       "remove": "Entfernen",
       "removeConfirm": "Dieses Wallet entfernen?",

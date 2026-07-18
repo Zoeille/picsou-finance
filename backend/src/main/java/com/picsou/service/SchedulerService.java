@@ -137,16 +137,26 @@ public class SchedulerService {
             List<Account> memberAccounts = accountRepository.findAllByMemberIdOrderByCreatedAtAsc(member.getId());
 
             for (Account account : memberAccounts) {
-                Optional<BalanceSnapshot> existing = snapshotRepository.findByAccountIdAndDate(account.getId(), today);
-                if (existing.isEmpty()) {
-                    BigDecimal balance = accountService.liveBalanceEur(account);
-                    BigDecimal invested = accountService.calculateInvestedAmount(account);
-                    snapshotRepository.save(BalanceSnapshot.builder()
-                        .account(account)
-                        .date(today)
-                        .balance(balance)
-                        .investedAmount(invested)
-                        .build());
+                // Guard per account. This method is @Transactional, so without it a single
+                // failing price lookup would not merely skip one account -- it would abort
+                // every remaining account AND member, and roll back the snapshots already
+                // saved in this run. A missing snapshot for one account is recoverable;
+                // losing the whole day's is not.
+                try {
+                    Optional<BalanceSnapshot> existing = snapshotRepository.findByAccountIdAndDate(account.getId(), today);
+                    if (existing.isEmpty()) {
+                        BigDecimal balance = accountService.liveBalanceEur(account);
+                        BigDecimal invested = accountService.calculateInvestedAmount(account);
+                        snapshotRepository.save(BalanceSnapshot.builder()
+                            .account(account)
+                            .date(today)
+                            .balance(balance)
+                            .investedAmount(invested)
+                            .build());
+                    }
+                } catch (Exception ex) {
+                    log.warn("Daily snapshot failed for account {} (member {}) -- skipping it",
+                        account.getId(), member.getId(), ex);
                 }
             }
         }
@@ -169,7 +179,13 @@ public class SchedulerService {
 
             if (!tickers.isEmpty()) {
                 log.debug("Refreshing prices for member {} tickers: {}", member.getId(), tickers);
-                priceService.refreshPrices(tickers);
+                // Guard per member so one member's bad ticker doesn't cost every later
+                // member their hourly refresh.
+                try {
+                    priceService.refreshPrices(tickers);
+                } catch (Exception ex) {
+                    log.warn("Price refresh failed for member {} -- skipping this cycle", member.getId(), ex);
+                }
             }
         }
     }

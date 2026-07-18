@@ -473,6 +473,8 @@
       "label": "Label",
       "track": "Suivre",
       "connectError": "Échec de l'ajout. Vérifiez l'adresse et réessayez.",
+      "syncError": "Échec de la synchronisation. Vérifiez l'adresse ou réessayez plus tard.",
+      "removeError": "Impossible de supprimer ce portefeuille. Veuillez réessayer.",
       "sync": "Synchroniser",
       "remove": "Supprimer",
       "removeConfirm": "Supprimer ce wallet ?",

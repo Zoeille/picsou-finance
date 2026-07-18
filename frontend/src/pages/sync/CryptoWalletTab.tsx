@@ -251,43 +251,55 @@ export function CryptoWalletTab() {
         <div className="space-y-3">
           {wallets.map(wallet => (
             <Card key={wallet.id} size="sm">
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    {wallet.label && (
-                      <span className="font-medium">{wallet.label}</span>
-                    )}
-                    <Badge className={CHAIN_COLORS[wallet.chain]}>
-                      {wallet.chain}
-                    </Badge>
-                  </div>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {truncateAddress(wallet.address)}
-                  </p>
-                  {wallet.lastSyncedAt && (
-                    <p className="text-xs text-muted-foreground">
-                      {t('sync.wallets.lastSync')}: {formatDate(wallet.lastSyncedAt)}
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      {wallet.label && (
+                        <span className="font-medium">{wallet.label}</span>
+                      )}
+                      <Badge className={CHAIN_COLORS[wallet.chain]}>
+                        {wallet.chain}
+                      </Badge>
+                    </div>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {truncateAddress(wallet.address)}
                     </p>
-                  )}
+                    {wallet.lastSyncedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        {t('sync.wallets.lastSync')}: {formatDate(wallet.lastSyncedAt)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => syncMutation.mutate(wallet.id)}
+                      // Scope to the row being synced: one shared mutation drives every
+                      // row, so an unscoped flag disables all of them at once.
+                      disabled={syncMutation.isPending && syncMutation.variables === wallet.id}
+                    >
+                      <RefreshCw />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setRemovingId(wallet.id)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => syncMutation.mutate(wallet.id)}
-                    disabled={syncMutation.isPending}
-                  >
-                    <RefreshCw />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setRemovingId(wallet.id)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
+                {/* Both conditions are required: `variables` holds the last-synced id and
+                    survives until reset, so isError alone would mark every row. */}
+                {syncMutation.isError && syncMutation.variables === wallet.id && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {formatApiError(syncMutation.error, t, 'sync.wallets.syncError')}
+                  </p>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -297,11 +309,23 @@ export function CryptoWalletTab() {
       {/* Remove confirmation */}
       <ConfirmDialog
         open={removingId != null}
-        onOpenChange={open => !open && setRemovingId(null)}
+        // ConfirmDialog renders `error` and stays open; per its contract the parent owns
+        // clearing it, so reset on close or a stale failure greets the next deletion.
+        onOpenChange={open => {
+          if (!open) {
+            setRemovingId(null)
+            removeMutation.reset()
+          }
+        }}
         title={t('sync.wallets.remove')}
         description={t('sync.wallets.removeConfirm')}
         onConfirm={handleRemove}
         loading={removeMutation.isPending}
+        error={
+          removeMutation.isError
+            ? formatApiError(removeMutation.error, t, 'sync.wallets.removeError')
+            : undefined
+        }
       />
     </div>
   )

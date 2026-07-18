@@ -466,6 +466,8 @@
       "label": "Etiqueta",
       "track": "Seguir",
       "connectError": "No se pudo añadir el wallet. Comprueba la dirección e inténtalo de nuevo.",
+      "syncError": "Error de sincronización. Comprueba la dirección o inténtalo más tarde.",
+      "removeError": "No se pudo eliminar este wallet. Inténtalo de nuevo.",
       "sync": "Sincronizar",
       "remove": "Eliminar",
       "removeConfirm": "¿Eliminar este wallet?",

@@ -43,6 +43,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Wallet sync and removal failures now say why.** Both buttons reported nothing
+  at all when they failed — the row simply re-enabled, and the delete dialog sat
+  there — so a `422` from an RPC outage was indistinguishable from success. The
+  reason is now shown against the wallet that failed, and inside the delete
+  dialog, matching the add-wallet form.
+- **A bad price response can no longer cost a day of history.** The daily
+  snapshot job is transactional and looped over every account without a guard, so
+  one malformed CoinGecko reply would have aborted the remaining accounts and
+  members *and* rolled back the snapshots already taken. Each account, member and
+  backfilled ticker is now guarded individually. Relatedly, a genuine bug in the
+  price adapter is no longer swallowed as "no prices available" — only real
+  upstream outages are.
 - **Invalid wallet addresses fail fast with a clear error.** Adding a wallet with
   a malformed address — or no address or chain at all — reported a `422` "could
   not sync, please try again later", inviting a retry of input that can never
