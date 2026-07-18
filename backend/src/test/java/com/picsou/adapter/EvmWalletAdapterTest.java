@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -66,6 +67,28 @@ class EvmWalletAdapterTest {
 
     private EvmWalletAdapter adapter(List<EvmNetwork> networks) {
         return adapter(networks, Map.of());
+    }
+
+    /**
+     * Adapter whose transport fails the first {@code failuresBeforeSuccess} calls to a given
+     * route and then succeeds, counting attempts. Lets the retry policy be observed by
+     * outcome, which the canned-response stub above cannot do: its sentinels either always
+     * fail or never do, so retrying changes nothing either way.
+     */
+    private EvmWalletAdapter retryingAdapter(
+        List<EvmNetwork> networks, String route, int failuresBeforeSuccess, AtomicInteger attempts) {
+
+        EvmRpc rpc = (url, request) -> {
+            String key = routeKey(url, request);
+            if (!key.equals(route)) {
+                return Mono.just(parse("eth_call".equals(request.get("method")) ? EMPTY_CALL : ZERO));
+            }
+            // Count on subscribe, not on assembly: a retry re-subscribes to the same Mono.
+            return Mono.defer(() -> attempts.incrementAndGet() <= failuresBeforeSuccess
+                ? Mono.error(new RuntimeException("simulated transport failure"))
+                : Mono.just(parse(ONE_COIN)));
+        };
+        return new EvmWalletAdapter(rpc, networks);
     }
 
     private static String routeKey(String url, Map<String, Object> request) {
@@ -295,6 +318,69 @@ class EvmWalletAdapterTest {
 
         assertThatThrownBy(() -> adapter.fetchBalances(ADDRESS))
             .isInstanceOf(WalletRpcException.class);
+    }
+
+    @Test
+    void transientTransportFailure_isRetried_andTheSyncSucceeds() {
+        // The point of the retry: a single blip on one chain must not fail a whole wallet
+        // sync. Two failures then success is within the 2-retry budget (3 attempts total).
+        AtomicInteger attempts = new AtomicInteger();
+        var adapter = retryingAdapter(
+            List.of(net("eth", "ETH", List.of())), nativeKey("eth"), 2, attempts);
+
+        List<WalletBalance> balances = adapter.fetchBalances(ADDRESS);
+
+        assertThat(balances).singleElement()
+            .satisfies(b -> assertThat(b.amount()).isEqualByComparingTo("1"));
+        assertThat(attempts).hasValue(3); // initial + 2 retries
+    }
+
+    @Test
+    void transportFailureBeyondTheRetryBudget_failsTheSync() {
+        // Three failures exceeds the budget, so the native probe stays fatal rather than
+        // retrying forever. onRetryExhaustedThrow must surface the ORIGINAL cause, wrapped
+        // as WalletRpcException -- not reactor's RetryExhaustedException, which would miss
+        // WalletSyncService's expected-failure catch and read as a bug.
+        AtomicInteger attempts = new AtomicInteger();
+        var adapter = retryingAdapter(
+            List.of(net("eth", "ETH", List.of())), nativeKey("eth"), 3, attempts);
+
+        assertThatThrownBy(() -> adapter.fetchBalances(ADDRESS))
+            .isInstanceOf(WalletRpcException.class);
+        assertThat(attempts).hasValue(3);
+    }
+
+    @Test
+    void jsonRpcErrorIsNotRetried() {
+        // The retry filter excludes WalletRpcException: a node answering "method not found"
+        // or "rate limited" will answer the same way three times, so retrying only delays
+        // the failure and triples the load on an endpoint that may already be rate-limiting.
+        AtomicInteger calls = new AtomicInteger();
+        EvmRpc rpc = (url, request) -> {
+            calls.incrementAndGet();
+            return Mono.just(parse(RPC_ERROR));
+        };
+        var adapter = new EvmWalletAdapter(rpc, List.of(net("eth", "ETH", List.of())));
+
+        assertThatThrownBy(() -> adapter.fetchBalances(ADDRESS))
+            .isInstanceOf(WalletRpcException.class);
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void transientFailureOnAToken_isRetried_beforeBeingSkipped() {
+        // Same budget applies to token calls; only after it is exhausted does the token get
+        // skipped, so a blip does not silently drop a holding.
+        AtomicInteger attempts = new AtomicInteger();
+        var adapter = retryingAdapter(
+            List.of(net("eth", "ETH", List.of(new Erc20Token("0xUSDC", "USDC", 18)))),
+            tokenKey("eth", "0xUSDC"), 1, attempts);
+
+        List<WalletBalance> balances = adapter.fetchBalances(ADDRESS);
+
+        // Retry succeeded, so the token survives (ONE_COIN at 18 decimals = 1).
+        assertThat(balances).anySatisfy(b -> assertThat(b.symbol()).isEqualTo("USDC"));
+        assertThat(attempts).hasValue(2);
     }
 
     @Test

@@ -438,6 +438,65 @@ class WalletSyncServiceTest {
         verify(accountService).pruneHoldings(eq(accountA), eq(Set.of("ETH")));
     }
 
+    @Test
+    void sync_initialisesTheAccountFields_whenCreatingItForTheFirstTime() {
+        // provider/color/isManual are set once at creation and never revisited, so a
+        // regression here is invisible until someone looks at the account list. provider
+        // carries the native symbol for display; isManual=false is what keeps the balance
+        // read-only in the UI (a synced account must not be hand-editable).
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account saved = mock(Account.class);
+        when(saved.getId()).thenReturn(100L);
+        when(accountRepository.save(any())).thenReturn(saved);
+
+        serviceWith(adapter).sync(1L, MEMBER_ID);
+
+        ArgumentCaptor<Account> created = ArgumentCaptor.forClass(Account.class);
+        verify(accountRepository).save(created.capture());
+        Account account = created.getValue();
+        assertThat(account.getProvider()).isEqualTo("ETH");
+        assertThat(account.getColor()).isEqualTo("#f59e0b");
+        assertThat(account.isManual()).isFalse();
+        assertThat(account.getType()).isEqualTo(com.picsou.model.AccountType.CRYPTO);
+        assertThat(account.getCurrency()).isEqualTo("EUR");
+        assertThat(account.getExternalAccountId()).isEqualTo("wallet_evm_1");
+        // No ticker on the account: the balance is already EUR, so a ticker here would
+        // make liveBalanceEur convert it a second time.
+        assertThat(account.getTicker()).isNull();
+    }
+
+    @Test
+    void sync_usesTheChainNameForAnUnlabelledWallet_andTheLabelOtherwise() {
+        WalletAddress labelled = WalletAddress.builder()
+            .id(1L).chain(Chain.EVM).address("0xabc").label("My Ledger").build();
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(labelled));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account saved = mock(Account.class);
+        when(saved.getId()).thenReturn(100L);
+        when(accountRepository.save(any())).thenReturn(saved);
+
+        serviceWith(adapter).sync(1L, MEMBER_ID);
+
+        ArgumentCaptor<Account> created = ArgumentCaptor.forClass(Account.class);
+        verify(accountRepository).save(created.capture());
+        // The label wins; "EVM Wallet" is only the fallback (and the string V55 rewrites).
+        assertThat(created.getValue().getName()).isEqualTo("My Ledger");
+    }
+
     // ─── startup adapter coverage ─────────────────────────────────────────────
 
     @Test

@@ -121,6 +121,42 @@ class CoinGeckoPriceProviderTest {
             .satisfies(e -> assertThat(e.getFormattedMessage()).contains("ETH").doesNotContain("BTC"));
     }
 
+    @Test
+    void resolvesEveryTickerAddedForTheEvmFanOut_toItsCoinGeckoId() {
+        // POL/USDT/USDC/DAI/EURC were added alongside the EVM multichain work. A typo in a
+        // coin id degrades silently: the request simply omits it, the price comes back
+        // missing, and the asset drops out of the wallet total with only a generic warning.
+        // Assert on the outgoing request so the mapping itself is pinned, not just the
+        // stubbed response.
+        Map<String, String> expectedIds = Map.of(
+            "POL", "polygon-ecosystem-token",
+            "USDT", "tether",
+            "USDC", "usd-coin",
+            "DAI", "dai",
+            "EURC", "euro-coin");
+
+        expectedIds.forEach((ticker, coinId) -> {
+            var captured = new java.util.concurrent.atomic.AtomicReference<String>();
+            ExchangeFunction exchange = request -> {
+                captured.set(request.url().toString());
+                return Mono.just(ClientResponse.create(HttpStatus.OK)
+                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .body("{\"" + coinId + "\":{\"eur\":1.0}}").build());
+            };
+            var provider = new CoinGeckoPriceProvider(
+                WebClient.builder().exchangeFunction(exchange).build());
+
+            Map<String, BigDecimal> prices = provider.getPricesEur(Set.of(ticker));
+
+            assertThat(captured.get())
+                .as("%s must be requested as CoinGecko id '%s'", ticker, coinId)
+                .contains("ids=" + coinId);
+            assertThat(prices)
+                .as("%s must resolve back to its ticker key", ticker)
+                .containsKey(ticker);
+        });
+    }
+
     // ── Expected upstream failures: no prices, graded log, never thrown ───────
 
     @Test
