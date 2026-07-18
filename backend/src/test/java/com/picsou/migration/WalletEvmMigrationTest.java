@@ -1,6 +1,7 @@
 package com.picsou.migration;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -24,9 +25,11 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Verifies {@code V54__wallet_ethereum_to_evm.sql}, the one data-mutating migration in
- * the EVM fan-out change: it rewrites {@code wallet_address.chain} and, critically, the
- * {@code account.external_account_id} that ties a wallet to its synced account.
+ * Verifies the two data-mutating migrations in the EVM fan-out change:
+ * {@code V54__wallet_ethereum_to_evm.sql}, which rewrites {@code wallet_address.chain} and,
+ * critically, the {@code account.external_account_id} tying a wallet to its synced account;
+ * and {@code V55__wallet_evm_account_name.sql}, which relabels the auto-generated account
+ * name without disturbing a user's own label.
  *
  * <p>If the id rewrite were wrong or missing, {@code WalletSyncService} would compute a
  * {@code wallet_evm_<id>} key that matches nothing, silently create a <em>second</em>
@@ -42,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @EnabledIf("dockerAvailable")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class V54WalletEthereumToEvmMigrationTest {
+class WalletEvmMigrationTest {
 
     static {
         // docker-java otherwise negotiates down to Docker API 1.32, which Engine >= 28
@@ -222,7 +225,7 @@ class V54WalletEthereumToEvmMigrationTest {
         // rows, so a copy passes no matter what the actual migration says -- and it
         // stops tracking the file the moment someone edits it.
         String sql;
-        try (var in = V54WalletEthereumToEvmMigrationTest.class
+        try (var in = WalletEvmMigrationTest.class
             .getResourceAsStream("/db/migration/V54__wallet_ethereum_to_evm.sql")) {
             assertThat(in).as("V54 migration must be on the test classpath").isNotNull();
             sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
@@ -298,13 +301,27 @@ class V54WalletEthereumToEvmMigrationTest {
         return querySingle(sql, rs -> rs.getBigDecimal(1));
     }
 
+    /**
+     * Reuses one connection across the read-only assertions — a fresh JDBC connect per
+     * single-value check pays a TCP handshake and auth round-trip each time. Autocommit
+     * means it still sees writes committed by the mutating connections.
+     */
     private static <T> T querySingle(String sql, SqlFunction<T> extractor) throws SQLException {
-        try (Connection conn = connect();
-             PreparedStatement ps = conn.prepareStatement(sql);
+        if (readConn == null || readConn.isClosed()) {
+            readConn = connect();
+        }
+        try (PreparedStatement ps = readConn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             assertThat(rs.next()).as("query returned no row: %s", sql).isTrue();
             return extractor.apply(rs);
         }
+    }
+
+    private static Connection readConn;
+
+    @AfterAll
+    static void closeReadConnection() throws SQLException {
+        if (readConn != null) readConn.close();
     }
 
     @FunctionalInterface

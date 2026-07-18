@@ -174,17 +174,18 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                 // run per-ticker, so an hours-long outage would otherwise pour ERROR lines
                 // (each carrying a full HTML error page) into a self-hosted instance's log.
                 log.warn("CoinGecko server error (HTTP {}) fetching {} for {} -- returning no prices: {}",
-                    status, operation, context, truncate(http.getResponseBodyAsString()));
+                    status, operation, context, lazyBody(http));
             } else if (status == 400 || status == 404) {
                 // A malformed request or an unknown coin id points at a bad TICKER_TO_ID
-                // entry -- something we can actually fix, so ERROR.
+                // entry -- something we can actually fix, so ERROR. The body is decoded
+                // lazily via a supplier so a disabled level costs nothing.
                 log.error("CoinGecko rejected the {} request for {} with HTTP {} -- returning no prices: {}",
-                    operation, context, status, truncate(http.getResponseBodyAsString()));
+                    operation, context, status, lazyBody(http));
             } else {
                 // Other 4xx (401/403 free-tier restrictions, 451...) are the provider's
                 // access policy, not a bug on our side: WARN like the other outage cases.
                 log.warn("CoinGecko refused the {} request for {} with HTTP {} -- returning no prices: {}",
-                    operation, context, status, truncate(http.getResponseBodyAsString()));
+                    operation, context, status, lazyBody(http));
             }
         } else if (cause instanceof TimeoutException) {
             log.warn("CoinGecko {} request for {} timed out after {} -- returning no prices",
@@ -203,10 +204,19 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
         }
     }
 
-    /** Caps an upstream error body so one bad gateway's HTML page can't fill the log. */
-    private static String truncate(String body) {
-        if (body == null || body.isBlank()) return "<empty body>";
-        return body.length() <= 200 ? body : body.substring(0, 200) + "... (truncated)";
+    /**
+     * Defers decoding the upstream error body until the log level is known to be enabled —
+     * SLF4J only calls {@code toString()} on an argument it actually formats. Also caps it,
+     * so one bad gateway's multi-kilobyte HTML page can't fill the log.
+     */
+    private static Object lazyBody(WebClientResponseException http) {
+        return new Object() {
+            @Override public String toString() {
+                String body = http.getResponseBodyAsString();
+                if (body == null || body.isBlank()) return "<empty body>";
+                return body.length() <= 200 ? body : body.substring(0, 200) + "... (truncated)";
+            }
+        };
     }
 
     /**

@@ -34,6 +34,9 @@ public class WalletSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(WalletSyncService.class);
 
+    /** Matches the {@code wallet_address.address} column width (see V10). */
+    private static final int MAX_ADDRESS_LENGTH = 200;
+
     private final List<WalletPort> walletAdapters;
     private final WalletAddressRepository walletRepository;
     private final AccountRepository accountRepository;
@@ -72,6 +75,16 @@ public class WalletSyncService {
         // and SOLANA and reach the explorer as an empty path segment.
         if (trimmed.isEmpty()) {
             throw new IllegalArgumentException("A wallet address is required");
+        }
+        // wallet_address.address is VARCHAR(200) and validateAddress is a no-op for
+        // BITCOIN/SOLANA, so without this a pasted seed phrase or wall of text reaches the
+        // insert and comes back as a 500 from the constraint violation -- the same
+        // bad-input-becomes-500 this method exists to prevent for EVM. Bitcoin output
+        // descriptors are the longest legitimate value and sit well under 200.
+        if (trimmed.length() > MAX_ADDRESS_LENGTH) {
+            throw new IllegalArgumentException(
+                "Wallet address is too long (" + trimmed.length() + " characters, maximum "
+                    + MAX_ADDRESS_LENGTH + ")");
         }
 
         // Check the address format before the sync attempt, so a typo is a 400 naming the

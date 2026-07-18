@@ -239,6 +239,24 @@ class WalletSyncServiceTest {
     }
 
     @Test
+    void addWallet_rejectsOverlongAddress_beforeItReachesTheColumn() {
+        // wallet_address.address is VARCHAR(200) and BITCOIN has no validateAddress
+        // override, so a pasted seed phrase used to reach the insert and come back as a
+        // 500 from the constraint violation.
+        WalletPort adapter = mock(WalletPort.class);
+
+        WalletSyncService service = serviceWith(adapter);
+
+        assertThatThrownBy(() -> service.addWallet(
+            Chain.BITCOIN, "x".repeat(201), "Cold", MEMBER_ID))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("too long");
+
+        verify(walletRepository, never()).save(any());
+        verify(adapter, never()).fetchBalances(any());
+    }
+
+    @Test
     void resyncAll_returnsEmptySummary_whenNoWallets() {
         when(walletRepository.findAllByMemberId(MEMBER_ID)).thenReturn(List.of());
 

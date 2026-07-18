@@ -65,6 +65,9 @@ public class EvmWalletAdapter implements WalletPort {
     /** A well-formed EVM address: {@code 0x} followed by exactly 40 hex chars. */
     private static final Pattern EVM_ADDRESS = Pattern.compile("0x[0-9a-fA-F]{40}");
 
+    /** A valid address is 42 chars; enough to show the user what was rejected. */
+    private static final int MESSAGE_ADDRESS_LIMIT = 64;
+
     private static final Duration RPC_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_RETRIES = 2;
     private static final Duration RETRY_BACKOFF = Duration.ofMillis(200);
@@ -297,8 +300,13 @@ public class EvmWalletAdapter implements WalletPort {
      */
     private static String forMessage(String address) {
         if (address == null) return "null";
-        String flattened = address.replaceAll("\\s", " ");
-        return flattened.length() <= 64 ? flattened : flattened.substring(0, 64) + "...";
+        // Truncate BEFORE flattening: running a regex over the whole input first would
+        // allocate a second copy of a multi-megabyte payload, which is the amplification
+        // this method exists to prevent.
+        String bounded = address.length() <= MESSAGE_ADDRESS_LIMIT
+            ? address
+            : address.substring(0, MESSAGE_ADDRESS_LIMIT) + "...";
+        return bounded.replaceAll("\\s", " ");
     }
 
     /**
@@ -312,8 +320,10 @@ public class EvmWalletAdapter implements WalletPort {
      */
     private static void requireEvmAddress(String address) {
         if (!isEvmAddress(address)) {
+            // Bounded like the validateAddress path: this one handles a *stored* address,
+            // so the value is just as untrusted, and its message is logged twice.
             throw new WalletRpcException(
-                "Malformed EVM address '" + address + "' (expected 0x + 40 hex characters)");
+                "Malformed EVM address '" + forMessage(address) + "' (expected 0x + 40 hex characters)");
         }
     }
 

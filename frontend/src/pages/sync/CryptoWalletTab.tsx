@@ -18,7 +18,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { WalletStatus, ChainType } from '@/types/api'
-import { extractErrorMessage } from '@/lib/errors'
+import { extractErrorMessage, formatApiError } from '@/lib/errors'
 
 const CHAIN_COLORS: Record<ChainType, string> = {
   BITCOIN: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
@@ -89,6 +89,21 @@ export function CryptoWalletTab() {
   const [label, setLabel] = useState('')
   const [removingId, setRemovingId] = useState<number | null>(null)
 
+  // addMutation's error survives until the next mutate() settles, so every path that
+  // opens or clears the form must reset it too -- otherwise a stale failure renders over
+  // a fresh, empty form and is re-announced by role="alert".
+  function openAddForm() {
+    addMutation.reset()
+    setShowAddForm(true)
+  }
+
+  function closeAddForm() {
+    setShowAddForm(false)
+    setAddress('')
+    setLabel('')
+    addMutation.reset()
+  }
+
   function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     addMutation.mutate(
@@ -146,7 +161,7 @@ export function CryptoWalletTab() {
     <div className="space-y-4">
       {/* Add wallet */}
       {!showAddForm ? (
-        <Button onClick={() => setShowAddForm(true)}>
+        <Button onClick={openAddForm}>
           <Plus />
           {t('sync.wallets.add')}
         </Button>
@@ -197,7 +212,7 @@ export function CryptoWalletTab() {
 
               {addMutation.isError && (
                 <p role="alert" className="text-sm text-destructive">
-                  {extractErrorMessage(addMutation.error)}
+                  {formatApiError(addMutation.error, t, 'sync.wallets.connectError')}
                 </p>
               )}
 
@@ -209,11 +224,7 @@ export function CryptoWalletTab() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setShowAddForm(false)
-                    setAddress('')
-                    setLabel('')
-                  }}
+                  onClick={closeAddForm}
                 >
                   {t('common.cancel')}
                 </Button>
@@ -232,7 +243,7 @@ export function CryptoWalletTab() {
               ? undefined
               : {
                   label: t('sync.wallets.add'),
-                  onClick: () => setShowAddForm(true),
+                  onClick: openAddForm,
                 }
           }
         />

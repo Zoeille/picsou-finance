@@ -88,7 +88,7 @@ verified against real PostgreSQL via Testcontainers.
 Reach for it *only* for that. Everything else stays on Mockito or H2; a container costs
 seconds of wall clock per class.
 
-Pattern (see `V54WalletEthereumToEvmMigrationTest`): no Spring context — drive Flyway and
+Pattern (see `WalletEvmMigrationTest`): no Spring context — drive Flyway and
 JDBC directly, migrating in two steps so the seeded data is what the migration under test
 actually operates on.
 
@@ -116,12 +116,14 @@ Three things the class must do, all learned the hard way:
   socket skips this class instead of failing the whole suite. It must be a JUnit
   `ExecutionCondition` — a `@BeforeAll` assumption runs *after* the Testcontainers
   extension has already tried to start the container.
-- **Set `api.version=1.44` in a static initializer.** Otherwise docker-java negotiates
-  down to API 1.32, which Engine ≥ 28 refuses — and that surfaces as the *same* "Could not
-  find a valid Docker environment" error a Docker-less machine gives, so the guard above
-  would quietly skip the test on a perfectly capable host. A static block (not surefire
-  config, not a classpath `testcontainers.properties` — neither is honored here) keeps it
-  working from an IDE too. This sets the floor at Docker Engine ≥ 25.0.
+- **Pin `api.version=1.44`, in two places.** Otherwise docker-java negotiates down to API
+  1.32, which Engine ≥ 28 refuses — and that surfaces as the *same* "Could not find a valid
+  Docker environment" error a Docker-less machine gives, so the guard above would quietly
+  skip the test on a perfectly capable host. `pom.xml` sets it via surefire
+  `systemPropertyVariables` so it applies process-wide before *any* Testcontainers class
+  initializes; the test class also sets it in a static block so IDE and failsafe runs
+  (which never read surefire config) work too. A classpath `testcontainers.properties` is
+  **not** honored for this — tested. Sets the floor at Docker Engine ≥ 25.0.
 
 - **Make CI refuse to skip.** A skip is invisible in a green build, so `ci.yml` sets
   `PICSOU_REQUIRE_DOCKER_TESTS=true` and `dockerAvailable()` throws instead of returning
@@ -163,7 +165,7 @@ JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=GoalServiceTest#progre
 
 ## Current coverage
 
-The suite has **577 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
+The suite has **578 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
 
 1. **Service-layer unit tests** — mock dependencies, test business logic.
 2. **Repository custom queries** — `@DataJpaTest` for non-trivial JPQL.
