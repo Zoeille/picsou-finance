@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backfilled ticker is now guarded individually. Relatedly, a genuine bug in the
   price adapter is no longer swallowed as "no prices available" — only real
   upstream outages are.
+- **One bad price no longer blanks the intraday chart.** A failure fetching
+  intraday prices for a single ticker returned a server error for the whole
+  chart; that ticker is now omitted and the rest still renders.
 - **Invalid wallet addresses fail fast with a clear error.** Adding a wallet with
   a malformed address — or no address or chain at all — reported a `422` "could
   not sync, please try again later", inviting a retry of input that can never

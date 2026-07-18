@@ -155,7 +155,12 @@ public class SchedulerService {
                             .build());
                     }
                 } catch (Exception ex) {
-                    log.warn("Daily snapshot failed for account {} (member {}) -- skipping it",
+                    // ERROR, not WARN: the price adapters swallow expected upstream failures
+                    // and return no prices, so anything reaching here is a genuine bug. Logging
+                    // it at WARN would re-hide exactly what CoinGeckoPriceProvider now rethrows
+                    // to make visible. Skipping still matters -- this method is @Transactional,
+                    // so aborting would roll back the snapshots already written this run.
+                    log.error("Daily snapshot failed for account {} (member {}) -- skipping it",
                         account.getId(), member.getId(), ex);
                 }
             }
@@ -184,7 +189,9 @@ public class SchedulerService {
                 try {
                     priceService.refreshPrices(tickers);
                 } catch (Exception ex) {
-                    log.warn("Price refresh failed for member {} -- skipping this cycle", member.getId(), ex);
+                    // ERROR for the same reason as dailySnapshots above: expected outages never
+                    // reach here, so this is a bug worth surfacing.
+                    log.error("Price refresh failed for member {} -- skipping this cycle", member.getId(), ex);
                 }
             }
         }

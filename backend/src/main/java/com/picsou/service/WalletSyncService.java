@@ -62,9 +62,10 @@ public class WalletSyncService {
 
     public AccountResponse addWallet(Chain chain, String address, String label, Long memberId) {
         // AddWalletRequest carries no @NotNull and the controller no @Valid, so both
-        // fields arrive null for a malformed body. Guard chain before findAdapter, which
-        // dereferences it via chain.name() -- an NPE has no @ExceptionHandler and would
-        // surface as a 500 rather than the 400 this is.
+        // fields arrive null for a malformed body. findAdapter would then match no adapter
+        // and throw SyncException (422) -- misleading for what is a malformed request, and
+        // it says "isn't supported yet" about a chain the caller never named. Reject it
+        // here as the 400 it is.
         if (chain == null) {
             throw new IllegalArgumentException("A wallet chain is required");
         }
@@ -235,7 +236,7 @@ public class WalletSyncService {
 
     private WalletPort findAdapter(Chain chain) {
         return walletAdapters.stream()
-            .filter(a -> a.chain().equalsIgnoreCase(chain.name()))
+            .filter(a -> a.chain() == chain)
             .findFirst()
             .orElseThrow(() -> new SyncException("This wallet type isn't supported yet."));
     }

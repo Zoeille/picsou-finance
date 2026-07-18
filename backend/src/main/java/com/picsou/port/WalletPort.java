@@ -1,11 +1,17 @@
 package com.picsou.port;
 
+import com.picsou.model.Chain;
+
 import java.math.BigDecimal;
 import java.util.List;
 
 public interface WalletPort {
 
-    String chain();
+    /**
+     * The chain this adapter serves. {@code WalletSyncService} dispatches on it to pick the
+     * adapter for a wallet, so exactly one adapter may claim each {@link Chain}.
+     */
+    Chain chain();
 
     /**
      * Rejects an address this chain can never resolve, before {@code addWallet} attempts

@@ -260,12 +260,19 @@ public class HistoryService {
             }
         }
 
-        // Fetch intraday prices for all tickers
+        // Fetch intraday prices for all tickers. Guard per ticker: the price providers swallow
+        // expected upstream failures and return an empty map, so anything thrown here is a bug
+        // -- but letting it escape would 500 the whole intraday chart over one bad ticker.
+        // Log it loudly, drop that ticker's series, and still render the rest.
         Map<String, NavigableMap<LocalDateTime, BigDecimal>> intradayPricesByTicker = new HashMap<>();
         for (String ticker : allTickers) {
-            Map<LocalDateTime, BigDecimal> prices = priceService.getIntradayPricesEur(ticker, from, now);
-            if (!prices.isEmpty()) {
-                intradayPricesByTicker.put(ticker, new TreeMap<>(prices));
+            try {
+                Map<LocalDateTime, BigDecimal> prices = priceService.getIntradayPricesEur(ticker, from, now);
+                if (!prices.isEmpty()) {
+                    intradayPricesByTicker.put(ticker, new TreeMap<>(prices));
+                }
+            } catch (Exception ex) {
+                log.error("Intraday price fetch failed for {} -- omitting it from the chart", ticker, ex);
             }
         }
 

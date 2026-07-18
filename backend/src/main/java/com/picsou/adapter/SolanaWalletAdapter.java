@@ -2,6 +2,7 @@ package com.picsou.adapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.picsou.adapter.util.JsonRpcResponse;
+import com.picsou.model.Chain;
 import com.picsou.port.WalletPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,8 +50,8 @@ public class SolanaWalletAdapter implements WalletPort {
     }
 
     @Override
-    public String chain() {
-        return "SOLANA";
+    public Chain chain() {
+        return Chain.SOLANA;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.picsou.service;
 
+import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.exception.SyncException;
 import com.picsou.exception.WalletRpcException;
 import com.picsou.model.Account;
@@ -61,7 +62,7 @@ class WalletSyncServiceTest {
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("EVM");
+        when(adapter.chain()).thenReturn(Chain.EVM);
         when(adapter.fetchBalances(any())).thenThrow(new WalletRpcException("Ethereum eth_getBalance: RPC error"));
 
         WalletSyncService service = serviceWith(adapter);
@@ -80,7 +81,7 @@ class WalletSyncServiceTest {
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("SOLANA");
+        when(adapter.chain()).thenReturn(Chain.SOLANA);
         when(adapter.fetchBalances(any())).thenReturn(List.of(
             new WalletBalance("SOL", BigDecimal.ONE),
             new WalletBalance("USDC", new BigDecimal("50"))));
@@ -128,7 +129,7 @@ class WalletSyncServiceTest {
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("EVM");
+        when(adapter.chain()).thenReturn(Chain.EVM);
         when(adapter.fetchBalances(any())).thenReturn(List.of(
             new WalletBalance("ETH", BigDecimal.ONE),
             new WalletBalance("USDC", new BigDecimal("50"))));
@@ -155,7 +156,7 @@ class WalletSyncServiceTest {
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("EVM");
+        when(adapter.chain()).thenReturn(Chain.EVM);
         when(adapter.fetchBalances(any())).thenReturn(List.of());
 
         WalletSyncService service = serviceWith(adapter);
@@ -174,10 +175,10 @@ class WalletSyncServiceTest {
 
         // EVM adapter succeeds; SOL adapter errors.
         WalletPort ethAdapter = mock(WalletPort.class);
-        when(ethAdapter.chain()).thenReturn("EVM");
+        when(ethAdapter.chain()).thenReturn(Chain.EVM);
         when(ethAdapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
         WalletPort solAdapter = mock(WalletPort.class);
-        when(solAdapter.chain()).thenReturn("SOLANA");
+        when(solAdapter.chain()).thenReturn(Chain.SOLANA);
         when(solAdapter.fetchBalances(any())).thenThrow(new WalletRpcException("Solana getBalance: RPC error"));
 
         // Happy-path wiring for the ETH sync.
@@ -200,7 +201,7 @@ class WalletSyncServiceTest {
     @Test
     void addWallet_rejectsMalformedAddress_beforePersistingAnything() {
         WalletPort adapter = mock(WalletPort.class);
-        when(adapter.chain()).thenReturn("EVM");
+        when(adapter.chain()).thenReturn(Chain.EVM);
         doThrow(new IllegalArgumentException("Invalid EVM address '0xnope'"))
             .when(adapter).validateAddress("0xnope");
 
@@ -254,6 +255,134 @@ class WalletSyncServiceTest {
 
         verify(walletRepository, never()).save(any());
         verify(adapter, never()).fetchBalances(any());
+    }
+
+    @Test
+    void addWallet_rejectsNullChain_asABadRequest() {
+        // The controller's AddWalletRequest has no @NotNull and no @Valid, so a body that
+        // omits "chain" arrives here as null. Without the guard it reaches findAdapter,
+        // matches nothing, and surfaces as a 422 claiming the chain "isn't supported yet".
+        WalletSyncService service = serviceWith(mock(WalletPort.class));
+
+        assertThatThrownBy(() -> service.addWallet(null, "0xabc", "Ledger", MEMBER_ID))
+            .isInstanceOf(IllegalArgumentException.class)
+            .isNotInstanceOf(SyncException.class);
+
+        verify(walletRepository, never()).save(any());
+    }
+
+    // ─── removeWallet ─────────────────────────────────────────────────────────
+
+    @Test
+    void removeWallet_deletesTheWalletAndItsAccount() {
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+        Account account = mock(Account.class);
+        // The external id must match exactly what sync() builds, or removal orphans the account.
+        when(accountRepository.findByExternalAccountIdAndMemberId("wallet_evm_1", MEMBER_ID))
+            .thenReturn(Optional.of(account));
+
+        serviceWith().removeWallet(1L, MEMBER_ID);
+
+        verify(accountRepository).delete(account);
+        verify(walletRepository).delete(wallet);
+    }
+
+    @Test
+    void removeWallet_stillDeletesTheWallet_whenNoAccountExists() {
+        // A wallet whose first sync never succeeded has no account. Removing it must not
+        // leave the wallet row behind.
+        WalletAddress wallet = wallet(2L, Chain.BITCOIN, "bc1q");
+        when(walletRepository.findByIdAndMemberId(2L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+        when(accountRepository.findByExternalAccountIdAndMemberId("wallet_bitcoin_2", MEMBER_ID))
+            .thenReturn(Optional.empty());
+
+        serviceWith().removeWallet(2L, MEMBER_ID);
+
+        verify(walletRepository).delete(wallet);
+        verify(accountRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeWallet_rejectsAnotherMembersWallet_andDeletesNothing() {
+        // The member-scoped lookup is the only thing standing between members here.
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.empty());
+
+        WalletSyncService service = serviceWith();
+
+        assertThatThrownBy(() -> service.removeWallet(1L, MEMBER_ID))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(walletRepository, never()).delete(any());
+        verify(accountRepository, never()).delete(any());
+    }
+
+    // ─── listWallets ──────────────────────────────────────────────────────────
+
+    @Test
+    void listWallets_mapsEveryFieldOfEachWallet() {
+        WalletAddress wallet = WalletAddress.builder()
+            .id(3L).chain(Chain.SOLANA).address("SoLaNa").label("Phantom")
+            .lastSyncedAt(java.time.Instant.EPOCH).build();
+        when(walletRepository.findAllByMemberId(MEMBER_ID)).thenReturn(List.of(wallet));
+
+        List<WalletSyncService.WalletStatusResponse> result = serviceWith().listWallets(MEMBER_ID);
+
+        assertThat(result).singleElement().satisfies(w -> {
+            assertThat(w.id()).isEqualTo(3L);
+            assertThat(w.chain()).isEqualTo(Chain.SOLANA);
+            assertThat(w.address()).isEqualTo("SoLaNa");
+            assertThat(w.label()).isEqualTo("Phantom");
+            assertThat(w.lastSyncedAt()).isEqualTo(java.time.Instant.EPOCH);
+        });
+    }
+
+    @Test
+    void listWallets_returnsEmpty_whenMemberHasNone() {
+        when(walletRepository.findAllByMemberId(MEMBER_ID)).thenReturn(List.of());
+
+        assertThat(serviceWith().listWallets(MEMBER_ID)).isEmpty();
+    }
+
+    // ─── multi-wallet isolation ───────────────────────────────────────────────
+
+    @Test
+    void sync_touchesOnlyTheRequestedWallet_notTheMembersOtherWallets() {
+        // The account key embeds the wallet id, so wallet A can only ever resolve
+        // wallet_evm_1. If that suffix were ever dropped, both wallets would collapse onto
+        // one account and syncing A would prune B's holdings to zero -- silent data loss
+        // that no other test would catch.
+        WalletAddress walletA = wallet(1L, Chain.EVM, "0xabc");
+        WalletAddress walletB = wallet(2L, Chain.SOLANA, "SoLaNa");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(walletA));
+
+        WalletPort evmAdapter = mock(WalletPort.class);
+        when(evmAdapter.chain()).thenReturn(Chain.EVM);
+        when(evmAdapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
+        // Deliberately NOT stubbing solAdapter.chain(): findAdapter short-circuits on the
+        // first match, so a stub here would fail Mockito's strict-stub check.
+        WalletPort solAdapter = mock(WalletPort.class);
+
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account accountA = mock(Account.class);
+        when(accountA.getId()).thenReturn(100L);
+        when(accountRepository.save(any())).thenReturn(accountA);
+
+        serviceWith(evmAdapter, solAdapter).sync(1L, MEMBER_ID);
+
+        // Only A's account key was ever resolved.
+        verify(accountRepository).findByExternalAccountIdAndMemberId("wallet_evm_1", MEMBER_ID);
+        verify(accountRepository, never()).findByExternalAccountIdAndMemberId(eq("wallet_solana_2"), any());
+
+        // B was never fetched, never stamped, and its adapter never contacted.
+        verify(solAdapter, never()).fetchBalances(any());
+        verify(walletRepository, never()).save(walletB);
+        assertThat(walletB.getLastSyncedAt()).isNull();
+
+        // The destructive call landed on A's account only.
+        verify(accountService).pruneHoldings(eq(accountA), eq(Set.of("ETH")));
     }
 
     @Test

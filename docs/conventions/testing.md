@@ -9,7 +9,7 @@ src/test/java/com/picsou/
 ├── service/      # 19 service test classes (GoalService, AccountService, FamilyService,
 │                 #   MfaService, SecurityInsightService, HoldingCompute, …)
 ├── adapter/      # external-provider adapter tests
-├── controller/   # MockMvc controller tests
+├── controller/   # controller tests (pure Mockito -- no MockMvc, see below)
 ├── config/       # security / config tests
 └── export/       # GDPR export tests
 ```
@@ -165,11 +165,11 @@ JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=GoalServiceTest#progre
 
 ## Current coverage
 
-The suite has **592 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
+The suite has **608 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
 
 1. **Service-layer unit tests** — mock dependencies, test business logic.
 2. **Repository custom queries** — `@DataJpaTest` for non-trivial JPQL.
-3. **Controller integration tests** — MockMvc only when auth or validation flow needs verification.
+3. **Controller tests** — pure Mockito (`@Mock` + `@InjectMocks`), calling controller methods directly and asserting on the returned DTO. There is **no MockMvc anywhere in `src/test`**; controllers in this project are thin enough that a Spring context buys nothing. Assert that the member id comes from `UserContext`, which is the scoping contract at that layer.
 4. **Data-mutating migrations** — Testcontainers, per the section above.
 
 ## Don'ts

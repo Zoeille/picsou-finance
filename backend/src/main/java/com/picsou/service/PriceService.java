@@ -186,7 +186,11 @@ public class PriceService {
 
                 log.info("Backfilled {} prices for {}", prices.size(), upper);
             } catch (Exception ex) {
-                log.warn("Historical price backfill failed for {} -- skipping it", upper, ex);
+                // ERROR, not WARN: the providers return an empty map for expected upstream
+                // failures, so anything thrown here is a genuine bug. Still skip rather than
+                // propagate -- this runs from PriceBackfillRunner, an ApplicationRunner, where
+                // an escaping exception fails Spring Boot startup outright.
+                log.error("Historical price backfill failed for {} -- skipping it", upper, ex);
             }
         }
 
