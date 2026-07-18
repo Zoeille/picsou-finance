@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backfilled ticker is now guarded individually. Relatedly, a genuine bug in the
   price adapter is no longer swallowed as "no prices available" — only real
   upstream outages are.
+- **A price-provider outage can no longer zero a wallet's balance.** If no asset
+  in a wallet could be priced, the sync recorded a 0 EUR balance and stamped a 0
+  snapshot for that day — flattening the net-worth chart for what was a transient
+  outage, and doing it quietly because the holdings themselves were preserved.
+  That sync now fails instead, leaving the previous balance intact. A partial
+  outage still records a partial total.
 - **One bad price no longer blanks the intraday chart.** A failure fetching
   intraday prices for a single ticker returned a server error for the whole
   chart; that ticker is now omitted and the rest still renders.

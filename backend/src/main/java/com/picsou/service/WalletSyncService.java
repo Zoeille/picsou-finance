@@ -10,6 +10,8 @@ import com.picsou.port.WalletPort.WalletBalance;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.WalletAddressRepository;
+import jakarta.annotation.PostConstruct;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -144,13 +147,35 @@ public class WalletSyncService {
                 .toList();
 
             BigDecimal balanceEur = BigDecimal.ZERO;
+            boolean anyHeld = false;
+            boolean anyPriced = false;
             for (Priced p : priced) {
+                if (p.amount().signum() > 0) anyHeld = true;
                 if (p.priceEur() != null) {
+                    anyPriced = true;
                     balanceEur = balanceEur.add(
                         p.amount().multiply(p.priceEur()).setScale(2, RoundingMode.HALF_UP));
                 } else if (p.amount().signum() > 0) {
                     log.warn("No EUR price for {} -- skipping in wallet total", p.ticker());
                 }
+            }
+
+            // A wallet that holds assets but priced none of them means the price provider is
+            // down, NOT that the wallet is empty. Writing the resulting zero would set
+            // account.currentBalance to 0 and stamp a 0 balance snapshot for today --
+            // corrupting the net-worth history for a transient outage, and doing it silently
+            // because the holdings themselves survive. Fail the sync instead: the wallet keeps
+            // its last balance, nothing is written (this method is @Transactional), and the
+            // user gets the same friendly 422 as any other transient sync failure. Same rule
+            // as never reading a failed RPC as a 0 balance.
+            //
+            // A PARTIAL outage still writes a partial total, deliberately: refusing to snapshot
+            // whenever any single obscure token is unpriced would block snapshots indefinitely.
+            // That case is logged per ticker above.
+            if (anyHeld && !anyPriced) {
+                throw new SyncException(
+                    "No EUR price available for any asset held in this wallet -- refusing to "
+                        + "record a zero balance for " + wallet.getChain());
             }
 
             wallet.setLastSyncedAt(Instant.now());
@@ -267,7 +292,45 @@ public class WalletSyncService {
                 .build();
         }
 
-        return accountRepository.save(account);
+        try {
+            return accountRepository.save(account);
+        } catch (DataIntegrityViolationException ex) {
+            // Lost a race: another sync of this same wallet (a double-click, or a user sync
+            // colliding with the scheduler) inserted the account between our lookup and this
+            // insert. Re-resolve rather than fail -- two accounts for one wallet would split
+            // its snapshot history in half. Note this narrows the window rather than closing
+            // it: external_account_id carries only a plain index today, so the reconciliation
+            // relies on whichever constraint the insert did violate.
+            log.warn("Concurrent account creation for {} -- reusing the winning row", externalId);
+            return accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId)
+                .orElseThrow(() -> ex);
+        }
+    }
+
+    /**
+     * Fails fast at startup if any {@link Chain} has no adapter, or more than one. Dispatch in
+     * {@link #findAdapter} is a {@code findFirst} over injected beans, so without this a missing
+     * adapter surfaces only when a user syncs that chain (a 422 reading "isn't supported yet"),
+     * and a duplicate silently lets whichever bean loaded first win.
+     */
+    @PostConstruct
+    void verifyAdapterCoverage() {
+        Map<Chain, Long> byChain = walletAdapters.stream()
+            .collect(Collectors.groupingBy(WalletPort::chain, Collectors.counting()));
+
+        Set<Chain> missing = EnumSet.allOf(Chain.class);
+        missing.removeAll(byChain.keySet());
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException("No WalletPort adapter for chain(s): " + missing);
+        }
+
+        List<Chain> duplicated = byChain.entrySet().stream()
+            .filter(e -> e.getValue() > 1)
+            .map(Map.Entry::getKey)
+            .toList();
+        if (!duplicated.isEmpty()) {
+            throw new IllegalStateException("Multiple WalletPort adapters for chain(s): " + duplicated);
+        }
     }
 
     public record WalletStatusResponse(

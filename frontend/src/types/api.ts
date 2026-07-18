@@ -221,7 +221,17 @@ export interface SecurityInsight {
 }
 
 export type ExchangeType = 'BINANCE' | 'KRAKEN'
-export type ChainType = 'SOLANA' | 'EVM' | 'BITCOIN'
+/**
+ * On-chain wallet chains, in the order the pickers show them.
+ *
+ * Mirrors the backend `com.picsou.model.Chain` enum — there is no codegen between the two, so
+ * adding a chain means editing both in the same change. The backend side fails fast if you
+ * forget the adapter (`WalletSyncService.verifyAdapterCoverage`); on this side a missing entry
+ * shows up as a chain that never appears in the picker.
+ */
+export const SUPPORTED_CHAINS = ['BITCOIN', 'EVM', 'SOLANA'] as const
+
+export type ChainType = (typeof SUPPORTED_CHAINS)[number]
 export type FinaryMappingAction = 'SKIP' | 'MAP_EXISTING' | 'CREATE_NEW'
 
 export interface ExchangeStatus {

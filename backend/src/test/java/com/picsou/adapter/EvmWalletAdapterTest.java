@@ -261,6 +261,43 @@ class EvmWalletAdapterTest {
     }
 
     @Test
+    void nativeFailureOnOneChain_abortsEvenWhenAnotherChainOnlyLosesAToken() {
+        // The two failure modes occurring together across concurrently-queried networks:
+        // BNB's native probe fails (fatal) while Ethereum merely loses one token
+        // (recoverable). The whole sync must abort -- otherwise the wallet would be marked
+        // synced with BNB silently missing, understating net worth. Asserting the outcome
+        // rather than any ordering, since the fan-out gives no completion-order guarantee.
+        var adapter = adapter(
+            List.of(
+                net("eth", "ETH", List.of(new Erc20Token("0xBAD", "DAI", 18))),
+                net("bnb", "BNB", List.of())),
+            Map.of(
+                nativeKey("eth"), ONE_COIN,
+                tokenKey("eth", "0xBAD"), RPC_ERROR,   // recoverable on its own
+                nativeKey("bnb"), RPC_ERROR));         // fatal
+
+        assertThatThrownBy(() -> adapter.fetchBalances(ADDRESS))
+            .isInstanceOf(WalletRpcException.class);
+    }
+
+    @Test
+    void nativeTransportFailureOnOneChain_abortsWhileAnotherChainSucceeds() {
+        // Same asymmetry, but the fatal side is a transport error rather than a JSON-RPC
+        // payload, and the other chain fully succeeds. A partially-successful fan-out must
+        // still abort: never report a subset as if it were the whole wallet.
+        var adapter = adapter(
+            List.of(
+                net("eth", "ETH", List.of()),
+                net("bnb", "BNB", List.of())),
+            Map.of(
+                nativeKey("eth"), ONE_COIN,
+                nativeKey("bnb"), TRANSPORT_ERROR));
+
+        assertThatThrownBy(() -> adapter.fetchBalances(ADDRESS))
+            .isInstanceOf(WalletRpcException.class);
+    }
+
+    @Test
     void emptyCallResult_treatedAsZeroToken() {
         // A "0x" result (call to a non-contract) is not an error -- just no balance.
         var adapter = adapter(

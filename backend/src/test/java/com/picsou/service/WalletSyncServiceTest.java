@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -120,11 +121,12 @@ class WalletSyncServiceTest {
     }
 
     @Test
-    void sync_keepsHeldAssets_whenPricesUnavailable() {
-        // CoinGecko outage: refreshPrices returns an empty map. Held assets must
-        // still be kept (pruneHoldings is keyed on held balances, not on which
-        // prices resolved), so a transient price failure can't wipe holdings and
-        // their cost basis.
+    void sync_failsAndWritesNothing_whenNoHeldAssetCanBePriced() {
+        // Total CoinGecko outage on a wallet that still holds assets. The balance sums to
+        // zero purely because nothing could be priced -- writing it would set the account
+        // to 0 EUR and stamp a 0 snapshot for today, silently flattening the net-worth
+        // chart for a transient outage. The holdings rows would survive, which is exactly
+        // what makes the corruption easy to miss.
         WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
         when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
 
@@ -135,19 +137,70 @@ class WalletSyncServiceTest {
             new WalletBalance("USDC", new BigDecimal("50"))));
         when(priceService.refreshPrices(any())).thenReturn(Map.of()); // price outage
 
+        WalletSyncService service = serviceWith(adapter);
+
+        assertThatThrownBy(() -> service.sync(1L, MEMBER_ID))
+            .isInstanceOf(SyncException.class);
+
+        // Nothing persisted: no zero balance, no zero snapshot, no prune, and the wallet
+        // is not marked synced. It keeps whatever balance it last had.
+        verify(accountRepository, never()).save(any());
+        verify(accountService, never()).upsertSnapshot(any(), any(), any());
+        verify(accountService, never()).pruneHoldings(any(), any());
+        verify(walletRepository, never()).save(any());
+    }
+
+    @Test
+    void sync_recordsAPartialTotal_whenOnlySomeAssetsArePriced() {
+        // The complement of the test above: refusing to snapshot whenever ANY asset is
+        // unpriced would block snapshots indefinitely on one obscure token. A partial
+        // total is recorded, and the unpriced asset is still kept as a holding.
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(
+            new WalletBalance("ETH", BigDecimal.ONE),
+            new WalletBalance("SOMETOKEN", new BigDecimal("50"))));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account savedAccount = mock(Account.class);
+        when(savedAccount.getId()).thenReturn(100L);
+        when(accountRepository.save(any())).thenReturn(savedAccount);
+
+        serviceWith(adapter).sync(1L, MEMBER_ID);
+
+        ArgumentCaptor<BigDecimal> balanceEur = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(accountService).upsertSnapshot(eq(savedAccount), balanceEur.capture(), any());
+        assertThat(balanceEur.getValue()).isEqualByComparingTo("2000.00");
+
+        // Both are still held, so neither is pruned -- the unpriced one keeps its cost basis.
+        verify(accountService).pruneHoldings(eq(savedAccount), eq(Set.of("ETH", "SOMETOKEN")));
+    }
+
+    @Test
+    void sync_succeedsOnAGenuinelyEmptyWallet_withoutPrices() {
+        // A zero balance is only suspicious when assets are held. An empty wallet legitimately
+        // prices nothing, and must still sync (and snapshot 0) rather than erroring forever.
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ZERO)));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of());
+
         when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
         when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
         Account savedAccount = mock(Account.class);
         when(accountRepository.save(any())).thenReturn(savedAccount);
 
-        WalletSyncService service = serviceWith(adapter);
+        serviceWith(adapter).sync(1L, MEMBER_ID);
 
-        service.sync(1L, MEMBER_ID);
-
-        // No prices -> nothing upserted, but the held tickers are kept: this must
-        // NOT be an empty-set prune (which would delete every holding row).
-        verify(accountService, never()).upsertHolding(any(), any(), any(), any(), any(), any());
-        verify(accountService).pruneHoldings(eq(savedAccount), eq(Set.of("ETH", "USDC")));
+        verify(accountService).upsertSnapshot(eq(savedAccount), any(), any());
     }
 
     @Test
@@ -383,6 +436,81 @@ class WalletSyncServiceTest {
 
         // The destructive call landed on A's account only.
         verify(accountService).pruneHoldings(eq(accountA), eq(Set.of("ETH")));
+    }
+
+    // ─── startup adapter coverage ─────────────────────────────────────────────
+
+    @Test
+    void verifyAdapterCoverage_failsStartup_whenAChainHasNoAdapter() {
+        // Dispatch is a findFirst over injected beans, so a missing adapter would otherwise
+        // only show up as a 422 the first time a user syncs that chain.
+        WalletPort evm = mock(WalletPort.class);
+        when(evm.chain()).thenReturn(Chain.EVM);
+
+        assertThatThrownBy(() -> serviceWith(evm).verifyAdapterCoverage())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("BITCOIN")
+            .hasMessageContaining("SOLANA");
+    }
+
+    @Test
+    void verifyAdapterCoverage_failsStartup_whenTwoAdaptersClaimTheSameChain() {
+        WalletPort evm = mock(WalletPort.class);
+        WalletPort evmAgain = mock(WalletPort.class);
+        WalletPort btc = mock(WalletPort.class);
+        WalletPort sol = mock(WalletPort.class);
+        when(evm.chain()).thenReturn(Chain.EVM);
+        when(evmAgain.chain()).thenReturn(Chain.EVM);
+        when(btc.chain()).thenReturn(Chain.BITCOIN);
+        when(sol.chain()).thenReturn(Chain.SOLANA);
+
+        assertThatThrownBy(() -> serviceWith(evm, evmAgain, btc, sol).verifyAdapterCoverage())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("EVM");
+    }
+
+    @Test
+    void verifyAdapterCoverage_passes_whenEveryChainHasExactlyOneAdapter() {
+        WalletPort evm = mock(WalletPort.class);
+        WalletPort btc = mock(WalletPort.class);
+        WalletPort sol = mock(WalletPort.class);
+        when(evm.chain()).thenReturn(Chain.EVM);
+        when(btc.chain()).thenReturn(Chain.BITCOIN);
+        when(sol.chain()).thenReturn(Chain.SOLANA);
+
+        assertThatCode(() -> serviceWith(evm, btc, sol).verifyAdapterCoverage())
+            .doesNotThrowAnyException();
+    }
+
+    // ─── concurrent account creation ──────────────────────────────────────────
+
+    @Test
+    void sync_reusesTheWinningAccount_whenAConcurrentSyncInsertedItFirst() {
+        // Two syncs of the same wallet (double-click, or a user sync colliding with the
+        // scheduler) both see no account and both insert. The loser must converge on the
+        // winner's row -- two accounts for one wallet would split its snapshot history.
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+
+        Account winner = mock(Account.class);
+        when(winner.getId()).thenReturn(100L);
+        // First lookup: nothing. Insert loses the race. Re-lookup: the winner's row.
+        when(accountRepository.findByExternalAccountIdAndMemberId("wallet_evm_1", MEMBER_ID))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(winner));
+        when(accountRepository.save(any()))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+
+        serviceWith(adapter).sync(1L, MEMBER_ID);
+
+        // The sync completed against the surviving account rather than failing or duplicating.
+        verify(accountService).upsertSnapshot(eq(winner), any(), any());
     }
 
     @Test

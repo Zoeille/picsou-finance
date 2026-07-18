@@ -52,6 +52,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import type { ExchangeType, ChainType, AccountRequest, FinaryPreviewResponse, FinaryAccountMapping, FinaryMappingAction, FinaryImportResultResponse, AccountType } from '@/types/api'
+import { SUPPORTED_CHAINS } from '@/types/api'
 
 // ---------------------------------------------------------------------------
 // Props & types
@@ -529,7 +530,7 @@ function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
         <div className="space-y-2">
           <Label>{t('sync.wallets.chain')}</Label>
           <div className="flex gap-2">
-            {(['BITCOIN', 'EVM', 'SOLANA'] as ChainType[]).map((c) => (
+            {SUPPORTED_CHAINS.map((c) => (
               <Button
                 key={c}
                 type="button"

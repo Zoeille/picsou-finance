@@ -18,6 +18,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { WalletStatus, ChainType } from '@/types/api'
+import { SUPPORTED_CHAINS } from '@/types/api'
 import { extractErrorMessage, formatApiError } from '@/lib/errors'
 
 const CHAIN_COLORS: Record<ChainType, string> = {
@@ -172,7 +173,7 @@ export function CryptoWalletTab() {
               <div className="space-y-2">
                 <Label>{t('sync.wallets.chain')}</Label>
                 <div className="flex gap-2">
-                  {(['BITCOIN', 'EVM', 'SOLANA'] as ChainType[]).map(c => (
+                  {SUPPORTED_CHAINS.map(c => (
                     <Button
                       key={c}
                       type="button"
