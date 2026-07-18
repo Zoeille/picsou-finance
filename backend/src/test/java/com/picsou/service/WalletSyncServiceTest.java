@@ -218,6 +218,27 @@ class WalletSyncServiceTest {
     }
 
     @Test
+    void addWallet_rejectsBlankAddress_evenOnChainsWithoutFormatValidation() {
+        // BITCOIN has no validateAddress override (its encodings aren't cheaply checked
+        // offline), so a blank address would otherwise sail through the gate and only
+        // fail at sync -- as a retryable-looking 422, after calling the explorer with an
+        // empty address in the URL path.
+        // No chain() stub: the blank check fires before findAdapter is even consulted,
+        // which is itself the point -- an empty address is rejected chain-agnostically.
+        WalletPort adapter = mock(WalletPort.class);
+
+        WalletSyncService service = serviceWith(adapter);
+
+        assertThatThrownBy(() -> service.addWallet(Chain.BITCOIN, "   ", "Cold", MEMBER_ID))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.addWallet(Chain.BITCOIN, null, "Cold", MEMBER_ID))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verify(walletRepository, never()).save(any());
+        verify(adapter, never()).fetchBalances(any());
+    }
+
+    @Test
     void resyncAll_returnsEmptySummary_whenNoWallets() {
         when(walletRepository.findAllByMemberId(MEMBER_ID)).thenReturn(List.of());
 

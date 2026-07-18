@@ -129,8 +129,14 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                 }
             }
             if (result.size() < supported.size()) {
-                Set<String> missing = new HashSet<>(supported);
-                missing.removeAll(result.keySet());
+                // Compare upper-cased: supports() is case-insensitive so `supported` keeps
+                // the caller's original case, while `result` is keyed upper-case. Comparing
+                // them raw would report every ticker as missing for a lower-case caller --
+                // a false outage alarm in the very line meant to make outages diagnosable.
+                Set<String> missing = supported.stream()
+                    .map(t -> t.toUpperCase(Locale.ROOT))
+                    .filter(t -> !result.containsKey(t))
+                    .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
                 log.warn("CoinGecko had no EUR price for {} of {} requested tickers: {}",
                     missing.size(), supported.size(), missing);
             }
@@ -160,11 +166,16 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
             if (status == 429) {
                 log.warn("CoinGecko rate-limited (429) fetching {} for {} -- returning no prices", operation, context);
             } else if (http.getStatusCode().is5xxServerError()) {
-                log.error("CoinGecko server error (HTTP {}) fetching {} for {} -- returning no prices: {}",
-                    status, operation, context, http.getResponseBodyAsString());
+                // Their outage, not our bug: WARN, matching how the rest of the codebase
+                // grades expected external failures. These callers are on a scheduler and
+                // run per-ticker, so an hours-long outage would otherwise pour ERROR lines
+                // (each carrying a full HTML error page) into a self-hosted instance's log.
+                log.warn("CoinGecko server error (HTTP {}) fetching {} for {} -- returning no prices: {}",
+                    status, operation, context, truncate(http.getResponseBodyAsString()));
             } else {
+                // A 4xx means we sent something wrong -- that IS our bug, so ERROR.
                 log.error("CoinGecko rejected the {} request for {} with HTTP {} -- returning no prices: {}",
-                    operation, context, status, http.getResponseBodyAsString());
+                    operation, context, status, truncate(http.getResponseBodyAsString()));
             }
         } else if (cause instanceof TimeoutException) {
             log.warn("CoinGecko {} request for {} timed out after {} -- returning no prices",
@@ -175,6 +186,12 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
             log.error("CoinGecko {} request for {} failed with {} -- returning no prices",
                 operation, context, cause.getClass().getSimpleName(), cause);
         }
+    }
+
+    /** Caps an upstream error body so one bad gateway's HTML page can't fill the log. */
+    private static String truncate(String body) {
+        if (body == null || body.isBlank()) return "<empty body>";
+        return body.length() <= 200 ? body : body.substring(0, 200) + "... (truncated)";
     }
 
     /**

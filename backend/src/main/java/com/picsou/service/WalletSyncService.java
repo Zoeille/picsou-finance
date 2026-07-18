@@ -59,6 +59,14 @@ public class WalletSyncService {
     public AccountResponse addWallet(Chain chain, String address, String label, Long memberId) {
         String trimmed = address == null ? "" : address.trim();
 
+        // Reject a missing address here rather than in validateAddress: that hook is a
+        // no-op by default, so an empty string would otherwise sail past it on BITCOIN
+        // and SOLANA and only fail later as a retryable-looking 422 -- after a wasted
+        // call to the explorer with an empty address in the path.
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("A wallet address is required");
+        }
+
         // Resolve the adapter and check the address format BEFORE persisting: a typo
         // must come back as a 400 with nothing written, otherwise the unusable wallet
         // row survives the failed first sync and fails every resync after it.

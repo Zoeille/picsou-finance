@@ -3,16 +3,20 @@ package com.picsou.migration;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,11 +37,35 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code split_part()} do not exist in H2.
  */
 @Testcontainers
+@EnabledIf("dockerAvailable")
 class V54WalletEthereumToEvmMigrationTest {
+
+    static {
+        // docker-java otherwise negotiates down to Docker API 1.32, which Engine >= 28
+        // refuses outright ("minimum supported API version is 1.40") -- which surfaces as
+        // the *same* "no valid Docker environment" error a machine without Docker gives,
+        // so the guard below would quietly skip this test on a perfectly capable host.
+        // Set here rather than in surefire config so it also applies when the class is run
+        // from an IDE or failsafe. 1.44 is satisfied by Engine >= 25.0 (Jan 2024).
+        System.setProperty("api.version", System.getProperty("api.version", "1.44"));
+    }
 
     @Container
     @SuppressWarnings("resource") // closed by the Testcontainers JUnit extension
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    /**
+     * Gates the whole class on a reachable Docker daemon so the other 570-odd tests stay
+     * runnable without one (notably {@code mvn test} inside a Maven image with no
+     * {@code /var/run/docker.sock} mount). Evaluated as a JUnit {@code ExecutionCondition},
+     * which runs <em>before</em> the Testcontainers extension tries to start the container.
+     *
+     * <p>Deliberately a skip, not a silent pass: surefire reports it as skipped, and CI
+     * runners provide Docker, so the migration is still covered where it matters.
+     */
+    static boolean dockerAvailable() {
+        return DockerClientFactory.instance().isDockerAvailable();
+    }
 
     private static Long ethWalletId;
     private static Long solWalletId;
@@ -128,17 +156,37 @@ class V54WalletEthereumToEvmMigrationTest {
     }
 
     @Test
-    void isIdempotent_whenNoEthereumWalletsRemain() throws SQLException {
-        // Re-running the migration's statements (a repair, a replayed deploy) must be a
-        // no-op rather than mangling ids that already carry the evm_ prefix.
-        try (Connection conn = connect()) {
-            exec(conn, "UPDATE wallet_address SET chain = 'EVM' WHERE chain = 'ETHEREUM'");
-            exec(conn, "UPDATE account SET external_account_id = 'wallet_evm_' "
-                + "|| split_part(external_account_id, '_', 3) WHERE external_account_id LIKE 'wallet_ethereum_%'");
+    void migrationSqlIsIdempotent_whenReplayedOnAlreadyMigratedData() throws Exception {
+        // Replays the REAL V54 file against data it has already migrated (a repair, a
+        // restored dump, a replayed deploy). Re-typing the SQL into the test instead
+        // would assert nothing at all: after @BeforeAll both statements match zero
+        // rows, so a copy passes no matter what the actual migration says -- and it
+        // stops tracking the file the moment someone edits it.
+        String sql;
+        try (var in = V54WalletEthereumToEvmMigrationTest.class
+            .getResourceAsStream("/db/migration/V54__wallet_ethereum_to_evm.sql")) {
+            assertThat(in).as("V54 migration must be on the test classpath").isNotNull();
+            sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
 
+        try (Connection conn = connect(); Statement st = conn.createStatement()) {
+            st.execute(sql);
+        }
+
+        // A second pass must leave the already-rewritten ids and chains exactly as they
+        // were -- not re-split them into a truncated or doubled prefix.
+        assertThat(queryString("SELECT chain FROM wallet_address WHERE id = " + ethWalletId))
+            .isEqualTo("EVM");
         assertThat(queryString("SELECT external_account_id FROM account WHERE id = " + ethAccountId))
             .isEqualTo("wallet_evm_" + ethWalletId);
+        assertThat(queryString("SELECT external_account_id FROM account WHERE id = " + bankAccountId))
+            .isEqualTo("gocardless_abc_123");
+        // Catches a broadened WHERE (e.g. LIKE 'wallet_%'), which on a replay would
+        // silently rewrite the Solana wallet's account to a wallet_evm_ id and orphan it.
+        assertThat(queryString("SELECT external_account_id FROM account WHERE id = " + solAccountId))
+            .isEqualTo("wallet_solana_" + solWalletId);
+        assertThat(queryLong("SELECT COUNT(*) FROM account_holding WHERE account_id = " + ethAccountId))
+            .isEqualTo(1L);
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────

@@ -206,22 +206,6 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <systemPropertyVariables>
-                        <!--
-                            docker-java otherwise negotiates down to Docker API 1.32, which
-                            Engine >= 28 refuses outright ("minimum supported API version is
-                            1.40"), so every Testcontainers test dies with "Could not find a
-                            valid Docker environment". Pinning 1.44 works on Engine >= 25.0
-                            (Jan 2024), which is the floor for running this test suite.
-                        -->
-                        <api.version>1.44</api.version>
-                    </systemPropertyVariables>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <version>3.5.0</version>
                 <executions>

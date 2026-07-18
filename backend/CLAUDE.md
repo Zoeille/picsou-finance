@@ -11,7 +11,9 @@ mvn test -Dtest=GoalServiceTest                       # Run a single test class
 mvn package -DskipTests                               # Build JAR
 ```
 
-Tests use H2 in-memory — no external database needed.
+Tests use H2 in-memory — no external database needed. The one exception is the Flyway
+migration test, which needs real PostgreSQL (Testcontainers, Docker Engine ≥ 25.0); it
+skips itself when Docker is unreachable, so the rest of the suite still runs.
 
 ## Package structure
 

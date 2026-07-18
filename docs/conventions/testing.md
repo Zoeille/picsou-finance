@@ -109,10 +109,21 @@ class V99SomeMigrationTest {
 
 Assert both directions: the rows that must change, **and** the rows that must not.
 
-**Docker Engine ≥ 25.0 is required.** `pom.xml` pins the surefire system property
-`api.version=1.44`; without it docker-java negotiates down to API 1.32, which Engine ≥ 28
-refuses outright and every Testcontainers test fails with "Could not find a valid Docker
-environment".
+Two things the class must do, both learned the hard way:
+
+- **Gate on Docker** with `@EnabledIf("dockerAvailable")` (backed by
+  `DockerClientFactory.instance().isDockerAvailable()`), so a machine without a Docker
+  socket skips this class instead of failing the whole 570-test suite. It must be a JUnit
+  `ExecutionCondition` — a `@BeforeAll` assumption runs *after* the Testcontainers
+  extension has already tried to start the container.
+- **Set `api.version=1.44` in a static initializer.** Otherwise docker-java negotiates
+  down to API 1.32, which Engine ≥ 28 refuses — and that surfaces as the *same* "Could not
+  find a valid Docker environment" error a Docker-less machine gives, so the guard above
+  would quietly skip the test on a perfectly capable host. A static block (not surefire
+  config, not a classpath `testcontainers.properties` — neither is honored here) keeps it
+  working from an IDE too. This sets the floor at Docker Engine ≥ 25.0.
+
+The combination matters: the guard alone turns a config problem into a silent pass.
 
 ## Frontend tests
 
