@@ -2,7 +2,10 @@ package com.picsou.migration;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -38,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Testcontainers
 @EnabledIf("dockerAvailable")
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class V54WalletEthereumToEvmMigrationTest {
 
     static {
@@ -60,11 +64,20 @@ class V54WalletEthereumToEvmMigrationTest {
      * {@code /var/run/docker.sock} mount). Evaluated as a JUnit {@code ExecutionCondition},
      * which runs <em>before</em> the Testcontainers extension tries to start the container.
      *
-     * <p>Deliberately a skip, not a silent pass: surefire reports it as skipped, and CI
-     * runners provide Docker, so the migration is still covered where it matters.
+     * <p>A skip is invisible in a green build, and this is the project's only coverage of
+     * a data-mutating migration — so CI sets {@code PICSOU_REQUIRE_DOCKER_TESTS=true},
+     * which turns "no Docker" into a hard failure instead. Environment drift then shows up
+     * as a red build rather than silently deleting the coverage.
      */
     static boolean dockerAvailable() {
-        return DockerClientFactory.instance().isDockerAvailable();
+        boolean available = DockerClientFactory.instance().isDockerAvailable();
+        if (!available && Boolean.parseBoolean(System.getenv("PICSOU_REQUIRE_DOCKER_TESTS"))) {
+            throw new IllegalStateException(
+                "PICSOU_REQUIRE_DOCKER_TESTS is set but no Docker environment was found. "
+                    + "The V54/V55 migration test cannot be skipped here -- it is the only "
+                    + "coverage of a data-mutating migration. Needs Docker Engine >= 25.0.");
+        }
+        return available;
     }
 
     private static Long ethWalletId;
@@ -72,6 +85,7 @@ class V54WalletEthereumToEvmMigrationTest {
     private static Long ethAccountId;
     private static Long solAccountId;
     private static Long bankAccountId;
+    private static Long labelledAccountId;
 
     /**
      * Brings the schema to V53 (the state a deployed instance is in before this change),
@@ -94,10 +108,17 @@ class V54WalletEthereumToEvmMigrationTest {
                 "INSERT INTO wallet_address (chain, address, member_id) "
                     + "VALUES ('SOLANA', 'SoLaNaAddr', " + memberId + ") RETURNING id");
 
-            ethAccountId = insertAccount(conn, memberId, "ETH Wallet", "wallet_ethereum_" + ethWalletId);
+            // "ETHEREUM Wallet" is exactly what resolveAccount names an UNLABELLED wallet
+            // (chain.name() + " Wallet") -- the name V55 has to rewrite.
+            ethAccountId = insertAccount(conn, memberId, "ETHEREUM Wallet", "wallet_ethereum_" + ethWalletId);
             solAccountId = insertAccount(conn, memberId, "SOL Wallet", "wallet_solana_" + solWalletId);
             // A bank account whose external id is unrelated: the LIKE filter must not reach it.
             bankAccountId = insertAccount(conn, memberId, "Checking", "gocardless_abc_123");
+            // A second migrated wallet that the user had LABELLED: V55 must not rename it.
+            long labelledWalletId = insertReturningId(conn,
+                "INSERT INTO wallet_address (chain, address, member_id) "
+                    + "VALUES ('ETHEREUM', '0x2222222222222222222222222222222222222222', " + memberId + ") RETURNING id");
+            labelledAccountId = insertAccount(conn, memberId, "My Ledger", "wallet_ethereum_" + labelledWalletId);
 
             // Cost basis on the migrated account -- the value most expensive to lose,
             // since it cannot be recomputed from on-chain data.
@@ -105,7 +126,20 @@ class V54WalletEthereumToEvmMigrationTest {
                 + "VALUES (" + ethAccountId + ", 'ETH', 0.96100000, 1850.00000000)");
         }
 
-        migrateTo("54");
+        migrateTo("55");
+    }
+
+    @Test
+    void renamesDefaultChainNamedAccount_butKeepsUserLabels() throws SQLException {
+        // V55: an unlabelled wallet's account was named from the retired chain value and
+        // resolveAccount never refreshes an existing account's name, so without this it
+        // would read "ETHEREUM Wallet" forever while tracking BNB, POL and AVAX too.
+        assertThat(queryString("SELECT name FROM account WHERE id = " + ethAccountId))
+            .isEqualTo("EVM Wallet");
+        assertThat(queryString("SELECT name FROM account WHERE id = " + labelledAccountId))
+            .isEqualTo("My Ledger");
+        assertThat(queryString("SELECT name FROM account WHERE id = " + bankAccountId))
+            .isEqualTo("Checking");
     }
 
     @Test
@@ -155,7 +189,14 @@ class V54WalletEthereumToEvmMigrationTest {
             .isEqualTo("gocardless_abc_123");
     }
 
+    /**
+     * Ordered last: it is the only test that mutates the shared seeded dataset, so the
+     * assertions above must observe the post-migration state, not the post-replay one.
+     * (The replay is a no-op while V54 is correct — but that is the property under test,
+     * so it cannot be assumed by the tests that run before it.)
+     */
     @Test
+    @Order(Integer.MAX_VALUE)
     void migrationSqlIsIdempotent_whenReplayedOnAlreadyMigratedData() throws Exception {
         // Replays the REAL V54 file against data it has already migrated (a repair, a
         // restored dump, a replayed deploy). Re-typing the SQL into the test instead

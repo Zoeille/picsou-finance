@@ -21,6 +21,12 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Run backend tests
+        # The migration test skips itself when Docker is unreachable so local runs
+        # without a socket still work. Runners always have Docker, so require it here --
+        # otherwise environment drift would silently drop the project's only coverage of
+        # a data-mutating migration and the build would stay green.
+        env:
+          PICSOU_REQUIRE_DOCKER_TESTS: 'true'
         run: mvn -B test
         working-directory: backend
 

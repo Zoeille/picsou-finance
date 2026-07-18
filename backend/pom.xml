@@ -188,7 +188,8 @@
         <!--
             Flyway migrations are PostgreSQL-flavoured (enum types, split_part...), so a
             data-mutating migration can only be verified against real PostgreSQL, not H2.
-            Versions come from the Spring Boot parent's testcontainers BOM.
+            Version comes from the testcontainers.version property above, which overrides
+            the Spring Boot parent's BOM.
         -->
         <dependency>
             <groupId>org.testcontainers</groupId>

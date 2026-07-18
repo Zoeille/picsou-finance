@@ -98,7 +98,7 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
         if (supported.isEmpty()) return Map.of();
 
         String ids = supported.stream()
-            .map(t -> TICKER_TO_ID.get(t.toUpperCase()))
+            .map(t -> TICKER_TO_ID.get(t.toUpperCase(Locale.ROOT)))
             .filter(Objects::nonNull)
             .reduce((a, b) -> a + "," + b)
             .orElse("");
@@ -122,21 +122,23 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
 
             Map<String, BigDecimal> result = new HashMap<>();
             for (String ticker : supported) {
-                String coinId = TICKER_TO_ID.get(ticker.toUpperCase());
+                String coinId = TICKER_TO_ID.get(ticker.toUpperCase(Locale.ROOT));
                 if (coinId != null && response.containsKey(coinId)) {
                     BigDecimal price = response.get(coinId).eur();
-                    if (price != null) result.put(ticker.toUpperCase(), price);
+                    if (price != null) result.put(ticker.toUpperCase(Locale.ROOT), price);
                 }
             }
-            if (result.size() < supported.size()) {
-                // Compare upper-cased: supports() is case-insensitive so `supported` keeps
-                // the caller's original case, while `result` is keyed upper-case. Comparing
-                // them raw would report every ticker as missing for a lower-case caller --
-                // a false outage alarm in the very line meant to make outages diagnosable.
-                Set<String> missing = supported.stream()
-                    .map(t -> t.toUpperCase(Locale.ROOT))
-                    .filter(t -> !result.containsKey(t))
-                    .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+            // Compare upper-cased: supports() is case-insensitive so `supported` keeps the
+            // caller's original case, while `result` is keyed upper-case. Comparing them
+            // raw would report every ticker as missing for a lower-case caller -- a false
+            // outage alarm in the very line meant to make outages diagnosable. Gate on the
+            // set itself, not on a size comparison: {"BTC","btc"} collapses to one result
+            // key, which would otherwise warn "no EUR price for 0 of 2 tickers: []".
+            Set<String> missing = supported.stream()
+                .map(t -> t.toUpperCase(Locale.ROOT))
+                .filter(t -> !result.containsKey(t))
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+            if (!missing.isEmpty()) {
                 log.warn("CoinGecko had no EUR price for {} of {} requested tickers: {}",
                     missing.size(), supported.size(), missing);
             }
@@ -172,9 +174,15 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                 // (each carrying a full HTML error page) into a self-hosted instance's log.
                 log.warn("CoinGecko server error (HTTP {}) fetching {} for {} -- returning no prices: {}",
                     status, operation, context, truncate(http.getResponseBodyAsString()));
-            } else {
-                // A 4xx means we sent something wrong -- that IS our bug, so ERROR.
+            } else if (status == 400 || status == 404) {
+                // A malformed request or an unknown coin id points at a bad TICKER_TO_ID
+                // entry -- something we can actually fix, so ERROR.
                 log.error("CoinGecko rejected the {} request for {} with HTTP {} -- returning no prices: {}",
+                    operation, context, status, truncate(http.getResponseBodyAsString()));
+            } else {
+                // Other 4xx (401/403 free-tier restrictions, 451...) are the provider's
+                // access policy, not a bug on our side: WARN like the other outage cases.
+                log.warn("CoinGecko refused the {} request for {} with HTTP {} -- returning no prices: {}",
                     operation, context, status, truncate(http.getResponseBodyAsString()));
             }
         } else if (cause instanceof TimeoutException) {
@@ -199,7 +207,7 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
      * CoinGecko's market_chart/range returns hourly data for ranges < 90 days.
      */
     public Map<LocalDateTime, BigDecimal> getIntradayPricesEur(String ticker, LocalDateTime from, LocalDateTime to) {
-        String coinId = TICKER_TO_ID.get(ticker.toUpperCase());
+        String coinId = TICKER_TO_ID.get(ticker.toUpperCase(Locale.ROOT));
         if (coinId == null) return Map.of();
 
         try {
@@ -251,7 +259,7 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
      * Returns a map of date -> priceEur.
      */
     public Map<LocalDate, BigDecimal> getHistoricalPricesEur(String ticker, LocalDate from, LocalDate to) {
-        String coinId = TICKER_TO_ID.get(ticker.toUpperCase());
+        String coinId = TICKER_TO_ID.get(ticker.toUpperCase(Locale.ROOT));
         if (coinId == null) return Map.of();
 
         try {

@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reporting each native coin (ETH, BNB, POL, AVAX…) plus curated ERC-20/BEP-20
   stablecoins, all over keyless public RPCs (no API key). Balances aggregate by
   symbol across chains. Existing Ethereum wallets are migrated to `EVM`
-  automatically, keeping their history. See
+  automatically, keeping their history — including their display name, which is
+  relabelled from "ETHEREUM Wallet" to "EVM Wallet" (custom labels untouched). See
   [ADR](docs/decisions/2026-07-17-evm-multichain-wallets.md).
 - **CSV transaction import for investment accounts (PEA/CTO)** and **realized
   P&L on closed positions**, computed on the fly with the average-cost method
@@ -42,10 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Invalid wallet addresses are rejected instead of stored.** Adding a wallet
-  with a malformed address persisted the row first and only failed on the
-  ensuing sync, leaving an unusable wallet that failed every later resync. The
-  format is now checked before anything is written and comes back as a `400`.
+- **Invalid wallet addresses fail fast with a clear error.** Adding a wallet with
+  a malformed address — or no address or chain at all — reported a `422` "could
+  not sync, please try again later", inviting a retry of input that can never
+  succeed, after a pointless call to the chain's RPC. The format is now checked
+  up front and comes back as a `400` naming what was expected.
 - **CoinGecko outages are diagnosable.** A failed price fetch returned an empty
   map indistinguishable from "nothing to price", logged as one opaque line.
   Failures are now classified — rate-limit, server error with status and body,

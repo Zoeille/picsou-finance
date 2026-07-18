@@ -57,19 +57,28 @@ public class WalletSyncService {
     }
 
     public AccountResponse addWallet(Chain chain, String address, String label, Long memberId) {
+        // AddWalletRequest carries no @NotNull and the controller no @Valid, so both
+        // fields arrive null for a malformed body. Guard chain before findAdapter, which
+        // dereferences it via chain.name() -- an NPE has no @ExceptionHandler and would
+        // surface as a 500 rather than the 400 this is.
+        if (chain == null) {
+            throw new IllegalArgumentException("A wallet chain is required");
+        }
         String trimmed = address == null ? "" : address.trim();
 
         // Reject a missing address here rather than in validateAddress: that hook is a
         // no-op by default, so an empty string would otherwise sail past it on BITCOIN
-        // and SOLANA and only fail later as a retryable-looking 422 -- after a wasted
-        // call to the explorer with an empty address in the path.
+        // and SOLANA and reach the explorer as an empty path segment.
         if (trimmed.isEmpty()) {
             throw new IllegalArgumentException("A wallet address is required");
         }
 
-        // Resolve the adapter and check the address format BEFORE persisting: a typo
-        // must come back as a 400 with nothing written, otherwise the unusable wallet
-        // row survives the failed first sync and fails every resync after it.
+        // Check the address format before the sync attempt, so a typo is a 400 naming the
+        // expected format instead of a 422 "try again later" for input that can never
+        // succeed -- and costs no call to the RPC/explorer. This is NOT what stops a bad
+        // row from being persisted: addWallet is @Transactional, so a throwing sync()
+        // already rolls the insert back. Keep both; the transaction is the durability
+        // guarantee, this is the error quality one.
         findAdapter(chain).validateAddress(trimmed);
 
         FamilyMember member = familyMemberRepository.findById(memberId)

@@ -109,11 +109,11 @@ class V99SomeMigrationTest {
 
 Assert both directions: the rows that must change, **and** the rows that must not.
 
-Two things the class must do, both learned the hard way:
+Three things the class must do, all learned the hard way:
 
 - **Gate on Docker** with `@EnabledIf("dockerAvailable")` (backed by
   `DockerClientFactory.instance().isDockerAvailable()`), so a machine without a Docker
-  socket skips this class instead of failing the whole 570-test suite. It must be a JUnit
+  socket skips this class instead of failing the whole suite. It must be a JUnit
   `ExecutionCondition` — a `@BeforeAll` assumption runs *after* the Testcontainers
   extension has already tried to start the container.
 - **Set `api.version=1.44` in a static initializer.** Otherwise docker-java negotiates
@@ -123,7 +123,17 @@ Two things the class must do, both learned the hard way:
   config, not a classpath `testcontainers.properties` — neither is honored here) keeps it
   working from an IDE too. This sets the floor at Docker Engine ≥ 25.0.
 
-The combination matters: the guard alone turns a config problem into a silent pass.
+- **Make CI refuse to skip.** A skip is invisible in a green build, so `ci.yml` sets
+  `PICSOU_REQUIRE_DOCKER_TESTS=true` and `dockerAvailable()` throws instead of returning
+  false when it is set. Without this, any Docker drift on the runner silently converts the
+  project's only data-mutating-migration coverage into a permanently green no-op.
+
+The three interlock: the guard alone turns a config problem into a silent pass, and the
+API pin alone makes Docker-less machines fail the whole suite.
+
+Also order any test that mutates the shared seeded dataset **last**
+(`@TestMethodOrder` + `@Order`) — JUnit's default method order is deliberately
+unspecified, so otherwise the other tests may assert against post-mutation state.
 
 ## Frontend tests
 
@@ -153,7 +163,7 @@ JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=GoalServiceTest#progre
 
 ## Current coverage
 
-The suite has **575 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
+The suite has **577 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
 
 1. **Service-layer unit tests** — mock dependencies, test business logic.
 2. **Repository custom queries** — `@DataJpaTest` for non-trivial JPQL.
