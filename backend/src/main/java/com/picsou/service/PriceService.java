@@ -143,7 +143,18 @@ public class PriceService {
         BigDecimal price = getPriceEur(symbol);
 
         if (price == null) {
-            log.warn("No price available for symbol: {}, returning raw balance", symbol);
+            // The returned number is now WRONG, not merely missing: an unconverted USD or
+            // GBP balance flows into net worth and its snapshots as though it were EUR.
+            // ERROR, because unlike a missing crypto price (which the wallet sync refuses to
+            // record) this one silently corrupts a figure the user reads as authoritative.
+            //
+            // Deliberately NOT thrown, and deliberately still returning the raw balance:
+            // toEur backs liveBalanceEur, the dashboard and the history charts, so throwing
+            // would 500 all of them on one missing FX rate, and substituting zero would
+            // understate net worth just as silently. Changing the number either way shifts
+            // every user's totals; making the failure loud does not.
+            log.error("No EUR rate for {} -- returning the balance UNCONVERTED, so any total "
+                + "including it is wrong until the rate is available", symbol);
             return balance;
         }
 

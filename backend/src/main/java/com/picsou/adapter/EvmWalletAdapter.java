@@ -277,8 +277,11 @@ public class EvmWalletAdapter implements WalletPort {
             .retryWhen(Retry.backoff(MAX_RETRIES, RETRY_BACKOFF)
                 .filter(ex -> !(ex instanceof WalletRpcException))
                 .onRetryExhaustedThrow((spec, signal) -> signal.failure()))
+            // Name the exception type: a read timeout and a connection reset otherwise
+            // produce near-identical messages, and this string is what reaches the log.
             .onErrorMap(ex -> ex instanceof WalletRpcException ? ex
-                : new WalletRpcException(context + ": RPC call failed - " + ex.getMessage(), ex))
+                : new WalletRpcException(
+                    context + ": RPC failed (" + ex.getClass().getSimpleName() + ") - " + ex.getMessage(), ex))
             // An empty body (dropped connection) completes without onNext, which
             // would skip validation entirely -- surface it as a failure instead.
             .switchIfEmpty(Mono.error(new WalletRpcException(context + ": RPC returned no response")))
