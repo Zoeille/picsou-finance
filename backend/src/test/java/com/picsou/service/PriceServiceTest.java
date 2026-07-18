@@ -88,10 +88,16 @@ class PriceServiceTest {
         assertThat(saved).isEqualTo(1);
         verify(priceSnapshotRepository).save(any());
 
-        // ERROR, not WARN: a bug here must not be quietly downgraded.
-        assertThat(eventsAt(Level.ERROR)).singleElement()
-            .satisfies(e -> assertThat(e.getFormattedMessage()).contains("BTC"));
+        // ERROR, not WARN: a bug here must not be quietly downgraded. Two lines now -- the
+        // per-ticker failure and the run summary.
+        assertThat(eventsAt(Level.ERROR)).hasSize(2);
+        assertThat(eventsAt(Level.ERROR).get(0).getFormattedMessage()).contains("BTC");
         assertThat(eventsAt(Level.WARN)).isEmpty();
+
+        // The returned count alone can't distinguish "1 of 1" from "1 of 100", so the run
+        // summary has to carry the failure ratio.
+        assertThat(eventsAt(Level.ERROR).get(1).getFormattedMessage())
+            .contains("1 of 2 tickers failing");
     }
 
     @Test

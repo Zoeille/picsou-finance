@@ -142,6 +142,27 @@ describe('CryptoWalletTab error handling', () => {
     expect(alert.closest('[data-slot="card"]')).not.toHaveTextContent('Cold')
   })
 
+  it('blocks every sync button while one is in flight', async () => {
+    // One shared mutation drives all rows, and the error block keys on its `variables`.
+    // If a second sync can start before the first settles, `variables` is overwritten and
+    // wallet A's failure surfaces under wallet B. Disabling all of them is what prevents it.
+    let settle: (v: unknown) => void = () => {}
+    apiPost.mockImplementation(() => new Promise(resolve => { settle = resolve }))
+    renderTab()
+
+    await screen.findByText('Ledger')
+    const syncButtons = () => screen.getAllByRole('button', { name: '' }).filter((_, i) => i % 2 === 0)
+
+    fireEvent.click(syncButtons()[0])
+
+    await waitFor(() => expect(syncButtons()[0]).toBeDisabled())
+    // The other wallet's button must be disabled too, not just the one clicked.
+    expect(syncButtons()[1]).toBeDisabled()
+
+    settle({ data: {} })
+    await waitFor(() => expect(syncButtons()[0]).toBeEnabled())
+  })
+
   it('shows why a removal failed, and keeps the dialog open', async () => {
     apiDelete.mockRejectedValue(badRequest('Wallet is still referenced'))
     renderTab()

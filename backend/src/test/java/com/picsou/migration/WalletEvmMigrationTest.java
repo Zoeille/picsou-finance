@@ -224,16 +224,7 @@ class WalletEvmMigrationTest {
         // would assert nothing at all: after @BeforeAll both statements match zero
         // rows, so a copy passes no matter what the actual migration says -- and it
         // stops tracking the file the moment someone edits it.
-        String sql;
-        try (var in = WalletEvmMigrationTest.class
-            .getResourceAsStream("/db/migration/V54__wallet_ethereum_to_evm.sql")) {
-            assertThat(in).as("V54 migration must be on the test classpath").isNotNull();
-            sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-
-        try (Connection conn = connect(); Statement st = conn.createStatement()) {
-            st.execute(sql);
-        }
+        replay("V54__wallet_ethereum_to_evm.sql");
 
         // A second pass must leave the already-rewritten ids and chains exactly as they
         // were -- not re-split them into a truncated or doubled prefix.
@@ -249,6 +240,41 @@ class WalletEvmMigrationTest {
             .isEqualTo("wallet_solana_" + solWalletId);
         assertThat(queryLong("SELECT COUNT(*) FROM account_holding WHERE account_id = " + ethAccountId))
             .isEqualTo(1L);
+    }
+
+    /**
+     * V55's replay safety rests on its own effect: once an account is renamed to "EVM Wallet"
+     * its {@code a.name = 'ETHEREUM Wallet'} predicate no longer matches. That is easy to
+     * break by broadening the WHERE, and the damage would be a user's chosen label — so pin
+     * it against the real file rather than trusting the reasoning.
+     */
+    @Test
+    @Order(Integer.MAX_VALUE - 1)
+    void v55IsIdempotent_whenReplayedOnAlreadyRenamedAccounts() throws Exception {
+        replay("V55__wallet_evm_account_name.sql");
+
+        assertThat(queryString("SELECT name FROM account WHERE id = " + ethAccountId))
+            .isEqualTo("EVM Wallet");
+        // The two that must never be touched, on a replay least of all.
+        assertThat(queryString("SELECT name FROM account WHERE id = " + labelledAccountId))
+            .isEqualTo("My Ledger");
+        assertThat(queryString("SELECT name FROM account WHERE id = " + trapAccountId))
+            .as("a user label identical to the default must survive a replay too")
+            .isEqualTo("ETHEREUM Wallet");
+        assertThat(queryString("SELECT name FROM account WHERE id = " + bankAccountId))
+            .isEqualTo("Checking");
+    }
+
+    /** Executes a migration file from the classpath verbatim, as Flyway would. */
+    private static void replay(String migrationFile) throws Exception {
+        String sql;
+        try (var in = WalletEvmMigrationTest.class.getResourceAsStream("/db/migration/" + migrationFile)) {
+            assertThat(in).as("%s must be on the test classpath", migrationFile).isNotNull();
+            sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        try (Connection conn = connect(); Statement st = conn.createStatement()) {
+            st.execute(sql);
+        }
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────

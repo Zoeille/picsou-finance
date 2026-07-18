@@ -179,6 +179,45 @@ class WalletSyncServiceTest {
 
         // Both are still held, so neither is pruned -- the unpriced one keeps its cost basis.
         verify(accountService).pruneHoldings(eq(savedAccount), eq(Set.of("ETH", "SOMETOKEN")));
+
+        // Only the PRICED asset is upserted. Upserting the unpriced one would write a null
+        // or zero price over a holding that still has a real cost basis -- the corruption
+        // this whole unpriced-vs-held distinction exists to avoid.
+        verify(accountService).upsertHolding(
+            eq(100L), eq(MEMBER_ID), eq("ETH"), eq("ETH"), any(), eq(new BigDecimal("2000")));
+        verify(accountService, never()).upsertHolding(
+            any(), any(), eq("SOMETOKEN"), any(), any(), any());
+    }
+
+    @Test
+    void sync_writesNoSnapshot_whenAHoldingUpsertFails() {
+        // upsertHolding runs before the snapshot, so a failure part-way through must abort
+        // the whole sync rather than leave a snapshot recorded against half-written
+        // holdings. The method is @Transactional, so throwing is what rolls the rest back.
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), any())).thenReturn(Optional.empty());
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        Account savedAccount = mock(Account.class);
+        when(savedAccount.getId()).thenReturn(100L);
+        when(accountRepository.save(any())).thenReturn(savedAccount);
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("holding write failed"))
+            .when(accountService).upsertHolding(any(), any(), any(), any(), any(), any());
+
+        WalletSyncService service = serviceWith(adapter);
+
+        assertThatThrownBy(() -> service.sync(1L, MEMBER_ID))
+            .isInstanceOf(SyncException.class);
+
+        // No snapshot, and no prune -- a prune here would delete rows while the upserts
+        // that should have replaced them never landed.
+        verify(accountService, never()).upsertSnapshot(any(), any(), any());
+        verify(accountService, never()).pruneHoldings(any(), any());
     }
 
     @Test

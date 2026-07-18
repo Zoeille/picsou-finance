@@ -278,9 +278,12 @@ export function CryptoWalletTab() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => syncMutation.mutate(wallet.id)}
-                      // Scope to the row being synced: one shared mutation drives every
-                      // row, so an unscoped flag disables all of them at once.
-                      disabled={syncMutation.isPending && syncMutation.variables === wallet.id}
+                      // Disables EVERY row while any sync is in flight, deliberately. One
+                      // shared mutation drives all rows, so starting a second sync before
+                      // the first settles overwrites `variables` -- and the error block
+                      // below keys on it, so wallet A's failure would surface under wallet
+                      // B. Scoping this per-row reads tidier and reintroduces that bug.
+                      disabled={syncMutation.isPending}
                     >
                       <RefreshCw />
                     </Button>

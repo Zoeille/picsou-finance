@@ -158,6 +158,7 @@ public class PriceService {
     public int backfillHistoricalPrices(Set<String> tickers, LocalDate from) {
         LocalDate to = LocalDate.now();
         int saved = 0;
+        int failed = 0;
 
         for (String ticker : tickers) {
             String upper = ticker.toUpperCase(Locale.ROOT);
@@ -190,8 +191,20 @@ public class PriceService {
                 // failures, so anything thrown here is a genuine bug. Still skip rather than
                 // propagate -- this runs from PriceBackfillRunner, an ApplicationRunner, where
                 // an escaping exception fails Spring Boot startup outright.
+                failed++;
                 log.error("Historical price backfill failed for {} -- skipping it", upper, ex);
             }
+        }
+
+        // The per-ticker guard means a run can "succeed" having backfilled almost nothing,
+        // and the returned count alone cannot distinguish "1 of 1" from "1 of 100". Summarise
+        // so a sparse backfill is visible without grepping for individual failures.
+        if (failed > 0) {
+            log.error("Historical price backfill completed with {} of {} tickers failing ({} prices saved)",
+                failed, tickers.size(), saved);
+        } else {
+            log.info("Historical price backfill completed for {} tickers ({} prices saved)",
+                tickers.size(), saved);
         }
 
         return saved;
