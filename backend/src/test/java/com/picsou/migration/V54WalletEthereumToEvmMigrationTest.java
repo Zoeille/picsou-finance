@@ -86,6 +86,8 @@ class V54WalletEthereumToEvmMigrationTest {
     private static Long solAccountId;
     private static Long bankAccountId;
     private static Long labelledAccountId;
+    private static Long trapWalletId;
+    private static Long trapAccountId;
 
     /**
      * Brings the schema to V53 (the state a deployed instance is in before this change),
@@ -114,11 +116,22 @@ class V54WalletEthereumToEvmMigrationTest {
             solAccountId = insertAccount(conn, memberId, "SOL Wallet", "wallet_solana_" + solWalletId);
             // A bank account whose external id is unrelated: the LIKE filter must not reach it.
             bankAccountId = insertAccount(conn, memberId, "Checking", "gocardless_abc_123");
-            // A second migrated wallet that the user had LABELLED: V55 must not rename it.
+            // A second migrated wallet the user LABELLED: V55 must not rename it.
             long labelledWalletId = insertReturningId(conn,
-                "INSERT INTO wallet_address (chain, address, member_id) "
-                    + "VALUES ('ETHEREUM', '0x2222222222222222222222222222222222222222', " + memberId + ") RETURNING id");
+                "INSERT INTO wallet_address (chain, address, member_id, label) "
+                    + "VALUES ('ETHEREUM', '0x2222222222222222222222222222222222222222', "
+                    + memberId + ", 'My Ledger') RETURNING id");
             labelledAccountId = insertAccount(conn, memberId, "My Ledger", "wallet_ethereum_" + labelledWalletId);
+
+            // The trap: a user whose chosen label happens to BE the auto-generated name.
+            // resolveAccount uses a label verbatim, so this account is indistinguishable
+            // from an auto-named one by name alone -- keying V55 on the name would destroy
+            // a label that can never be recovered (resolveAccount never rewrites names).
+            trapWalletId = insertReturningId(conn,
+                "INSERT INTO wallet_address (chain, address, member_id, label) "
+                    + "VALUES ('ETHEREUM', '0x3333333333333333333333333333333333333333', "
+                    + memberId + ", 'ETHEREUM Wallet') RETURNING id");
+            trapAccountId = insertAccount(conn, memberId, "ETHEREUM Wallet", "wallet_ethereum_" + trapWalletId);
 
             // Cost basis on the migrated account -- the value most expensive to lose,
             // since it cannot be recomputed from on-chain data.
@@ -140,6 +153,11 @@ class V54WalletEthereumToEvmMigrationTest {
             .isEqualTo("My Ledger");
         assertThat(queryString("SELECT name FROM account WHERE id = " + bankAccountId))
             .isEqualTo("Checking");
+        // The label that collides with the auto-generated name must survive: it is a user's
+        // choice, and nothing else in the app would ever restore it.
+        assertThat(queryString("SELECT name FROM account WHERE id = " + trapAccountId))
+            .as("a user label identical to the default name must not be rewritten")
+            .isEqualTo("ETHEREUM Wallet");
     }
 
     @Test

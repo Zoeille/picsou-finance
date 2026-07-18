@@ -284,8 +284,21 @@ public class EvmWalletAdapter implements WalletPort {
     public void validateAddress(String address) {
         if (!isEvmAddress(address)) {
             throw new IllegalArgumentException(
-                "Invalid EVM address '" + address + "' (expected 0x followed by 40 hex characters)");
+                "Invalid EVM address '" + forMessage(address) + "' (expected 0x followed by 40 hex characters)");
         }
+    }
+
+    /**
+     * Bounds and flattens a rejected address before it is echoed. The message reaches the
+     * caller verbatim as the 400 body and is also logged, so an unbounded value lets a
+     * client amplify a multi-megabyte payload back out of the server, and embedded
+     * newlines let it forge extra log lines. A valid address is 42 chars; 64 is plenty to
+     * show the user what was rejected.
+     */
+    private static String forMessage(String address) {
+        if (address == null) return "null";
+        String flattened = address.replaceAll("\\s", " ");
+        return flattened.length() <= 64 ? flattened : flattened.substring(0, 64) + "...";
     }
 
     /**

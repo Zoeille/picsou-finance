@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -114,7 +115,7 @@ public class WalletSyncService {
             String nativeSymbol = balances.get(0).symbol();
 
             Set<String> tickers = balances.stream()
-                .map(b -> b.symbol().toUpperCase())
+                .map(b -> b.symbol().toUpperCase(Locale.ROOT))
                 .collect(Collectors.toSet());
             Map<String, BigDecimal> prices = priceService.refreshPrices(tickers);
 
@@ -123,7 +124,7 @@ public class WalletSyncService {
             record Priced(String ticker, BigDecimal amount, BigDecimal priceEur) {}
             List<Priced> priced = balances.stream()
                 .map(b -> {
-                    String ticker = b.symbol().toUpperCase();
+                    String ticker = b.symbol().toUpperCase(Locale.ROOT);
                     return new Priced(ticker, b.amount(), prices.get(ticker));
                 })
                 .toList();
@@ -141,7 +142,7 @@ public class WalletSyncService {
             wallet.setLastSyncedAt(Instant.now());
             walletRepository.save(wallet);
 
-            String externalId = "wallet_" + wallet.getChain().name().toLowerCase() + "_" + wallet.getId();
+            String externalId = "wallet_" + wallet.getChain().name().toLowerCase(Locale.ROOT) + "_" + wallet.getId();
             String name = wallet.getLabel() != null
                 ? wallet.getLabel()
                 : wallet.getChain().name() + " Wallet";
@@ -188,7 +189,7 @@ public class WalletSyncService {
         WalletAddress wallet = walletRepository.findByIdAndMemberId(walletId, memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
-        String externalId = "wallet_" + wallet.getChain().name().toLowerCase() + "_" + wallet.getId();
+        String externalId = "wallet_" + wallet.getChain().name().toLowerCase(Locale.ROOT) + "_" + wallet.getId();
         accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId)
             .ifPresent(accountRepository::delete);
         walletRepository.delete(wallet);

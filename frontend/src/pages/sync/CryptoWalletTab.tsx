@@ -195,6 +195,12 @@ export function CryptoWalletTab() {
                 />
               </div>
 
+              {addMutation.isError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {extractErrorMessage(addMutation.error)}
+                </p>
+              )}
+
               <div className="flex gap-2">
                 <Button type="submit" disabled={addMutation.isPending}>
                   <Wallet />

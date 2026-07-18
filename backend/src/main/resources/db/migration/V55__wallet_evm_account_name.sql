@@ -5,9 +5,16 @@
 -- migrated wallet would display the retired chain name forever, even though it now also
 -- tracks BNB, POL and AVAX.
 --
--- Rewrite only the exact default name, and only for accounts V54 re-pointed: a
--- user-chosen label must survive untouched.
-UPDATE account
+-- Key on wallet_address.label IS NULL, NOT on the display name alone: resolveAccount uses
+-- a user's label verbatim, so someone who typed "ETHEREUM Wallet" as their own label owns
+-- a row indistinguishable by name from an auto-named one. Renaming that would silently
+-- destroy a user's chosen label, and resolveAccount never rewrites an existing account's
+-- name, so it could never be restored except by hand. Joining through the wallet lets us
+-- rename only the genuinely auto-named rows.
+UPDATE account a
    SET name = 'EVM Wallet'
- WHERE name = 'ETHEREUM Wallet'
-   AND external_account_id LIKE 'wallet_evm_%';
+  FROM wallet_address w
+ WHERE a.external_account_id = 'wallet_evm_' || w.id
+   AND w.chain = 'EVM'
+   AND w.label IS NULL
+   AND a.name = 'ETHEREUM Wallet';

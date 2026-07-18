@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.math.BigDecimal;
@@ -91,14 +92,19 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
 
     @Override
     public Map<String, BigDecimal> getPricesEur(Set<String> tickers) {
+        // Normalize once, up front: supports() is case-insensitive, so leaving mixed case
+        // in here forces every later step to re-upper-case and makes the result map's keys
+        // disagree with this set (which previously produced a false "no EUR price for 2 of
+        // 2 tickers" warning, and a count computed over two different domains).
         Set<String> supported = tickers.stream()
             .filter(this::supports)
-            .collect(java.util.stream.Collectors.toSet());
+            .map(t -> t.toUpperCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
 
         if (supported.isEmpty()) return Map.of();
 
         String ids = supported.stream()
-            .map(t -> TICKER_TO_ID.get(t.toUpperCase(Locale.ROOT)))
+            .map(TICKER_TO_ID::get)
             .filter(Objects::nonNull)
             .reduce((a, b) -> a + "," + b)
             .orElse("");
@@ -122,20 +128,15 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
 
             Map<String, BigDecimal> result = new HashMap<>();
             for (String ticker : supported) {
-                String coinId = TICKER_TO_ID.get(ticker.toUpperCase(Locale.ROOT));
+                String coinId = TICKER_TO_ID.get(ticker);
                 if (coinId != null && response.containsKey(coinId)) {
                     BigDecimal price = response.get(coinId).eur();
-                    if (price != null) result.put(ticker.toUpperCase(Locale.ROOT), price);
+                    if (price != null) result.put(ticker, price);
                 }
             }
-            // Compare upper-cased: supports() is case-insensitive so `supported` keeps the
-            // caller's original case, while `result` is keyed upper-case. Comparing them
-            // raw would report every ticker as missing for a lower-case caller -- a false
-            // outage alarm in the very line meant to make outages diagnosable. Gate on the
-            // set itself, not on a size comparison: {"BTC","btc"} collapses to one result
-            // key, which would otherwise warn "no EUR price for 0 of 2 tickers: []".
+            // Both sides are now normalized, so this is a like-for-like comparison. Gate on
+            // the set rather than a size check, which could warn with an empty list.
             Set<String> missing = supported.stream()
-                .map(t -> t.toUpperCase(Locale.ROOT))
                 .filter(t -> !result.containsKey(t))
                 .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
             if (!missing.isEmpty()) {
@@ -188,6 +189,12 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
         } else if (cause instanceof TimeoutException) {
             log.warn("CoinGecko {} request for {} timed out after {} -- returning no prices",
                 operation, context, timeout);
+        } else if (cause instanceof WebClientRequestException) {
+            // Never reached the server at all: DNS failure, connection refused/reset, TLS
+            // handshake. Same class of expected outage as a 5xx -- WARN, and without the
+            // stacktrace, which would otherwise flood the log for the whole outage.
+            log.warn("CoinGecko {} request for {} could not reach the API ({}) -- returning no prices",
+                operation, context, cause.getMessage());
         } else {
             // Connection reset, DNS failure, JSON parse error, or a genuine bug: keep the
             // stacktrace, it is the only place this failure is visible.

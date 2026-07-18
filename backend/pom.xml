@@ -207,6 +207,24 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!--
+                            Set process-wide so it applies before ANY Testcontainers class
+                            initializes, not just the one that carries a static block for
+                            IDE runs. Without it docker-java negotiates down to Docker API
+                            1.32, which Engine >= 28 refuses; that error is indistinguishable
+                            from "no Docker installed", so the migration test's availability
+                            guard would silently skip on a capable host.
+                            1.44 is satisfied by Engine >= 25.0 (Jan 2024).
+                        -->
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <version>3.5.0</version>
                 <executions>

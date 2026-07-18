@@ -47,7 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a malformed address — or no address or chain at all — reported a `422` "could
   not sync, please try again later", inviting a retry of input that can never
   succeed, after a pointless call to the chain's RPC. The format is now checked
-  up front and comes back as a `400` naming what was expected.
+  up front and comes back as a `400` naming what was expected — and the crypto
+  wallet form actually displays it, where it previously swallowed add failures
+  and simply appeared to do nothing.
 - **CoinGecko outages are diagnosable.** A failed price fetch returned an empty
   map indistinguishable from "nothing to price", logged as one opaque line.
   Failures are now classified — rate-limit, server error with status and body,
