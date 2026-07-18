@@ -68,14 +68,51 @@ class GoalServiceTest {
 
 ## Integration tests
 
-When JPA is needed, use `@DataJpaTest` with **H2 in-memory** (not Testcontainers).
+When JPA is needed, use `@DataJpaTest` with **H2 in-memory** — the default, and enough
+for repository queries and entity mapping.
 
 ```bash
 # H2 auto-configures; no external database needed
 JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=SomeRepoTest
 ```
 
-H2 is on the test classpath via `spring-boot-starter-test`. No Testcontainers dependency exists in the project.
+H2 is on the test classpath via `spring-boot-starter-test`.
+
+### Testcontainers — only for real-PostgreSQL behaviour
+
+H2 cannot run the Flyway chain: the migrations are PostgreSQL-flavoured
+(`CREATE TYPE ... AS ENUM`, `split_part()`, partial indexes). So a **data-mutating
+migration** — one that rewrites existing rows rather than only adding structure — is
+verified against real PostgreSQL via Testcontainers.
+
+Reach for it *only* for that. Everything else stays on Mockito or H2; a container costs
+seconds of wall clock per class.
+
+Pattern (see `V54WalletEthereumToEvmMigrationTest`): no Spring context — drive Flyway and
+JDBC directly, migrating in two steps so the seeded data is what the migration under test
+actually operates on.
+
+```java
+@Testcontainers
+class V99SomeMigrationTest {
+    @Container
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @BeforeAll
+    static void migrateAndSeed() throws SQLException {
+        migrateTo("98");   // the schema a deployed instance is already on
+        // ... seed rows representing real pre-migration data, incl. negative controls ...
+        migrateTo("99");   // apply the migration under test, alone
+    }
+}
+```
+
+Assert both directions: the rows that must change, **and** the rows that must not.
+
+**Docker Engine ≥ 25.0 is required.** `pom.xml` pins the surefire system property
+`api.version=1.44`; without it docker-java negotiates down to API 1.32, which Engine ≥ 28
+refuses outright and every Testcontainers test fails with "Could not find a valid Docker
+environment".
 
 ## Frontend tests
 
@@ -105,11 +142,12 @@ JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn test -Dtest=GoalServiceTest#progre
 
 ## Current coverage
 
-The suite has **247 backend tests** across 35 test classes (service, adapter, controller, config, export). Service-layer unit tests dominate. When adding coverage, prioritize:
+The suite has **575 backend tests** (service, adapter, controller, config, export, migration). Service-layer unit tests dominate. When adding coverage, prioritize:
 
 1. **Service-layer unit tests** — mock dependencies, test business logic.
 2. **Repository custom queries** — `@DataJpaTest` for non-trivial JPQL.
 3. **Controller integration tests** — MockMvc only when auth or validation flow needs verification.
+4. **Data-mutating migrations** — Testcontainers, per the section above.
 
 ## Don'ts
 

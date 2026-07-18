@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EvmWalletAdapterTest {
@@ -298,5 +299,31 @@ class EvmWalletAdapterTest {
             .isInstanceOf(WalletRpcException.class);
         assertThatThrownBy(() -> adapter.fetchBalances(null))
             .isInstanceOf(WalletRpcException.class);
+    }
+
+    @Test
+    void validateAddress_rejectsMalformed_asABadRequest() {
+        // Pre-persist gate: a typed-in typo must read as HTTP 400
+        // (IllegalArgumentException), not as the 422 a failed sync produces.
+        var adapter = adapter(List.of(net("eth", "ETH", List.of())));
+
+        assertThatThrownBy(() -> adapter.validateAddress("0x123"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .isNotInstanceOf(WalletRpcException.class)
+            .hasMessageContaining("Invalid EVM address");
+        assertThatThrownBy(() -> adapter.validateAddress("not-an-address"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> adapter.validateAddress(null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void validateAddress_acceptsWellFormedAddress_inEitherCase() {
+        var adapter = adapter(List.of(net("eth", "ETH", List.of())));
+
+        assertThatCode(() -> adapter.validateAddress(ADDRESS)).doesNotThrowAnyException();
+        // EIP-55 checksummed addresses mix cases -- they must pass unchanged.
+        assertThatCode(() -> adapter.validateAddress("0xc579D4Eb8179aF7f322F028D12BDDB845cA10a3b"))
+            .doesNotThrowAnyException();
     }
 }

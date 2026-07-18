@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Invalid wallet addresses are rejected instead of stored.** Adding a wallet
+  with a malformed address persisted the row first and only failed on the
+  ensuing sync, leaving an unusable wallet that failed every later resync. The
+  format is now checked before anything is written and comes back as a `400`.
+- **CoinGecko outages are diagnosable.** A failed price fetch returned an empty
+  map indistinguishable from "nothing to price", logged as one opaque line.
+  Failures are now classified — rate-limit, server error with status and body,
+  timeout with its duration, or an unexpected error with its stacktrace — and
+  always name the tickers involved. Prices still degrade to "unvalued this
+  cycle" rather than failing the sync, which is what keeps a price blip from
+  touching holdings or their cost basis.
 - **Ethereum wallet balances sync again.** The hard-coded `cloudflare-eth.com`
   RPC was deprecated and started returning an HTTP 200 JSON-RPC error for
   `eth_getBalance`, which the adapter read as a 0 balance — wallets appeared to

@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -194,6 +195,26 @@ class WalletSyncServiceTest {
         assertThat(summary.total()).isEqualTo(2);
         assertThat(summary.succeeded()).isEqualTo(1);
         assertThat(summary.failed()).containsExactly(Chain.SOLANA);
+    }
+
+    @Test
+    void addWallet_rejectsMalformedAddress_beforePersistingAnything() {
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn("EVM");
+        doThrow(new IllegalArgumentException("Invalid EVM address '0xnope'"))
+            .when(adapter).validateAddress("0xnope");
+
+        WalletSyncService service = serviceWith(adapter);
+
+        // Surfaces as a 400 (IllegalArgumentException), not the 422 of a failed sync.
+        assertThatThrownBy(() -> service.addWallet(Chain.EVM, "  0xnope  ", "Ledger", MEMBER_ID))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        // The whole point: no row is written, so the unusable wallet can't linger and
+        // fail every subsequent resync. Validation also runs on the TRIMMED value.
+        verify(walletRepository, never()).save(any());
+        verify(familyMemberRepository, never()).findById(any());
+        verify(adapter, never()).fetchBalances(any());
     }
 
     @Test

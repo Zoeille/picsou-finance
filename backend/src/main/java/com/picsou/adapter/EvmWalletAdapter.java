@@ -175,11 +175,12 @@ public class EvmWalletAdapter implements WalletPort {
         if (!networks.isEmpty()) {
             bySymbol.put(networks.get(0).nativeSymbol(), BigDecimal.ZERO);
         }
-        if (collected != null) {
-            for (WalletBalance b : collected) {
-                if (b.amount().signum() > 0) {
-                    merge(bySymbol, b.symbol(), b.amount());
-                }
+        // collectList().block() returns a (possibly empty) list or throws -- never null,
+        // so no null guard here: a broken contract must fail loudly rather than read as
+        // "this wallet holds nothing".
+        for (WalletBalance b : collected) {
+            if (b.amount().signum() > 0) {
+                merge(bySymbol, b.symbol(), b.amount());
             }
         }
 
@@ -268,15 +269,36 @@ public class EvmWalletAdapter implements WalletPort {
         bySymbol.merge(symbol, amount, BigDecimal::add);
     }
 
+    /** A well-formed EVM address: {@code 0x} followed by exactly 40 hex characters. */
+    private static boolean isEvmAddress(String address) {
+        return address != null && EVM_ADDRESS.matcher(address).matches();
+    }
+
     /**
-     * Rejects a value that is not a well-formed EVM address ({@code 0x} + 40 hex
-     * chars) before any RPC call. Besides failing fast with a clear message, this
-     * guarantees {@link #padAddress} receives exactly 40 hex chars — an over-long
-     * string would otherwise make {@code "0".repeat(64 - length)} throw an
-     * uncaught {@link IllegalArgumentException} mid-sync.
+     * Pre-persist gate called by {@code WalletSyncService.addWallet} before the wallet
+     * row is written. A user-supplied typo is a <em>bad request</em> (400), not a sync
+     * failure — hence {@link IllegalArgumentException} rather than the
+     * {@link WalletRpcException} its fetch-time twin throws.
+     */
+    @Override
+    public void validateAddress(String address) {
+        if (!isEvmAddress(address)) {
+            throw new IllegalArgumentException(
+                "Invalid EVM address '" + address + "' (expected 0x followed by 40 hex characters)");
+        }
+    }
+
+    /**
+     * The same rule re-checked before any RPC call, for an address that is <em>already
+     * stored</em> — one written before {@link #validateAddress} existed, or edited
+     * directly in the database. That is a sync problem (422), not a bad request, so it
+     * stays a {@link WalletRpcException}. It also guarantees {@link #padAddress}
+     * receives exactly 40 hex chars — an over-long string would otherwise make
+     * {@code "0".repeat(64 - length)} throw an uncaught {@link IllegalArgumentException}
+     * mid-sync.
      */
     private static void requireEvmAddress(String address) {
-        if (address == null || !EVM_ADDRESS.matcher(address).matches()) {
+        if (!isEvmAddress(address)) {
             throw new WalletRpcException(
                 "Malformed EVM address '" + address + "' (expected 0x + 40 hex characters)");
         }

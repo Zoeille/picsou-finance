@@ -22,6 +22,9 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <bucket4j.version>8.10.1</bucket4j.version>
+        <!-- Ahead of the Boot 3.4.9 BOM (1.20.6): its bundled docker-java negotiates down to
+             Docker API 1.32, which engines >= 28 refuse ("minimum supported API version is 1.40"). -->
+        <testcontainers.version>1.21.3</testcontainers.version>
         <!-- Spring AI 1.0.x targets Spring Boot 3.4.x (Spring 6.2) — matches this project.
              Do NOT bump to 1.1.x: it targets Boot 3.5 / Spring 6.3 and conflicts with the pins below. -->
         <spring-ai.version>1.0.3</spring-ai.version>
@@ -182,10 +185,41 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+            Flyway migrations are PostgreSQL-flavoured (enum types, split_part...), so a
+            data-mutating migration can only be verified against real PostgreSQL, not H2.
+            Versions come from the Spring Boot parent's testcontainers BOM.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!--
+                            docker-java otherwise negotiates down to Docker API 1.32, which
+                            Engine >= 28 refuses outright ("minimum supported API version is
+                            1.40"), so every Testcontainers test dies with "Could not find a
+                            valid Docker environment". Pinning 1.44 works on Engine >= 25.0
+                            (Jan 2024), which is the floor for running this test suite.
+                        -->
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>

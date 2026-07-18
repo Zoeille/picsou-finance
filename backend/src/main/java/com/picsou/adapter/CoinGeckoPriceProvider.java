@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -15,6 +16,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Fetches crypto prices from CoinGecko public API (no API key required for free tier).
@@ -25,6 +27,7 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
 
     private static final Logger log = LoggerFactory.getLogger(CoinGeckoPriceProvider.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration HISTORY_TIMEOUT = Duration.ofSeconds(15);
 
     // Map from ticker (uppercase) → CoinGecko coin ID
     private static final Map<String, String> TICKER_TO_ID = Map.ofEntries(
@@ -112,7 +115,10 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                 .timeout(TIMEOUT)
                 .block();
 
-            if (response == null) return Map.of();
+            if (response == null) {
+                log.warn("CoinGecko returned an empty body for spot prices {} -- returning no prices", supported);
+                return Map.of();
+            }
 
             Map<String, BigDecimal> result = new HashMap<>();
             for (String ticker : supported) {
@@ -122,10 +128,52 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                     if (price != null) result.put(ticker.toUpperCase(), price);
                 }
             }
+            if (result.size() < supported.size()) {
+                Set<String> missing = new HashSet<>(supported);
+                missing.removeAll(result.keySet());
+                log.warn("CoinGecko had no EUR price for {} of {} requested tickers: {}",
+                    missing.size(), supported.size(), missing);
+            }
             return result;
         } catch (Exception ex) {
-            log.warn("CoinGecko price fetch failed: {}", ex.getMessage());
+            logFetchFailure("spot prices", supported, TIMEOUT, ex);
             return Map.of();
+        }
+    }
+
+    /**
+     * Logs a failed CoinGecko call with enough context to tell a rate-limit from an
+     * outage from a bug: which tickers/coin were asked for, the HTTP status or the
+     * exception type, and the timeout that applied.
+     *
+     * <p>The "no prices" return contract is deliberately kept in every case rather than
+     * rethrowing. Callers treat a missing price as "not valued this cycle", never as
+     * "not held" — {@code WalletSyncService} keys its holdings prune on on-chain
+     * balances, so a CoinGecko blip leaves holdings and their cost basis intact. Turning
+     * a price outage into a thrown error would instead fail the whole wallet sync. The
+     * severity therefore lives in the log, not in an exception.
+     */
+    private static void logFetchFailure(String operation, Object context, Duration timeout, Throwable ex) {
+        Throwable cause = reactor.core.Exceptions.unwrap(ex);
+        if (cause instanceof WebClientResponseException http) {
+            int status = http.getStatusCode().value();
+            if (status == 429) {
+                log.warn("CoinGecko rate-limited (429) fetching {} for {} -- returning no prices", operation, context);
+            } else if (http.getStatusCode().is5xxServerError()) {
+                log.error("CoinGecko server error (HTTP {}) fetching {} for {} -- returning no prices: {}",
+                    status, operation, context, http.getResponseBodyAsString());
+            } else {
+                log.error("CoinGecko rejected the {} request for {} with HTTP {} -- returning no prices: {}",
+                    operation, context, status, http.getResponseBodyAsString());
+            }
+        } else if (cause instanceof TimeoutException) {
+            log.warn("CoinGecko {} request for {} timed out after {} -- returning no prices",
+                operation, context, timeout);
+        } else {
+            // Connection reset, DNS failure, JSON parse error, or a genuine bug: keep the
+            // stacktrace, it is the only place this failure is visible.
+            log.error("CoinGecko {} request for {} failed with {} -- returning no prices",
+                operation, context, cause.getClass().getSimpleName(), cause);
         }
     }
 
@@ -150,10 +198,13 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                     .build(coinId))
                 .retrieve()
                 .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
-                .timeout(Duration.ofSeconds(15))
+                .timeout(HISTORY_TIMEOUT)
                 .block();
 
-            if (response == null) return Map.of();
+            if (response == null) {
+                log.warn("CoinGecko returned an empty body for intraday prices of {} ({})", ticker, coinId);
+                return Map.of();
+            }
 
             List<?> rawPrices = (List<?>) response.getOrDefault("prices", List.of());
             Map<LocalDateTime, BigDecimal> prices = new LinkedHashMap<>();
@@ -173,7 +224,7 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
             log.debug("Fetched {} intraday prices for {} ({}) from CoinGecko", prices.size(), ticker, coinId);
             return prices;
         } catch (Exception ex) {
-            log.warn("CoinGecko intraday price fetch failed for {}: {}", ticker, ex.getMessage());
+            logFetchFailure("intraday prices", ticker + " (" + coinId + ")", HISTORY_TIMEOUT, ex);
             return Map.of();
         }
     }
@@ -199,10 +250,13 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
                     .build(coinId))
                 .retrieve()
                 .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
-                .timeout(Duration.ofSeconds(15))
+                .timeout(HISTORY_TIMEOUT)
                 .block();
 
-            if (response == null) return Map.of();
+            if (response == null) {
+                log.warn("CoinGecko returned an empty body for historical prices of {} ({})", ticker, coinId);
+                return Map.of();
+            }
 
             List<?> rawPrices = (List<?>) response.getOrDefault("prices", List.of());
             Map<LocalDate, BigDecimal> prices = new HashMap<>();
@@ -222,7 +276,7 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
             log.debug("Fetched {} historical prices for {} ({}) from CoinGecko", prices.size(), ticker, coinId);
             return prices;
         } catch (Exception ex) {
-            log.warn("CoinGecko historical price fetch failed for {}: {}", ticker, ex.getMessage());
+            logFetchFailure("historical prices", ticker + " (" + coinId + ")", HISTORY_TIMEOUT, ex);
             return Map.of();
         }
     }

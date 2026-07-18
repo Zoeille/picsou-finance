@@ -57,13 +57,20 @@ public class WalletSyncService {
     }
 
     public AccountResponse addWallet(Chain chain, String address, String label, Long memberId) {
+        String trimmed = address == null ? "" : address.trim();
+
+        // Resolve the adapter and check the address format BEFORE persisting: a typo
+        // must come back as a 400 with nothing written, otherwise the unusable wallet
+        // row survives the failed first sync and fails every resync after it.
+        findAdapter(chain).validateAddress(trimmed);
+
         FamilyMember member = familyMemberRepository.findById(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Family member not found"));
 
         WalletAddress wallet = WalletAddress.builder()
             .member(member)
             .chain(chain)
-            .address(address.trim())
+            .address(trimmed)
             .label(label != null && !label.isBlank() ? label.trim() : null)
             .build();
         walletRepository.save(wallet);
