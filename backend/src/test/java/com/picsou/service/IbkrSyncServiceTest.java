@@ -259,6 +259,43 @@ class IbkrSyncServiceTest {
         assertThat(captor.getValue().getTicker()).isEqualTo("PLTR");
     }
 
+    /**
+     * Two positions resolving to the same ticker with opposite signs that net to
+     * exactly zero (e.g. a short fully covered by an equal long lot) must not persist a
+     * stale holding: {@code HoldingDedup.vwapMerge} returns a zero-quantity sentinel,
+     * and the post-merge persist loop must skip it rather than saving a phantom
+     * zero-quantity row.
+     */
+    @Test
+    void sync_positionsNettingToZero_savesNoHolding() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        IbkrPosition longLeg = pos("US0378331005", "AAPL", "STK", bd("40"), bd("100"), bd("1"));
+        IbkrPosition shortLeg = pos("US0378331005", "AAPL", "STK", bd("-40"), bd("120"), bd("1"));
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query"))
+            .thenReturn(List.of(new IbkrAccountData("U1", List.of(longLeg, shortLeg))));
+
+        when(isinConverter.resolve("US0378331005")).thenReturn(new TickerResult("AAPL", "Apple"));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(Optional.empty());
+        lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(false);
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> { Account a = inv.getArgument(0); a.setId(1L); return a; });
+        when(accountService.liveBalanceEur(any(Account.class))).thenReturn(bd("0"));
+        when(accountService.toResponse(any(Account.class))).thenReturn(
+            AccountResponse.from(Account.builder().id(1L).name("IBKR U1").type(AccountType.COMPTE_TITRES).build(), BigDecimal.ZERO));
+
+        service.sync(memberId);
+
+        verify(holdingRepository, never()).save(any(AccountHolding.class));
+    }
+
     /** Convenience builder for an account "U1" SUMMARY position. */
     private static IbkrPosition pos(String isin, String symbol, String assetCategory,
                                     BigDecimal position, BigDecimal costBasisPrice, BigDecimal fxRateToBase) {

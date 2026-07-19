@@ -116,7 +116,10 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
 - `IbkrFlexClientTest` — XML parser against a realistic fixture (exact IBKR attribute
   names, SUMMARY/LOT distinction, empty statement)
 - `IbkrSyncServiceTest` — mapping: cost-basis → base-currency conversion, LOT filtering,
-  "not connected" error
+  "not connected" error, error-status persistence, derivative asset-category filtering,
+  zero-net-quantity positions
+- `HoldingDedupTest` — VWAP merge (shared with TR/Bourso), including the sign-aware
+  cases IBKR can trigger (opposite-sign netting, netting to exactly zero)
 
 ## Links
 

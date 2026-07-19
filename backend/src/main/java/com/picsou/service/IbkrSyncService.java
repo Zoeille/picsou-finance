@@ -233,6 +233,12 @@ public class IbkrSyncService {
         }
         for (Map.Entry<String, HoldingDedup.HoldingAgg> entry : deduped.entrySet()) {
             HoldingDedup.HoldingAgg agg = entry.getValue();
+            if (agg.quantity().signum() == 0) {
+                // Mixed-sign positions (e.g. a short covered by an equal-and-opposite
+                // long lot) can net to exactly zero in vwapMerge -- a flat position, not
+                // a holding to persist.
+                continue;
+            }
             holdingRepository.save(AccountHolding.builder()
                 .account(account)
                 .ticker(entry.getKey())
