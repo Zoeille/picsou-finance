@@ -1,6 +1,6 @@
 # Feature: GDPR-friendly data export (JSON + CSV)
 
-> Last updated: 2026-04-26
+> Last updated: 2026-07-20
 > Status: ✅ Implemented
 
 ## Context
@@ -203,7 +203,7 @@ Frontend:
 Backend:
 
 - `*ExporterTest` (one per `EntityExporter`) — fixtures → expected JSON node + CSV rows. Each includes a *negative* assertion: the produced bytes do not contain known-secret tokens.
-- `DataExportServiceTest` — verifies ZIP file list given options, presence/absence of `balance_snapshots.csv` based on toggle, presence of `README.txt`.
+- `DataExportServiceTest` — verifies ZIP file list given options, presence/absence of `balance_snapshots.csv` based on toggle, presence of `README.txt`. Wires **all** `EntityExporter` beans (matching production Spring injection, not a subset) with one fixture per entity carrying a unique tripwire literal in every sensitive, non-exported field (e.g. `Requisition.authLink`); asserts none of the tripwires appear anywhere in the archive bytes. **New exporter ⇒ new wiring + new tripwire(s) in this test** — the net only protects what it exercises, and a partial exporter list (as this test shipped with for a while) silently blinds it to whichever exporters are missing.
 - `MeExportControllerTest` (`@WebMvcTest`) — happy path, re-auth fail (password), re-auth fail (TOTP), missing body, rate-limit exceeded.
 - `DataExportIntegrationTest` (`@SpringBootTest` + H2) — seed an `AppUser` with **all** entity types populated **and** every secret-bearing entity (MFA secret, recovery codes, BoursoSession ciphertext, requisition tokens, persistent session). Hit the endpoint, parse the ZIP in memory, assert:
   - all expected files present
