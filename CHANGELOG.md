@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Interactive Brokers (IBKR) sync via the Flex Web Service.** Connect once with a
+  read-only Flex token + an "Open Positions" query id; Picsou pulls open positions
+  end-of-day and maps them to accounts + holdings (one account per IBKR account id),
+  valued live in EUR through the existing ticker/price path. Cost basis is converted
+  to the account base currency via `fxRateToBase`; per-tax-lot rows are de-duplicated.
+  Daily auto-sync runs alongside the other connectors. Backend only for now — the
+  settings connection card is a follow-up. See
+  [ADR](docs/decisions/2026-07-19-ibkr-flex-web-service.md) and
+  [feature note](docs/features/ibkr-sync.md).
 - **BNB Chain support and EVM multichain wallets.** On-chain wallets gained an
   `EVM` chain that tracks a single `0x` address across every enabled EVM network
   — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche —

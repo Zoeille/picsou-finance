@@ -2,6 +2,7 @@ package com.picsou.service;
 
 import com.picsou.dto.FinaryAutoSyncResponse;
 import com.picsou.finary.FinaryApiSyncService;
+import com.picsou.ibkr.IbkrSyncService;
 import com.picsou.model.Account;
 import com.picsou.model.BalanceSnapshot;
 import com.picsou.model.FamilyMember;
@@ -37,6 +38,7 @@ public class SchedulerService {
     private final CryptoExchangeSyncService cryptoExchangeSyncService;
     private final WalletSyncService walletSyncService;
     private final FinaryApiSyncService finaryApiSyncService;
+    private final IbkrSyncService ibkrSyncService;
 
     public SchedulerService(
         AccountRepository accountRepository,
@@ -49,7 +51,8 @@ public class SchedulerService {
         PriceService priceService,
         CryptoExchangeSyncService cryptoExchangeSyncService,
         WalletSyncService walletSyncService,
-        FinaryApiSyncService finaryApiSyncService
+        FinaryApiSyncService finaryApiSyncService,
+        IbkrSyncService ibkrSyncService
     ) {
         this.accountRepository = accountRepository;
         this.snapshotRepository = snapshotRepository;
@@ -62,6 +65,7 @@ public class SchedulerService {
         this.cryptoExchangeSyncService = cryptoExchangeSyncService;
         this.walletSyncService = walletSyncService;
         this.finaryApiSyncService = finaryApiSyncService;
+        this.ibkrSyncService = ibkrSyncService;
     }
 
     /**
@@ -91,6 +95,7 @@ public class SchedulerService {
 
             trSyncService.resyncIfSessionActive(memberId);
             boursoSyncService.resyncIfSessionActive(memberId);
+            ibkrSyncService.resyncIfConnected(memberId);
 
             try {
                 cryptoExchangeSyncService.resyncAll(memberId);

@@ -76,6 +76,17 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-IP IBKR Flex sync rate limiter: 6 requests per minute.
+     * IBKR itself rate-limits the Flex Web Service to roughly one request per second
+     * per token and a sync fans out into SendRequest + several GetStatement polls, so a
+     * handful of manual syncs per minute is the sane ceiling.
+     */
+    @Bean("ibkrSyncBuckets")
+    public Map<String, Bucket> ibkrSyncBuckets() {
+        return new ConcurrentHashMap<>();
+    }
+
+    /**
      * Per-IP setup wizard rate limiter: 10 mutating requests per minute.
      * Tight because the endpoints are unauthenticated until setup completes
      * — without this, a fresh install is exposed to admin-seeding floods
@@ -175,6 +186,15 @@ public class RateLimitConfig {
             .addLimit(Bandwidth.builder()
                 .capacity(5)
                 .refillIntervally(5, Duration.ofMinutes(15))
+                .build())
+            .build();
+    }
+
+    public static Bucket createIbkrSyncBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(6)
+                .refillIntervally(6, Duration.ofMinutes(1))
                 .build())
             .build();
     }
