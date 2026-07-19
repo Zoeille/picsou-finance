@@ -219,6 +219,46 @@ class IbkrSyncServiceTest {
         assertThat(byTicker.get("PLTR").getAverageBuyIn()).isEqualByComparingTo("40");
     }
 
+    /**
+     * Derivatives allowlist: an OPT position must never become a holding, even with a
+     * short OCC symbol ("SPY 240119C00470000" is 19 chars, well under the 30-char
+     * length guard that used to be the only defense) — same for FUT. A position with no
+     * assetCategory attribute at all is kept (conservative default for statements that
+     * omit the field, unchanged from today's behavior).
+     */
+    @Test
+    void sync_skipsDerivativeAssetCategoriesButKeepsAbsentCategory() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        IbkrPosition option = pos(null, "SPY 240119C00470000", "OPT", bd("1"), bd("5"), bd("1"));
+        IbkrPosition future = pos(null, "ES FUT", "FUT", bd("1"), bd("100"), bd("1"));
+        IbkrPosition absentCategory = pos(null, "PLTR", null, bd("8"), bd("40"), bd("1"));
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query"))
+            .thenReturn(List.of(new IbkrAccountData("U1", List.of(option, future, absentCategory))));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(Optional.empty());
+        lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(false);
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> { Account a = inv.getArgument(0); a.setId(1L); return a; });
+        when(accountService.liveBalanceEur(any(Account.class))).thenReturn(bd("0"));
+        when(accountService.toResponse(any(Account.class))).thenReturn(
+            AccountResponse.from(Account.builder().id(1L).name("IBKR U1").type(AccountType.COMPTE_TITRES).build(), BigDecimal.ZERO));
+
+        service.sync(memberId);
+
+        // Only the absent-category row becomes a holding; OPT and FUT are skipped
+        // (asserted via the no-holding outcome, not by capturing the WARN log).
+        ArgumentCaptor<AccountHolding> captor = ArgumentCaptor.forClass(AccountHolding.class);
+        verify(holdingRepository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getTicker()).isEqualTo("PLTR");
+    }
+
     /** Convenience builder for an account "U1" SUMMARY position. */
     private static IbkrPosition pos(String isin, String symbol, String assetCategory,
                                     BigDecimal position, BigDecimal costBasisPrice, BigDecimal fxRateToBase) {

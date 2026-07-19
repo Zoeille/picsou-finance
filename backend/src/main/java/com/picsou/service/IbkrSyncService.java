@@ -29,8 +29,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Orchestrates Interactive Brokers sync: stores the encrypted Flex credentials,
@@ -66,6 +68,14 @@ public class IbkrSyncService {
     /** Column limits of {@code account_holding} (see V11): ticker VARCHAR(30), name VARCHAR(100). */
     private static final int MAX_TICKER_LEN = 30;
     private static final int MAX_NAME_LEN = 100;
+
+    /**
+     * Asset categories we price and cost-basis correctly (stocks/ETFs, mutual funds,
+     * bonds, crypto). Everything else (options, futures, CFDs, warrants, ...) is a
+     * derivative whose per-share cost basis ignores the contract multiplier and whose
+     * mark rarely resolves through Yahoo/CoinGecko — see {@link #isReportable}.
+     */
+    private static final Set<String> REPORTABLE_ASSET_CATEGORIES = Set.of("STK", "FUND", "BOND", "CRYPTO");
 
     // ---------------------------------------------------------------------------
     // Connection management
@@ -248,8 +258,9 @@ public class IbkrSyncService {
 
     /**
      * Whether a position should become a holding: non-zero quantity, summary-level
-     * (not a per-lot duplicate) and not a cash line. A ticker source (ISIN or symbol)
-     * is required so we never persist a nameless holding.
+     * (not a per-lot duplicate), not a cash line, and an asset category we can price
+     * and cost-basis correctly ({@link #REPORTABLE_ASSET_CATEGORIES}, or absent). A
+     * ticker source (ISIN or symbol) is required so we never persist a nameless holding.
      */
     private boolean isReportable(IbkrPosition p) {
         if (p.position() == null || p.position().signum() == 0) {
@@ -261,6 +272,17 @@ public class IbkrSyncService {
             return false;
         }
         if (p.assetCategory() != null && "CASH".equalsIgnoreCase(p.assetCategory())) {
+            return false;
+        }
+        // Allowlist rather than the old over-long-ticker guard alone: standard OCC
+        // option symbols (e.g. "SPY 240119C00470000", 19 chars) are well under the
+        // 30-char column limit and used to pass straight through as a stock holding.
+        // Skip (and warn) anything outside the categories we handle correctly so
+        // day-1 real data reveals any category we got wrong.
+        if (p.assetCategory() != null
+            && !REPORTABLE_ASSET_CATEGORIES.contains(p.assetCategory().toUpperCase(Locale.ROOT))) {
+            log.warn("IBKR: skipping unsupported assetCategory '{}' for symbol '{}'",
+                p.assetCategory(), p.symbol());
             return false;
         }
         return (p.isin() != null && !p.isin().isBlank()) || (p.symbol() != null && !p.symbol().isBlank());

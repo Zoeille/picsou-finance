@@ -81,13 +81,23 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
 - **LOT vs SUMMARY rows.** If the Flex Query has lots enabled, IBKR emits both a `SUMMARY`
   row and per-tax-lot `LOT` rows. The service keeps `SUMMARY`/absent and drops `LOT` to
   avoid double counting (`IbkrSyncService.isReportable`).
-- **Asset coverage.** Equities/ETFs price well (ISIN→ticker→Yahoo). Instruments without a
-  usable ISIN (some derivatives) fall back to the IBKR symbol and may not price — they then
-  contribute 0 to the live balance (logged), same graceful degradation as Trade Republic.
-  Cash lines (`assetCategory = CASH`) and zero-quantity positions are skipped. A resolved
-  ticker longer than the `account_holding.ticker` column (30 chars — long option/future
-  symbols) is skipped rather than crashing the whole account's sync; the display name is
-  clipped to 100 chars for the same reason.
+- **Asset coverage.** `isReportable` allowlists `assetCategory` in `STK` (covers stocks
+  *and* ETFs — IBKR has no separate ETF category), `FUND`, `BOND`, `CRYPTO`, or absent
+  (case-insensitive). Everything else — options (`OPT`), futures (`FUT`), future options
+  (`FOP`), CFDs, warrants, ... — is skipped with a WARN log naming the category and
+  symbol, so day-1 real data surfaces any category the allowlist got wrong. This replaced
+  an over-long-ticker guard alone, which does **not** catch derivatives: a standard OCC
+  option symbol like `"SPY 240119C00470000"` is 19 chars, under the 30-char
+  `account_holding.ticker` column limit, so it used to pass through as a mispriced stock
+  holding (per-share cost basis with the contract multiplier ignored, live value null).
+  The ticker-length guard is still kept as a backstop for whatever slips through the
+  allowlist. Cash lines (`assetCategory = CASH`) and zero-quantity positions are skipped
+  silently (expected, not a day-1 finding). Equities/ETFs price well (ISIN→ticker→Yahoo);
+  instruments without a usable ISIN fall back to the IBKR symbol and may not price — they
+  then contribute 0 to the live balance (logged), same graceful degradation as Trade
+  Republic. A resolved ticker longer than the `account_holding.ticker` column (30 chars)
+  is skipped rather than crashing the whole account's sync; the display name is clipped
+  to 100 chars for the same reason.
 - **Async statement generation.** `GetStatement` can answer "still generating" (IBKR error
   code 1019); the client polls with backoff (matched on code *and* message text so a code
   change does not turn a transient wait into a hard failure).
