@@ -29,6 +29,8 @@ trusted for EUR valuation.
 - `controller/IbkrController.java` — `/api/ibkr/connect|status|sync|connection`
 - `service/IbkrSyncService.java` — connect/status/sync + position→holding mapping
   (lives in `com.picsou.service` with the other broker sync services)
+- `service/IbkrStatusWriter.java` — persists the `ERROR` status in its own
+  `REQUIRES_NEW` transaction so it survives the sync transaction's rollback
 - `ibkr/client/IbkrFlexClient.java` — Flex Web Service HTTP + XML parsing (`IbkrFlexPort`)
 - `port/IbkrFlexPort.java` — provider abstraction + `IbkrPosition` / `IbkrAccountData`
 - `model/IbkrConnection.java`, `repository/IbkrConnectionRepository.java` — encrypted token + query id
@@ -90,7 +92,12 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
   code 1019); the client polls with backoff (matched on code *and* message text so a code
   change does not turn a transient wait into a hard failure).
 - **Token expiry.** Flex tokens live 6h–1y. On failure the connection status flips to
-  `ERROR`; the user regenerates the token and reconnects.
+  `ERROR`; the user regenerates the token and reconnects. `IbkrSyncService` is
+  `@Transactional`, so a plain save-then-rethrow in the catch block would be rolled back
+  on the manual sync path (the exception marks the transaction rollback-only before it
+  reaches the controller) — `IbkrStatusWriter.markError` runs in its own `REQUIRES_NEW`
+  transaction instead, so the `ERROR` status commits independently of the outer
+  rollback on both the manual and scheduled paths.
 - **`GetStatement` `q` parameter.** Uses the **reference code** returned by `SendRequest`
   (not the query id). Verify against a real statement on first live run.
 

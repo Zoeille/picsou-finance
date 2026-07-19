@@ -28,10 +28,13 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +48,7 @@ class IbkrSyncServiceTest {
     @Mock AccountService accountService;
     @Mock OpenFigiIsinConverter isinConverter;
     @Mock CryptoEncryption encryption;
+    @Mock IbkrStatusWriter statusWriter;
 
     @InjectMocks IbkrSyncService service;
 
@@ -117,6 +121,8 @@ class IbkrSyncServiceTest {
         // Connection is marked freshly synced.
         assertThat(connection.getStatus()).isEqualTo("CONNECTED");
         assertThat(connection.getLastSyncedAt()).isNotNull();
+        // Happy path never touches the error-status writer.
+        verifyNoInteractions(statusWriter);
     }
 
     @Test
@@ -126,6 +132,37 @@ class IbkrSyncServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.sync(99L))
             .isInstanceOf(com.picsou.exception.SyncException.class)
             .hasMessageContaining("No Interactive Brokers connection");
+    }
+
+    /**
+     * When the Flex port throws (network error, expired token, ...), the manual sync
+     * path must still end up with the connection's status persisted as ERROR. The
+     * naive fix (save inside the @Transactional method, then rethrow) does not survive
+     * on the manual path: the rethrow marks the transaction rollback-only and the save
+     * is lost. {@link IbkrStatusWriter} runs in its own REQUIRES_NEW transaction instead
+     * — this test pins that it is invoked with the right connection id, and that the
+     * original exception still propagates to the caller (the controller surfaces it).
+     */
+    @Test
+    void sync_whenPortThrows_marksErrorViaStatusWriterAndPropagates() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .id(42L)
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        RuntimeException boom = new RuntimeException("IBKR: token expired");
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query")).thenThrow(boom);
+
+        assertThatThrownBy(() -> service.sync(memberId)).isSameAs(boom);
+
+        verify(statusWriter, times(1)).markError(42L);
+        // The old (broken) approach saved through connectionRepository directly inside
+        // the failing transaction; that must no longer happen on this path.
+        verify(connectionRepository, never()).save(any(IbkrConnection.class));
     }
 
     /**

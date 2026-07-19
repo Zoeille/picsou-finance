@@ -61,6 +61,7 @@ public class IbkrSyncService {
     private final AccountService accountService;
     private final OpenFigiIsinConverter isinConverter;
     private final CryptoEncryption encryption;
+    private final IbkrStatusWriter statusWriter;
 
     /** Column limits of {@code account_holding} (see V11): ticker VARCHAR(30), name VARCHAR(100). */
     private static final int MAX_TICKER_LEN = 30;
@@ -136,8 +137,10 @@ public class IbkrSyncService {
         try {
             accounts = ibkrFlexPort.fetchOpenPositions(token, queryId);
         } catch (RuntimeException ex) {
-            connection.setStatus("ERROR");
-            connectionRepository.save(connection);
+            // A plain save here would be lost on the manual path: the rethrow marks this
+            // @Transactional method rollback-only, so the ERROR status never commits.
+            // statusWriter runs in its own REQUIRES_NEW transaction, which survives.
+            statusWriter.markError(connection.getId());
             throw ex;
         }
 
