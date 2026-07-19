@@ -41,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -302,6 +303,48 @@ class AuthControllerTest {
         // No session is established, and a credential-less profile never reaches MFA.
         verify(cookieWriter, never()).setAccessAndRefresh(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(mfaService, never()).isEnabled(any());
+    }
+
+    @Test
+    void login_ratelimitKey_isXRealIp_notSpoofableXForwardedFor() {
+        // Regression for the leftmost-XFF spoofing bug: request.getRemoteAddr() is tainted by
+        // ForwardedHeaderFilter from whatever the client puts in X-Forwarded-For (nginx only
+        // appends, never replaces), so a raw client could rotate it and get a fresh bucket every
+        // request. ClientIp.resolve() must key on nginx's X-Real-IP instead, which stays constant
+        // for the same real client regardless of the spoofed XFF value.
+        @SuppressWarnings("unchecked")
+        Map<String, Bucket> mockedLoginBuckets = mock(Map.class);
+        Bucket bucket = mock(Bucket.class);
+        when(bucket.tryConsume(1)).thenReturn(true);
+        when(mockedLoginBuckets.computeIfAbsent(any(), any())).thenReturn(bucket);
+        when(userRepository.findByUsernameWithMember("alice")).thenReturn(Optional.empty());
+
+        AuthController spoofTestController = new AuthController(
+            userRepository, passwordEncoder, jwtUtil,
+            mockedLoginBuckets, mfaVerifyBuckets, cookieWriter,
+            mfaService, persistentSessionService, auditService, false);
+
+        MockHttpServletRequest firstCall = new MockHttpServletRequest();
+        firstCall.setRemoteAddr("172.18.0.2");
+        firstCall.addHeader("X-Forwarded-For", "1.1.1.1"); // attacker-supplied, rotates per request
+        firstCall.addHeader("X-Real-IP", "203.0.113.9");   // nginx-observed peer, stable
+
+        MockHttpServletRequest secondCall = new MockHttpServletRequest();
+        secondCall.setRemoteAddr("172.18.0.2");
+        secondCall.addHeader("X-Forwarded-For", "9.9.9.9"); // rotated -- same attacker, new value
+        secondCall.addHeader("X-Real-IP", "203.0.113.9");   // unchanged: same real client
+
+        assertThatThrownBy(() -> spoofTestController.login(
+                new LoginRequest("alice", "pw", false), firstCall, httpRes))
+            .isInstanceOf(BadCredentialsException.class);
+        assertThatThrownBy(() -> spoofTestController.login(
+                new LoginRequest("alice", "pw", false), secondCall, httpRes))
+            .isInstanceOf(BadCredentialsException.class);
+
+        // Both calls looked up the SAME key, despite the different X-Forwarded-For each time.
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockedLoginBuckets, times(2)).computeIfAbsent(keyCaptor.capture(), any());
+        assertThat(keyCaptor.getAllValues()).containsOnly("203.0.113.9");
     }
 
     // ─── activate ────────────────────────────────────────────────────────

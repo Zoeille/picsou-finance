@@ -80,6 +80,14 @@ server:
   # 403. "framework" (Spring's ForwardedHeaderFilter) is used because the backend is only
   # reachable through nginx — no per-IP trusted-proxy config needed — and it is a no-op
   # when no X-Forwarded-* headers are present (dev / direct-HTTP access).
+  #
+  # Side effect: this ALSO rewrites request.getRemoteAddr() from the leftmost
+  # X-Forwarded-For entry, which nginx's proxy_add_x_forwarded_for only appends to (never
+  # replaces) — so a raw client can set that entry itself and getRemoteAddr() is no longer
+  # a trustworthy per-client identity. Never key a rate limiter (or anything else
+  # security-sensitive) on getRemoteAddr() while this is "framework"; use
+  # com.picsou.config.ClientIp#resolve(request) instead, which reads the nginx-owned
+  # X-Real-IP header — see docs/features/security-cors-cookies.md ("client IP trust").
   forward-headers-strategy: framework
   error:
     include-stacktrace: never     # never expose stack traces to clients

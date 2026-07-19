@@ -1,6 +1,7 @@
 package com.picsou.controller;
 
 import com.picsou.config.AuthCookieWriter;
+import com.picsou.config.ClientIp;
 import com.picsou.config.JwtUtil;
 import com.picsou.config.RateLimitConfig;
 import com.picsou.dto.ActivationRequest;
@@ -550,10 +551,14 @@ public class AuthController {
 
     private String getClientIp(HttpServletRequest request) {
         // Never trust X-Forwarded-For from the client — it is user-controllable and
-        // would allow rate-limit bypass by spoofing IPs. Use only the TCP-level remote
-        // address, which is the nginx container's internal IP in production (the only
-        // valid entry point on the picsou-net Docker bridge network).
-        return request.getRemoteAddr();
+        // would allow rate-limit bypass by spoofing IPs. request.getRemoteAddr() is NOT
+        // a safe substitute either: under server.forward-headers-strategy=framework
+        // (see application.yml), Spring's ForwardedHeaderFilter rewrites it from the
+        // leftmost X-Forwarded-For entry, which nginx's proxy_add_x_forwarded_for only
+        // ever appends to (never replaces) — so it inherits the same spoofability.
+        // ClientIp.resolve() uses X-Real-IP instead, which our nginx always overwrites
+        // with $remote_addr and a client cannot inject through the proxy.
+        return ClientIp.resolve(request);
     }
 
     record ChangePasswordRequest(
