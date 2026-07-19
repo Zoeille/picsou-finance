@@ -30,8 +30,14 @@ A prior change (#39) added HTTPS to the Vite dev server via mkcert/basic-ssl, bu
 4. **Make HSTS opt-in** (`HSTS_ENABLED`, default off) at *both* emitters: a snippet `entrypoint.sh`
    writes and `nginx.conf` includes (SPA/static), and `SecurityConfig`'s `app.hsts-enabled` gate
    (`/api`, `/actuator`). Gating only nginx leaves the policy pinned by the first API call.
-5. **Reset `X-Forwarded-For` at Caddy** (`header_up X-Forwarded-For {remote_host}`) rather than
-   appending.
+5. **Rely on Caddy's default `X-Forwarded-For` handling — do not add a `header_up` directive.**
+   Caddy's `trusted_proxies` is empty here, so it already overwrites any client-supplied
+   `X-Forwarded-For` with the real peer address; verified by sending a spoofed
+   `X-Forwarded-For: 10.0.0.99` through this config and observing only the peer address reach the
+   upstream. Stating it explicitly is redundant and makes Caddy log
+   `Unnecessary header_up X-Forwarded-For` on every start. This matters because
+   `forward-headers-strategy: framework` makes `getRemoteAddr()` return `XFF[0]`, which
+   `AuthController.getClientIp()` uses as the login rate-limit key.
 
 ## Alternatives considered
 
