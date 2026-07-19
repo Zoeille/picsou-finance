@@ -2,7 +2,6 @@ package com.picsou.service;
 
 import com.picsou.dto.FinaryAutoSyncResponse;
 import com.picsou.finary.FinaryApiSyncService;
-import com.picsou.ibkr.IbkrSyncService;
 import com.picsou.model.Account;
 import com.picsou.model.BalanceSnapshot;
 import com.picsou.model.FamilyMember;

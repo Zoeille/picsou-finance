@@ -4,7 +4,7 @@ import com.picsou.config.RateLimitConfig;
 import com.picsou.dto.AccountResponse;
 import com.picsou.dto.IbkrConnectRequest;
 import com.picsou.dto.IbkrConnectionStatusResponse;
-import com.picsou.ibkr.IbkrSyncService;
+import com.picsou.service.IbkrSyncService;
 import com.picsou.service.UserContext;
 import io.github.bucket4j.Bucket;
 import jakarta.servlet.http.HttpServletRequest;

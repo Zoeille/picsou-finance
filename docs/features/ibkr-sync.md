@@ -27,7 +27,8 @@ trusted for EUR valuation.
 ### Key files
 
 - `controller/IbkrController.java` — `/api/ibkr/connect|status|sync|connection`
-- `ibkr/IbkrSyncService.java` — connect/status/sync + position→holding mapping
+- `service/IbkrSyncService.java` — connect/status/sync + position→holding mapping
+  (lives in `com.picsou.service` with the other broker sync services)
 - `ibkr/client/IbkrFlexClient.java` — Flex Web Service HTTP + XML parsing (`IbkrFlexPort`)
 - `port/IbkrFlexPort.java` — provider abstraction + `IbkrPosition` / `IbkrAccountData`
 - `model/IbkrConnection.java`, `repository/IbkrConnectionRepository.java` — encrypted token + query id

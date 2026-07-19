@@ -1,4 +1,4 @@
-package com.picsou.ibkr;
+package com.picsou.service;
 
 import com.picsou.adapter.OpenFigiIsinConverter;
 import com.picsou.adapter.OpenFigiIsinConverter.TickerResult;
@@ -19,8 +19,6 @@ import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.IbkrConnectionRepository;
-import com.picsou.service.AccountService;
-import com.picsou.service.HoldingDedup;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,12 +36,15 @@ import java.util.Optional;
  * Orchestrates Interactive Brokers sync: stores the encrypted Flex credentials,
  * pulls Open Positions once a day and maps them onto Picsou accounts + holdings.
  *
- * <p>Mirrors {@code TradeRepublicSyncService}'s broker→holdings pattern (delete +
- * recompute, VWAP de-dup, ISIN→ticker via {@link OpenFigiIsinConverter}). The one
- * IBKR-specific twist is currency: IBKR reports cost basis in each security's native
- * currency, so {@code averageBuyIn} is converted to the account's base currency via
+ * <p>Lives in {@code com.picsou.service} alongside the other broker sync services
+ * (Trade Republic, Bourso) so it can reuse {@link AccountService}'s package-private
+ * {@code upsertSnapshot} / {@code toResponse} helpers. Mirrors
+ * {@code TradeRepublicSyncService}'s broker→holdings pattern (delete + recompute,
+ * VWAP de-dup, ISIN→ticker via {@link OpenFigiIsinConverter}). The one IBKR-specific
+ * twist is currency: IBKR reports cost basis in each security's native currency, so
+ * {@code averageBuyIn} is converted to the account's base currency via
  * {@code fxRateToBase}. Net worth itself never depends on that conversion — it is
- * recomputed live in EUR from tickers by {@code AccountService.liveBalanceEur}
+ * recomputed live in EUR from tickers by {@link AccountService#liveBalanceEur}
  * (Yahoo/CoinGecko, FX-converted), exactly like every other holdings account.
  */
 @Service
@@ -282,7 +283,7 @@ public class IbkrSyncService {
     /**
      * Mark price per unit in the account base currency (≈EUR). Informational only:
      * the stored {@code currentPrice} is never trusted for EUR valuation — the
-     * dashboard recomputes live from the ticker (see {@code AccountService}).
+     * dashboard recomputes live from the ticker (see {@link AccountService}).
      */
     private BigDecimal eurMark(IbkrPosition p) {
         if (p.markPrice() == null) {

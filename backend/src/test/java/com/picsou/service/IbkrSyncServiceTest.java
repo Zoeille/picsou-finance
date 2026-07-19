@@ -1,4 +1,4 @@
-package com.picsou.ibkr;
+package com.picsou.service;
 
 import com.picsou.adapter.OpenFigiIsinConverter;
 import com.picsou.adapter.OpenFigiIsinConverter.TickerResult;
@@ -16,7 +16,6 @@ import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.IbkrConnectionRepository;
-import com.picsou.service.AccountService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
