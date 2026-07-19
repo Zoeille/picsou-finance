@@ -73,11 +73,21 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
 
 ## Gotchas / Pitfalls
 
-- **Base currency assumption.** `fxRateToBase` converts a position's native currency to the
-  user's **IBKR base currency**, not necessarily EUR. `averageBuyIn` (and therefore the
-  "invested" and PnL figures) is correct only when the IBKR base currency is EUR. **Net
-  worth is unaffected** — it is recomputed live in EUR from tickers, never from the stored
-  cost basis or IBKR prices. Document/expect a EUR IBKR base for accurate PnL.
+- **Base currency requirement (enforced).** `fxRateToBase` converts a position's native
+  currency to the user's **IBKR base currency**, not necessarily EUR. `averageBuyIn` (and
+  therefore the "invested" and PnL figures) is correct only when the IBKR base currency is
+  EUR. **Net worth is unaffected** — it is recomputed live in EUR from tickers, never from
+  the stored cost basis or IBKR prices. Since plan 003 (issue B), `IbkrSyncService`
+  actively guards this instead of silently trusting it: it reads the account's base
+  currency from the Flex statement's optional `AccountInformation` section (`currency`
+  attribute — a section the user must enable on the Flex Query alongside Open Positions);
+  if present and not `EUR`, the sync **throws `SyncException`** with a message telling the
+  user to change the IBKR account's base currency in Account Settings, and **no holdings
+  are persisted** for that account. If the statement has no `AccountInformation` section at
+  all (not enabled on the query), the base currency is unknown — sync proceeds assuming EUR
+  as before, logging one WARN per account per sync so this is visible on day 1. **Owner
+  operational note:** choosing EUR as the IBKR account base currency at account opening
+  neutralizes this entirely.
 - **LOT vs SUMMARY rows.** If the Flex Query has lots enabled, IBKR emits both a `SUMMARY`
   row and per-tax-lot `LOT` rows. The service keeps `SUMMARY`/absent and drops `LOT` to
   avoid double counting (`IbkrSyncService.isReportable`).

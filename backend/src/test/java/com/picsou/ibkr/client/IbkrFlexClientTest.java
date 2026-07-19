@@ -123,4 +123,44 @@ class IbkrFlexClientTest {
         assertThat(shorty.costBasisPrice()).isNull();
         assertThat(shorty.fxRateToBase()).isNull();
     }
+
+    /**
+     * AccountInformation is an optional Flex Query section (Account ID, Account Alias,
+     * Currency) that can be enabled alongside Open Positions in the same Activity Flex
+     * Query; when present, its {@code currency} attribute is the account's IBKR base
+     * currency (plan 003 / issue B).
+     */
+    @Test
+    void parse_readsAccountInformationBaseCurrency() {
+        String xml = """
+            <FlexQueryResponse queryName="OpenPositions" type="AF">
+              <FlexStatements count="1">
+                <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260718"
+                               period="LastBusinessDay" whenGenerated="20260719;050000">
+                  <AccountInformation accountId="U1234567" currency="USD" />
+                  <OpenPositions>
+                    <OpenPosition accountId="U1234567" currency="USD" fxRateToBase="1"
+                        assetCategory="STK" symbol="AAPL" description="APPLE INC" conid="265598"
+                        isin="US0378331005" position="10" markPrice="200.00"
+                        costBasisPrice="150.00" levelOfDetail="SUMMARY" />
+                  </OpenPositions>
+                </FlexStatement>
+              </FlexStatements>
+            </FlexQueryResponse>
+            """;
+
+        List<IbkrAccountData> accounts = client.parseOpenPositions(xml);
+
+        assertThat(accounts).hasSize(1);
+        assertThat(accounts.get(0).baseCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void parse_noAccountInformationSection_yieldsNullBaseCurrency() {
+        // The shared FIXTURE above has no AccountInformation element at all -- the
+        // common case today, since the parse must not assume the section is enabled.
+        List<IbkrAccountData> accounts = client.parseOpenPositions(FIXTURE);
+
+        assertThat(accounts.get(0).baseCurrency()).isNull();
+    }
 }

@@ -296,6 +296,64 @@ class IbkrSyncServiceTest {
         verify(holdingRepository, never()).save(any(AccountHolding.class));
     }
 
+    /**
+     * B: a non-EUR IBKR account base currency must fail that account's sync rather than
+     * silently persist a wrong-currency cost basis (averageBuyIn is converted via
+     * fxRateToBase into the account's base currency, not necessarily EUR). No holdings
+     * and no account row are persisted for it.
+     */
+    @Test
+    void sync_nonEurBaseCurrency_throwsAndPersistsNoHoldings() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        IbkrPosition aapl = pos("US0378331005", "AAPL", "STK", bd("10"), bd("150"), bd("1"));
+        IbkrAccountData accountData = new IbkrAccountData("U1", List.of(aapl), "USD");
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query")).thenReturn(List.of(accountData));
+
+        assertThatThrownBy(() -> service.sync(memberId))
+            .isInstanceOf(com.picsou.exception.SyncException.class)
+            .hasMessageContaining("IBKR account base currency is USD")
+            .hasMessageContaining("EUR-based accounts");
+
+        verify(holdingRepository, never()).save(any(AccountHolding.class));
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
+    /** B: an explicit "EUR" base currency syncs exactly like today (no behavior change). */
+    @Test
+    void sync_eurBaseCurrency_syncsNormally() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        IbkrPosition aapl = pos("US0378331005", "AAPL", "STK", bd("10"), bd("150"), bd("1"));
+        IbkrAccountData accountData = new IbkrAccountData("U1", List.of(aapl), "EUR");
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query")).thenReturn(List.of(accountData));
+
+        when(isinConverter.resolve("US0378331005")).thenReturn(new TickerResult("AAPL", "Apple"));
+        when(accountRepository.findByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(Optional.empty());
+        lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(false);
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> { Account a = inv.getArgument(0); a.setId(1L); return a; });
+        when(accountService.liveBalanceEur(any(Account.class))).thenReturn(bd("0"));
+        when(accountService.toResponse(any(Account.class))).thenReturn(
+            AccountResponse.from(Account.builder().id(1L).name("IBKR U1").type(AccountType.COMPTE_TITRES).build(), BigDecimal.ZERO));
+
+        service.sync(memberId);
+
+        verify(holdingRepository, times(1)).save(any(AccountHolding.class));
+    }
+
     /** Convenience builder for an account "U1" SUMMARY position. */
     private static IbkrPosition pos(String isin, String symbol, String assetCategory,
                                     BigDecimal position, BigDecimal costBasisPrice, BigDecimal fxRateToBase) {

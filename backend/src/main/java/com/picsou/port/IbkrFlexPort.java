@@ -58,8 +58,22 @@ public interface IbkrFlexPort {
         BigDecimal fxRateToBase
     ) {}
 
+    /**
+     * @param accountId    IBKR account id
+     * @param positions    open positions for this account
+     * @param baseCurrency the account's IBKR base currency (e.g. "EUR", "USD"), from the
+     *                     optional {@code AccountInformation} section of the Flex Query;
+     *                     null when that section is not enabled on the query, or absent
+     *                     from the statement
+     */
     record IbkrAccountData(
         String accountId,
-        List<IbkrPosition> positions
-    ) {}
+        List<IbkrPosition> positions,
+        String baseCurrency
+    ) {
+        /** Convenience constructor for callers/tests that predate the base-currency field. */
+        public IbkrAccountData(String accountId, List<IbkrPosition> positions) {
+            this(accountId, positions, null);
+        }
+    }
 }

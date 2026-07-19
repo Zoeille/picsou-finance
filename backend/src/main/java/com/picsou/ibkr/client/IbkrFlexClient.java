@@ -22,6 +22,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -168,6 +169,11 @@ public class IbkrFlexClient implements IbkrFlexPort {
         Document doc = parse(xml);
         NodeList positions = doc.getElementsByTagName("OpenPosition");
 
+        // Account base currency, keyed by accountId -- from the optional
+        // AccountInformation section (enabled per Flex Query, sibling of OpenPositions
+        // under FlexStatement). Absent entirely on statements that don't enable it.
+        Map<String, String> baseCurrencyByAccount = parseAccountInformation(doc);
+
         // LinkedHashMap: stable account ordering for deterministic downstream upserts.
         Map<String, List<IbkrPosition>> byAccount = new LinkedHashMap<>();
         for (int i = 0; i < positions.getLength(); i++) {
@@ -196,10 +202,36 @@ public class IbkrFlexClient implements IbkrFlexPort {
 
         List<IbkrAccountData> result = new ArrayList<>();
         for (Map.Entry<String, List<IbkrPosition>> entry : byAccount.entrySet()) {
-            result.add(new IbkrAccountData(entry.getKey(), entry.getValue()));
+            String accountId = entry.getKey();
+            result.add(new IbkrAccountData(accountId, entry.getValue(), baseCurrencyByAccount.get(accountId)));
         }
         log.info("IBKR Flex parsed {} open positions across {} account(s)",
             positions.getLength(), result.size());
+        return result;
+    }
+
+    /**
+     * Parses the optional {@code <AccountInformation accountId="..." currency="..." />}
+     * element(s) into an accountId → base-currency map. This section only appears when
+     * "Account Information" is enabled on the Flex Query; a statement without it (or
+     * without a usable {@code accountId}/{@code currency} pair) yields an empty map, and
+     * callers fall back to their pre-base-currency-detection behavior.
+     */
+    private Map<String, String> parseAccountInformation(Document doc) {
+        Map<String, String> result = new HashMap<>();
+        NodeList infos = doc.getElementsByTagName("AccountInformation");
+        for (int i = 0; i < infos.getLength(); i++) {
+            Node node = infos.item(i);
+            if (node.getNodeType() != Node.ELEMENT_NODE) {
+                continue;
+            }
+            Element el = (Element) node;
+            String accountId = blankToNull(attr(el, "accountId"));
+            String currency = blankToNull(attr(el, "currency"));
+            if (accountId != null && currency != null) {
+                result.put(accountId, currency);
+            }
+        }
         return result;
     }
 

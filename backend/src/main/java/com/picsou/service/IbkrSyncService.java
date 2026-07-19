@@ -181,6 +181,8 @@ public class IbkrSyncService {
             return Optional.empty();
         }
 
+        requireEurBaseCurrency(data);
+
         Account account;
         if (existing.isPresent()) {
             account = existing.get();
@@ -260,6 +262,31 @@ public class IbkrSyncService {
         accountService.upsertSnapshot(account, liveEur, LocalDate.now());
 
         return Optional.of(accountService.toResponse(account));
+    }
+
+    /**
+     * Guards against a non-EUR IBKR account base currency. {@code averageBuyIn} is
+     * stored converted via {@code fxRateToBase} into the account's IBKR base currency
+     * (see {@link #eurCostBasis}) -- if that base currency is not actually EUR, every
+     * invested-amount / per-holding P&L% figure derived from it is silently wrong. Net
+     * worth itself is unaffected (see the class javadoc: it is repriced live in EUR from
+     * tickers, never from the stored cost basis). Fail fast rather than persist
+     * quietly-wrong holdings for this account; a statement without the
+     * {@code AccountInformation} section (no {@code baseCurrency}) keeps today's
+     * assume-EUR behavior, with a once-per-account-sync WARN.
+     */
+    private void requireEurBaseCurrency(IbkrAccountData data) {
+        String baseCurrency = data.baseCurrency();
+        if (baseCurrency == null) {
+            log.warn("IBKR: account {} statement has no AccountInformation/baseCurrency; assuming EUR",
+                data.accountId());
+            return;
+        }
+        if (!"EUR".equalsIgnoreCase(baseCurrency)) {
+            throw new SyncException("IBKR account base currency is " + baseCurrency + "; Picsou currently "
+                + "supports EUR-based accounts — change the base currency in IBKR Account Settings, "
+                + "or reconnect after conversion support lands.");
+        }
     }
 
     /**
