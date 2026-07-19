@@ -203,6 +203,12 @@ future work):
 - **Audit trail** in the `setup_audit` table for `setup.admin.created`,
   `setup.integration.enabled`, `setup.security.updated`, `setup.completed` — valuable
   forensics for a self-host admin who wants to know "who ran setup on this machine".
+- **Single-account seeding.** The wizard seeds exactly one account. `SetupService.seedAdmin`
+  rejects any call once one user already exists (`AppUserRepository.count() > 0`),
+  regardless of `setup.state` — so a second, differently-named `role=ADMIN` account can no
+  longer be planted through `POST /api/setup/admin` during the `IN_PROGRESS` window (after
+  the first admin is seeded but before `/api/setup/complete` is called). Further accounts
+  are created from the authenticated Family admin UI, never from the wizard.
 
 ## Running without Docker
 
@@ -230,8 +236,8 @@ The wizard makes zero outbound requests on first load:
 
 - `SetupServiceTest` — state transitions (`PENDING_ADMIN → IN_PROGRESS → COMPLETE`),
   SERIALIZABLE CAS on admin claim, bcrypt-hash rejection, idempotent seed when user
-  already exists, CSV origin persistence, empty-origin rejection, consistent
-  integration-key formatting.
+  already exists, rejection when any account already exists (second-admin backdoor),
+  CSV origin persistence, empty-origin rejection, consistent integration-key formatting.
 - `SetupControllerTest` — endpoint-level: admin seed returns 410 after completion,
   EB keypair regenerate-flag on first call vs. idempotent subsequent calls, EB
   `test` only flips the integration flag on success, BoursoBank health / TR / Finary
