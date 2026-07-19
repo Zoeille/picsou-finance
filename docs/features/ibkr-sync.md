@@ -82,7 +82,10 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
 - **Asset coverage.** Equities/ETFs price well (ISIN→ticker→Yahoo). Instruments without a
   usable ISIN (some derivatives) fall back to the IBKR symbol and may not price — they then
   contribute 0 to the live balance (logged), same graceful degradation as Trade Republic.
-  Cash lines (`assetCategory = CASH`) are skipped.
+  Cash lines (`assetCategory = CASH`) and zero-quantity positions are skipped. A resolved
+  ticker longer than the `account_holding.ticker` column (30 chars — long option/future
+  symbols) is skipped rather than crashing the whole account's sync; the display name is
+  clipped to 100 chars for the same reason.
 - **Async statement generation.** `GetStatement` can answer "still generating" (IBKR error
   code 1019); the client polls with backoff (matched on code *and* message text so a code
   change does not turn a transient wait into a hard failure).

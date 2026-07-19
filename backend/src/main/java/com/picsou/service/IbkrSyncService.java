@@ -62,6 +62,10 @@ public class IbkrSyncService {
     private final OpenFigiIsinConverter isinConverter;
     private final CryptoEncryption encryption;
 
+    /** Column limits of {@code account_holding} (see V11): ticker VARCHAR(30), name VARCHAR(100). */
+    private static final int MAX_TICKER_LEN = 30;
+    private static final int MAX_NAME_LEN = 100;
+
     // ---------------------------------------------------------------------------
     // Connection management
     // ---------------------------------------------------------------------------
@@ -198,11 +202,19 @@ public class IbkrSyncService {
                 continue;
             }
             TickerResult resolved = resolveTicker(p);
-            if (resolved.ticker() == null || resolved.ticker().isBlank()) {
+            String ticker = resolved.ticker();
+            if (ticker == null || ticker.isBlank()) {
+                continue;
+            }
+            if (ticker.length() > MAX_TICKER_LEN) {
+                // Options / futures carry long symbols (e.g. "SPY 240119C00470000") that
+                // overflow account_holding.ticker (VARCHAR 30) and never price through Yahoo
+                // anyway — skip the position rather than fail the whole account's sync.
+                log.warn("IBKR: skipping position with over-long ticker '{}' ({} chars)", ticker, ticker.length());
                 continue;
             }
             deduped.merge(
-                resolved.ticker(),
+                ticker,
                 new HoldingDedup.HoldingAgg(p.position(), eurCostBasis(p), eurMark(p), resolved.name()),
                 HoldingDedup::vwapMerge);
         }
@@ -211,7 +223,7 @@ public class IbkrSyncService {
             holdingRepository.save(AccountHolding.builder()
                 .account(account)
                 .ticker(entry.getKey())
-                .name(agg.name())
+                .name(clip(agg.name(), MAX_NAME_LEN))
                 .quantity(agg.quantity())
                 .averageBuyIn(agg.averageBuyIn())
                 .currentPrice(agg.currentPrice())
@@ -291,6 +303,14 @@ public class IbkrSyncService {
         }
         BigDecimal rate = p.fxRateToBase() != null ? p.fxRateToBase() : BigDecimal.ONE;
         return p.markPrice().multiply(rate);
+    }
+
+    /** Truncates {@code s} to {@code max} chars so it fits its DB column; null-safe. */
+    private static String clip(String s, int max) {
+        if (s == null) {
+            return null;
+        }
+        return s.length() <= max ? s : s.substring(0, max);
     }
 
     /** Shows only the last 4 characters of the token, e.g. "••••••3F29". */

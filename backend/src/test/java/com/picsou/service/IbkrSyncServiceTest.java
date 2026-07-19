@@ -128,5 +128,66 @@ class IbkrSyncServiceTest {
             .hasMessageContaining("No Interactive Brokers connection");
     }
 
+    /**
+     * Hardening against real-world Flex variety in one account: an ISIN that OpenFIGI
+     * resolves, an ISIN that OpenFIGI misses (→ symbol fallback), a symbol-only line, a
+     * cash line, a zero-quantity line, and an over-long derivative symbol. Only the three
+     * price-able equities become holdings; cash / zero-qty / over-long are dropped, and a
+     * null fxRateToBase leaves the cost basis unscaled.
+     */
+    @Test
+    void sync_handlesMixedAssetClassesAndSkipsUnsupportedRows() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        String longSymbol = "AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDD"; // 35 chars > 30
+        IbkrPosition hit     = pos("US0378331005", "AAPL", "STK", bd("10"), bd("150"), bd("0.90"));
+        IbkrPosition miss    = pos("US88160R1014", "TSLA", "STK", bd("3"),  bd("200"), bd("1"));
+        IbkrPosition noIsin  = pos(null,           "PLTR", "STK", bd("8"),  bd("40"),  null);
+        IbkrPosition cash    = pos(null,           "USD.CASH", "CASH", bd("500"), bd("1"), bd("1"));
+        IbkrPosition zeroQty = pos("US0000000000", "ZRO", "STK", bd("0"),  bd("5"),   bd("1"));
+        IbkrPosition longSym = pos(null,           longSymbol, "OPT", bd("1"), bd("2"), bd("1"));
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query"))
+            .thenReturn(List.of(new IbkrAccountData("U1", List.of(hit, miss, noIsin, cash, zeroQty, longSym))));
+
+        when(isinConverter.resolve("US0378331005")).thenReturn(new TickerResult("AAPL", "Apple"));
+        // OpenFIGI miss: returns the ISIN unchanged → mapping must fall back to the symbol.
+        when(isinConverter.resolve("US88160R1014")).thenReturn(new TickerResult("US88160R1014", null));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(Optional.empty());
+        lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(false);
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> { Account a = inv.getArgument(0); a.setId(1L); return a; });
+        when(accountService.liveBalanceEur(any(Account.class))).thenReturn(bd("0"));
+        when(accountService.toResponse(any(Account.class))).thenReturn(
+            AccountResponse.from(Account.builder().id(1L).name("IBKR U1").type(AccountType.COMPTE_TITRES).build(), BigDecimal.ZERO));
+
+        service.sync(memberId);
+
+        ArgumentCaptor<AccountHolding> captor = ArgumentCaptor.forClass(AccountHolding.class);
+        verify(holdingRepository, times(3)).save(captor.capture());
+        var byTicker = captor.getAllValues().stream()
+            .collect(java.util.stream.Collectors.toMap(AccountHolding::getTicker, h -> h));
+
+        // Cash, zero-qty and the over-long option symbol are all dropped.
+        assertThat(byTicker.keySet()).containsExactlyInAnyOrder("AAPL", "TSLA", "PLTR");
+        // ISIN hit: 150 × 0.90 = 135 EUR cost basis.
+        assertThat(byTicker.get("AAPL").getAverageBuyIn()).isEqualByComparingTo("135");
+        // No fxRateToBase → cost basis left unscaled (× 1).
+        assertThat(byTicker.get("PLTR").getAverageBuyIn()).isEqualByComparingTo("40");
+    }
+
+    /** Convenience builder for an account "U1" SUMMARY position. */
+    private static IbkrPosition pos(String isin, String symbol, String assetCategory,
+                                    BigDecimal position, BigDecimal costBasisPrice, BigDecimal fxRateToBase) {
+        return new IbkrPosition("U1", isin, symbol, symbol, "USD", assetCategory, "SUMMARY",
+            position, bd("999"), costBasisPrice, fxRateToBase);
+    }
+
     private static BigDecimal bd(String v) { return new BigDecimal(v); }
 }

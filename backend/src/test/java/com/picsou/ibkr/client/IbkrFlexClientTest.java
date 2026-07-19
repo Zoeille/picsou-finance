@@ -91,4 +91,36 @@ class IbkrFlexClientTest {
 
         assertThat(client.parseOpenPositions(empty)).isEmpty();
     }
+
+    @Test
+    void parse_groupsMultipleAccountsAndReadsShortAndSparsePositions() {
+        // Two account ids in one statement; a short (negative) position; and a row
+        // missing the optional isin / costBasisPrice / fxRateToBase attributes.
+        String xml = """
+            <FlexQueryResponse queryName="OpenPositions" type="AF">
+              <FlexStatements count="1">
+                <FlexStatement accountId="U1">
+                  <OpenPositions>
+                    <OpenPosition accountId="U1" currency="USD" fxRateToBase="0.90" assetCategory="STK"
+                        symbol="AAPL" isin="US0378331005" position="10" markPrice="200"
+                        costBasisPrice="150" levelOfDetail="SUMMARY" />
+                    <OpenPosition accountId="U2" currency="EUR" assetCategory="STK"
+                        symbol="SHORTY" position="-5" markPrice="12" levelOfDetail="SUMMARY" />
+                  </OpenPositions>
+                </FlexStatement>
+              </FlexStatements>
+            </FlexQueryResponse>
+            """;
+
+        List<IbkrAccountData> accounts = client.parseOpenPositions(xml);
+
+        assertThat(accounts).hasSize(2);
+        assertThat(accounts).extracting(IbkrAccountData::accountId).containsExactly("U1", "U2");
+
+        IbkrPosition shorty = accounts.get(1).positions().get(0);
+        assertThat(shorty.position()).isEqualByComparingTo("-5");   // short parsed as negative
+        assertThat(shorty.isin()).isNull();                          // missing → null
+        assertThat(shorty.costBasisPrice()).isNull();
+        assertThat(shorty.fxRateToBase()).isNull();
+    }
 }
