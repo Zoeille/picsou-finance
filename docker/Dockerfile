@@ -58,7 +58,12 @@ RUN rm -f /etc/nginx/sites-enabled/default \
     # it on every boot from HSTS_ENABLED. Created empty here so the config is
     # valid even if nginx is exercised without the entrypoint (e.g. nginx -t).
     && mkdir -p /etc/nginx/snippets \
-    && : > /etc/nginx/snippets/picsou-hsts.conf
+    && : > /etc/nginx/snippets/picsou-hsts.conf \
+    # Fail the build on a broken nginx config rather than at container start.
+    # Needs the docroot to exist, and validates the HSTS-disabled shape (the
+    # enabled one is exercised by the entrypoint at boot).
+    && mkdir -p /usr/share/nginx/html \
+    && nginx -t
 
 COPY docker/supervisord.conf /etc/supervisor/conf.d/picsou.conf
 COPY docker/entrypoint.sh /app/entrypoint.sh

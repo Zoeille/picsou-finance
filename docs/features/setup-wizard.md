@@ -1,6 +1,6 @@
 # Feature: First-launch Setup Wizard
 
-> Last updated: 2026-04-24
+> Last updated: 2026-07-19 (HSTS is opt-in, no longer an always-on nginx header)
 
 ## Context
 

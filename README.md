@@ -216,8 +216,13 @@ Keep passing both `-f` flags from then on, or the publish comes back. (Requires 
 
 ```bash
 printf '\nHSTS_ENABLED=true\n' >> docker/.env
-docker compose -f docker/docker-compose.yml --profile tls up -d --force-recreate app
+docker compose -f docker/docker-compose.yml \
+               -f docker/docker-compose.no-http.yml \
+               --profile tls up -d --force-recreate app
 ```
+
+Both `-f` flags again — dropping the overlay here would re-publish the `:8080` port you just closed,
+and `--force-recreate` would make it happen immediately.
 
 `HSTS_ENABLED` sends `Strict-Transport-Security`, telling browsers to refuse plain HTTP for this
 host for a year. It is off by default, so **if you run a public HTTPS deployment you should turn it
@@ -229,11 +234,21 @@ as up-to-date and leave the old setting in place. Verify it took effect:
 
 ```bash
 curl -sI https://picsou.example.com/ | grep -i strict-transport
-curl -sI https://picsou.example.com/actuator/health | grep -i strict-transport
 ```
 
-Both must show the header (or, when disabled, neither should) — nginx serves the first and Spring
-Security the second, and they are gated by the same variable.
+Exactly one `Strict-Transport-Security` line when enabled, none when disabled.
+
+In this image nginx is the only emitter the browser ever sees: it adds the header to every response
+including proxied ones, and strips the backend's copy on `/api` and `/actuator`
+(`proxy_hide_header`) so it is never sent twice. The backend has its own gate on the same variable,
+which is what the split-stack deployment relies on — to check that one, ask the backend directly,
+bypassing nginx:
+
+```bash
+docker compose -f docker/docker-compose.yml exec app \
+  curl -sI -H 'X-Forwarded-Proto: https' http://127.0.0.1:9090/actuator/health \
+  | grep -i strict-transport
+```
 
 > [!WARNING]
 > Never set `HSTS_ENABLED=true` with an internal-CA or mkcert certificate. The browser remembers the

@@ -30,21 +30,18 @@
 	# Caddy sets X-Forwarded-Proto/Host/For by default, which is exactly
 	# what docker/nginx.conf preserves and what the backend needs for
 	# same-origin detection (server.forward-headers-strategy=framework).
-	reverse_proxy app:8080 {
-		# Set X-Forwarded-For to the real peer address, discarding whatever the
-		# client sent. Caddy is the edge here, so any inbound XFF is
-		# attacker-controlled.
-		#
-		# Caddy already does this by default (it only honours an inbound XFF
-		# from hosts listed in `trusted_proxies`, which is empty here) — this
-		# line makes the guarantee explicit and keeps it from silently changing
-		# if that default is ever revisited.
-		#
-		# It matters because Spring's forward-headers-strategy=framework makes
-		# getRemoteAddr() return XFF[0], and AuthController.getClientIp() uses
-		# that as the bucket4j key for the 5-attempts/15-min login and
-		# MFA-verify limits. A client-controlled XFF[0] would let an attacker
-		# mint a fresh bucket per request and brute-force the password.
-		header_up X-Forwarded-For {remote_host}
-	}
+	# Do NOT add `header_up X-Forwarded-For {remote_host}` here. Caddy already
+	# sets X-Forwarded-For to the real peer address and ignores whatever the
+	# client sent, because `trusted_proxies` is empty — verified by sending a
+	# spoofed `X-Forwarded-For: 10.0.0.99` through this config and observing
+	# only the peer address reach the upstream. Stating it explicitly is
+	# redundant and makes Caddy log "Unnecessary header_up X-Forwarded-For"
+	# on every start.
+	#
+	# It is worth knowing why this matters: Spring's
+	# forward-headers-strategy=framework makes getRemoteAddr() return XFF[0],
+	# and AuthController.getClientIp() uses that as the bucket4j key for the
+	# 5-attempts/15-min login and MFA-verify limits. A client-controlled XFF[0]
+	# would let an attacker mint a fresh bucket per request.
+	reverse_proxy app:8080
 }

@@ -22,7 +22,18 @@ set -euo pipefail
 
 SECRETS_DIR="/data/.secrets"
 mkdir -p "$SECRETS_DIR"
-chmod 0700 "$SECRETS_DIR" 2>/dev/null || true
+
+# Tighten permissions, but do not abort if the filesystem cannot represent them.
+# /data is frequently a bind mount on a NAS (SMB/CIFS, some overlay and FUSE
+# filesystems) where chmod is simply unsupported — failing hard there would break
+# exactly the self-hosted deployments this image targets. Warn instead, so the
+# operator can see it and decide, rather than the mode silently not applying.
+try_chmod() {  # $1 = mode, $2 = path
+    chmod "$1" "$2" 2>/dev/null \
+        || echo "[entrypoint] WARNING: could not chmod $1 $2 — the filesystem may not support it. Secrets may be readable by other users on the host." >&2
+}
+
+try_chmod 0700 "$SECRETS_DIR"
 
 # $1 = file basename, $2 = env var name, $3 = openssl args (e.g. "rand -base64 48")
 bootstrap_secret() {
@@ -35,7 +46,7 @@ bootstrap_secret() {
     if [ -n "${!var_name:-}" ]; then
         if [ ! -f "$file" ]; then
             printf '%s' "${!var_name}" > "$file"
-            chmod 0600 "$file" 2>/dev/null || true
+            try_chmod 0600 "$file"
         fi
         return 0
     fi
@@ -44,11 +55,21 @@ bootstrap_secret() {
     if [ ! -f "$file" ]; then
         # shellcheck disable=SC2086
         openssl $gen_args > "$file"
-        chmod 0600 "$file" 2>/dev/null || true
+        try_chmod 0600 "$file"
         echo "[entrypoint] generated $var_name at $file"
     fi
 
-    export "$var_name=$(cat "$file")"
+    # Read into a plain variable first, then export. `export VAR=$(cmd)` returns
+    # export's own exit status, so a failing cat would be masked by `set -e` and
+    # silently export an empty secret — an empty JWT_SECRET or encryption key
+    # fails much later, and far less legibly, inside Spring.
+    local value
+    value="$(cat "$file")"
+    if [ -z "$value" ]; then
+        echo "[entrypoint] FATAL: $file is empty — refusing to start with a blank $var_name." >&2
+        exit 1
+    fi
+    export "$var_name=$value"
 }
 
 bootstrap_secret "jwt_secret"        "JWT_SECRET"            "rand -base64 48"

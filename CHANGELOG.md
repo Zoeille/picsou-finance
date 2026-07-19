@@ -26,8 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unblocks Enable Banking, which rejects plain-HTTP callback URLs for
   PRODUCTION applications — previously no Docker deployment could sync banks.
   The profile is off by default so it cannot collide with an existing ingress
-  proxy. New optional `PICSOU_HTTP_BIND` restricts the plain-HTTP port to
-  loopback once TLS is in front.
+  proxy. An optional overlay, `docker/docker-compose.no-http.yml`, removes the
+  plain-HTTP `:8080` publish once TLS is confirmed working — pass it as a second
+  `-f` alongside the base compose file.
 - **HTTPS frontend development mode.** Vite uses trusted local `mkcert`
   certificates from `frontend/.local/certs/` when present and otherwise falls
   back to a generated self-signed certificate. Local Enable Banking callbacks

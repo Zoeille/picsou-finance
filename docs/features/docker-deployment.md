@@ -97,12 +97,29 @@ The header has **two independent emitters**, and both must be gated or the flag 
 2. **Spring Security**, for `/api/*` and `/actuator`. `SecurityConfig` reads
    `app.hsts-enabled` (`${HSTS_ENABLED:false}`) and calls `hsts.disable()` when off.
 
+**Accepted values** (both gates, identical by construction): `true`, `1`, `yes`, `on` —
+case-insensitive, surrounding whitespace tolerated. Anything else disables the header, and
+`entrypoint.sh` logs `WARNING: HSTS_ENABLED=... not understood` so a typo is visible rather than
+silent. Interior whitespace is deliberately *not* stripped, so `t rue` warns instead of enabling.
+`SecurityConfigHstsParsingTest` parses the token list out of `entrypoint.sh` and asserts it equals
+`SecurityConfig.HSTS_TRUTHY`, so the Java and shell parsers cannot drift apart unnoticed.
+
 Gating only nginx is **not sufficient** — a mistake worth not repeating. Spring Security's
 `HstsHeaderWriter` fires on any request where `isSecure()` is true, and
 `forward-headers-strategy: framework` makes that true from `X-Forwarded-Proto: https`, which is
-exactly what the proxy sends. `nginx.conf` does not `proxy_hide_header` it, so it reaches the
-browser. Since the SPA calls the API on load, the browser would pin the policy on the very first
-page view regardless of the nginx setting.
+exactly what the proxy sends. Since the SPA calls the API on load, an ungated backend pins the
+policy on the very first page view no matter what nginx was told.
+
+**Which emitter the browser actually sees, per deployment:**
+
+| Deployment | Browser-visible emitter |
+|---|---|
+| All-in-one image | **nginx only.** Its `add_header` covers proxied responses too, and `proxy_hide_header Strict-Transport-Security` on `/api` and `/actuator` discards the backend's copy so it is never sent twice |
+| Split stack / bare metal behind an operator's proxy | **Spring only.** `frontend/nginx.conf` sends no HSTS and hides nothing |
+
+So in the all-in-one image the Spring gate is defence in depth rather than the operative control —
+verifying it requires querying the backend directly on `:9090`, because nginx strips its header on
+the way out. Both gates read the same `HSTS_ENABLED`, so the two never disagree in practice.
 
 It was previously emitted unconditionally, which is a **lockout trap** once a locally-issued
 certificate is in play: the browser stores the HSTS policy, then refuses to offer the "proceed

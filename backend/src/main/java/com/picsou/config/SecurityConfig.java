@@ -41,10 +41,15 @@ public class SecurityConfig {
      * <p>Gating this matters because Spring Security's {@code HstsHeaderWriter} fires on any
      * request where {@code isSecure()} is true, and {@code forward-headers-strategy: framework}
      * makes that true from {@code X-Forwarded-Proto: https}. Without the gate, every
-     * {@code /api/*} response carries HSTS even when nginx has been told not to — and the SPA
-     * calls the API on load, so the browser pins the policy regardless. With a locally-issued
-     * certificate that is a lockout: the browser then refuses the "proceed anyway" bypass and
-     * there is no in-app recovery.
+     * {@code /api/*} response carries HSTS — and the SPA calls the API on load, so the browser
+     * pins the policy on the first page view. With a locally-issued certificate that is a
+     * lockout: the browser then refuses the "proceed anyway" bypass and there is no in-app
+     * recovery.
+     *
+     * <p>In the all-in-one Docker image this is defence in depth — nginx strips the backend's
+     * copy on {@code /api} and {@code /actuator} ({@code proxy_hide_header}) and emits its own.
+     * It is the operative control for the split stack and for bare-metal runs behind an
+     * operator's own proxy, where nothing hides it.
      *
      * <p>Bound as a {@code String} and parsed leniently on purpose. A primitive {@code boolean}
      * would make Spring fail field injection on any value it cannot convert — including a bare
@@ -55,10 +60,23 @@ public class SecurityConfig {
     @Value("${app.hsts-enabled:false}")
     private String hstsEnabledRaw;
 
-    /** Mirrors the {@code true|1|yes|on} set accepted by {@code docker/entrypoint.sh}. */
+    /**
+     * The truthy tokens accepted for {@code HSTS_ENABLED}. This set is duplicated in the
+     * {@code case} arm of {@code docker/entrypoint.sh}, which gates the nginx-side emitter from
+     * the same env var. The two must stay identical: if they diverge, one emitter sends HSTS
+     * while the other does not, and on a locally-issued certificate that is the browser lockout
+     * the whole gate exists to prevent. {@code SecurityConfigHstsParsingTest} pins this list
+     * against the shell script so the drift fails the build rather than a deployment.
+     */
+    static final java.util.Set<String> HSTS_TRUTHY = java.util.Set.of("true", "1", "yes", "on");
+
+    /** Lenient, case-insensitive, surrounding-whitespace-tolerant — mirrors entrypoint.sh. */
+    static boolean parseHstsEnabled(String raw) {
+        return raw != null && HSTS_TRUTHY.contains(raw.trim().toLowerCase());
+    }
+
     private boolean hstsEnabled() {
-        String v = hstsEnabledRaw == null ? "" : hstsEnabledRaw.trim().toLowerCase();
-        return v.equals("true") || v.equals("1") || v.equals("yes") || v.equals("on");
+        return parseHstsEnabled(hstsEnabledRaw);
     }
 
     @Bean
