@@ -9,6 +9,19 @@ services:
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     ports:
+      # Plain HTTP, published on both IPv4 and IPv6 (the unqualified short form
+      # binds 0.0.0.0 *and* [::]; naming an explicit host IP would bind one
+      # family only and silently cut off IPv6 clients).
+      #
+      # Running the `tls` profile and want this port closed on the LAN so Caddy
+      # is the only way in? Add the override file, which removes this publish:
+      #   docker compose -f docker/docker-compose.yml \
+      #                  -f docker/docker-compose.no-http.yml \
+      #                  --profile tls up -d
+      # Compose cannot vary `ports` by profile, and an env-var host prefix was
+      # tried and reverted: a value missing its trailing colon expanded to
+      # `127.0.0.18080:8080` and aborted the whole stack with an opaque
+      # "invalid published port".
       - "8080:8080"
     env_file:
       - path: .env
@@ -31,6 +44,34 @@ services:
     depends_on:
       - db
       - tr-auth
+
+  # Optional TLS terminator — OFF unless the `tls` profile is requested:
+  #   docker compose -f docker/docker-compose.yml --profile tls up -d
+  # Left opt-in so it cannot collide with an ingress proxy the operator
+  # already runs (Traefik, Nginx Proxy Manager, …) over :80/:443.
+  # Certificate strategy is chosen by Caddy from PICSOU_DOMAIN — see Caddyfile.
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    restart: unless-stopped
+    ports:
+      - "80:80"       # ACME HTTP-01 challenge + redirect to HTTPS
+      - "443:443"
+      - "443:443/udp" # HTTP/3 — Caddy advertises h3 via Alt-Svc by default,
+                      # so without the UDP map browsers retry and fall back.
+    environment:
+      # Interpolated from docker/.env (Compose's project directory). Drives the
+      # Caddyfile's site address, which is what selects ACME vs internal CA.
+      PICSOU_DOMAIN: ${PICSOU_DOMAIN:-picsou.localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data holds issued certificates AND the internal CA root key.
+      # It must persist: losing it regenerates the root, invalidating the
+      # certificate every device was told to trust.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
 
   tr-auth:
     image: ghcr.io/zoeille/picsou-finance/tr-auth:latest
@@ -62,3 +103,5 @@ services:
 volumes:
   pgdata:
   picsou_data:
+  caddy_data:
+  caddy_config:

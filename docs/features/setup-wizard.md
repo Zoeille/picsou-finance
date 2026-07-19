@@ -190,8 +190,11 @@ future work):
 - **Rate limiting** on `/api/setup/*` via Bucket4j (10 rpm / IP). 429 on breach.
 - **Headers** (set by nginx, app-wide):
   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy:
-  strict-origin-when-cross-origin`, `Strict-Transport-Security: max-age=31536000;
-  includeSubDomains`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+  strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+- **`Strict-Transport-Security` is opt-in**, not app-wide: it is only sent when
+  `HSTS_ENABLED=true` (see [docker-deployment.md](./docker-deployment.md)). Enabling it
+  with a locally-issued certificate locks users out — the browser drops the
+  "proceed anyway" bypass. Do not assume HSTS is enforced on a deployment.
 - **CSP** (nginx):
   `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src
   'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'`.

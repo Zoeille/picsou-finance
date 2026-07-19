@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatically, keeping their history — including their display name, which is
   relabelled from "ETHEREUM Wallet" to "EVM Wallet" (custom labels untouched). See
   [ADR](docs/decisions/2026-07-17-evm-multichain-wallets.md).
+- **HTTPS for the Docker stack** via an opt-in `tls` compose profile running
+  Caddy in front of the app (`docker compose --profile tls up -d`). Caddy picks
+  the certificate strategy from `PICSOU_DOMAIN` alone: a real domain gets a
+  fully automatic Let's Encrypt certificate, while a LAN IP or `.local` name
+  gets one from Caddy's built-in CA (install its root once per device). This
+  unblocks Enable Banking, which rejects plain-HTTP callback URLs for
+  PRODUCTION applications — previously no Docker deployment could sync banks.
+  The profile is off by default so it cannot collide with an existing ingress
+  proxy. New optional `PICSOU_HTTP_BIND` restricts the plain-HTTP port to
+  loopback once TLS is in front.
 - **HTTPS frontend development mode.** Vite uses trusted local `mkcert`
   certificates from `frontend/.local/certs/` when present and otherwise falls
   back to a generated self-signed certificate. Local Enable Banking callbacks
@@ -32,6 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **HSTS is now opt-in in Docker (`HSTS_ENABLED`, default off).** Nginx
+  previously sent `Strict-Transport-Security` unconditionally, including on
+  plain-HTTP deployments. Combined with a locally-issued certificate that is a
+  lockout trap: the browser remembers the policy, then refuses to offer the
+  "proceed anyway" bypass, leaving no in-app recovery. Deployments behind a
+  publicly-trusted certificate should set `HSTS_ENABLED=true` to restore the
+  previous behavior.
+- **The documented Docker Enable Banking callback is now `https://`.**
+  `docker/.env.example` previously suggested `http://your-nas-ip:8080/sync/callback`,
+  which Enable Banking rejects for PRODUCTION applications — the only mode that
+  lists real banks. `docs/features/bank-sync.md` likewise no longer presents a
+  plain-HTTP deployment as a supported option for bank sync.
 - **UI controls realigned to the shadcn theme radius.** Pill-shape overrides on
   buttons, chips, and tabs were reverted to the theme tokens; Mira
   design-system pass completed with a sidebar style toggle (#46).

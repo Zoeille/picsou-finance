@@ -122,6 +122,11 @@ app:
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:}
   secure-cookies: ${SECURE_COOKIES:true}
+  # Strict-Transport-Security. Off by default and read from the same env var as the
+  # nginx-side gate (docker/entrypoint.sh), so one flag controls the header on both
+  # the SPA/static responses and the /api responses. Enable only behind a
+  # publicly-trusted certificate — see docs/features/docker-deployment.md.
+  hsts-enabled: ${HSTS_ENABLED:false}
   crypto:
     encryption-key: ${CRYPTO_ENCRYPTION_KEY:}
   tr-auth:

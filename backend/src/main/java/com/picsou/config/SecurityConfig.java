@@ -33,6 +33,34 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins:}")
     private String allowedOrigins;
 
+    /**
+     * Whether to send {@code Strict-Transport-Security}. Off by default, and it must stay in
+     * lock-step with the nginx-side gate (docker/entrypoint.sh writes
+     * {@code /etc/nginx/snippets/picsou-hsts.conf} from the same {@code HSTS_ENABLED}).
+     *
+     * <p>Gating this matters because Spring Security's {@code HstsHeaderWriter} fires on any
+     * request where {@code isSecure()} is true, and {@code forward-headers-strategy: framework}
+     * makes that true from {@code X-Forwarded-Proto: https}. Without the gate, every
+     * {@code /api/*} response carries HSTS even when nginx has been told not to — and the SPA
+     * calls the API on load, so the browser pins the policy regardless. With a locally-issued
+     * certificate that is a lockout: the browser then refuses the "proceed anyway" bypass and
+     * there is no in-app recovery.
+     *
+     * <p>Bound as a {@code String} and parsed leniently on purpose. A primitive {@code boolean}
+     * would make Spring fail field injection on any value it cannot convert — including a bare
+     * {@code HSTS_ENABLED=} — which takes the whole backend down under supervisord while nginx
+     * keeps serving, turning a harmless typo into an app-wide 502. {@code docker/entrypoint.sh}
+     * deliberately tolerates the same inputs and warns; the two must agree.
+     */
+    @Value("${app.hsts-enabled:false}")
+    private String hstsEnabledRaw;
+
+    /** Mirrors the {@code true|1|yes|on} set accepted by {@code docker/entrypoint.sh}. */
+    private boolean hstsEnabled() {
+        String v = hstsEnabledRaw == null ? "" : hstsEnabledRaw.trim().toLowerCase();
+        return v.equals("true") || v.equals("1") || v.equals("yes") || v.equals("on");
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtUtil jwtUtil,
@@ -50,10 +78,13 @@ public class SecurityConfig {
             .headers(headers -> headers
                 .frameOptions(fo -> fo.deny())
                 .contentTypeOptions(cto -> {})
-                .httpStrictTransportSecurity(hsts -> hsts
-                    .maxAgeInSeconds(31536000)
-                    .includeSubDomains(true)
-                )
+                .httpStrictTransportSecurity(hsts -> {
+                    if (hstsEnabled()) {
+                        hsts.maxAgeInSeconds(31536000).includeSubDomains(true);
+                    } else {
+                        hsts.disable();
+                    }
+                })
                 .referrerPolicy(rp -> rp
                     .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)
                 )

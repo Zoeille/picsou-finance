@@ -1,6 +1,6 @@
 # Feature: Docker deployment
 
-> Last updated: 2026-05-18
+> Last updated: 2026-07-19 (optional Caddy TLS profile, HSTS made opt-in)
 
 ## Context
 
@@ -38,14 +38,95 @@ On first boot, auto-generates three secrets into `/data/.secrets/` (mounted name
 
 On subsequent boots, re-reads from the files. If the env var is already set by the operator, it is respected and written to the file for consistency. Secrets are **never** regenerated once created — doing so would invalidate JWTs and corrupt all encrypted data in the DB.
 
+### TLS — the optional `tls` compose profile
+
+The app container serves **plain HTTP on 8080 only**; it never terminates TLS itself. HTTPS comes
+from a terminator in front, and the stack ships an optional one: a `caddy:2-alpine` service named
+`proxy`, gated behind `profiles: ["tls"]` so it is inert unless explicitly requested
+(`docker compose --profile tls up -d`). It stays opt-in because publishing `:80`/`:443`
+unconditionally would collide with an ingress proxy the operator already runs.
+
+This is not cosmetic: **Enable Banking rejects `http://` callback URLs for PRODUCTION applications**,
+and PRODUCTION is the only mode listing real banks — so bank sync is unreachable without TLS. See
+[bank-sync.md](./bank-sync.md).
+
+`docker/Caddyfile` is a single site block, `{$PICSOU_DOMAIN:picsou.localhost}` →
+`reverse_proxy app:8080`. Caddy resolves the certificate strategy at **runtime** from the hostname
+(not at config-adapt time — the adapted JSON shows no explicit issuer for either case):
+
+| `PICSOU_DOMAIN` | Runtime issuer | Trust |
+|---|---|---|
+| Public FQDN | ACME (Let's Encrypt / ZeroSSL) | Public, zero manual steps |
+| `.localhost` / `.local` / `.internal` / bare IP | `local` (Caddy's built-in CA) | Root must be installed per device, from `/data/caddy/pki/authorities/local/root.crt` in the `caddy_data` volume |
+
+Caddy sets `X-Forwarded-Proto`/`-Host`/`-For` by default, which is exactly what `nginx.conf`'s
+`map` block preserves and what `forward-headers-strategy: framework` needs — so no backend change
+was required for the *proxying* itself. (HSTS did require one — see below.)
+
+#### TLS is a first-boot decision, not an add-on
+
+The setup wizard derives three values from the origin the operator happens to be visiting:
+`EBStep2Credentials.tsx` proposes `${window.location.origin}/sync/callback`, CORS is auto-detected
+from the browser origin, and `app.secure-cookies` from the protocol. All three are then written to
+`app_setting`.
+
+Because `EnableBankingConfigProvider.resolve()` (and the CORS/cookie equivalents) read the
+**database first** and fall back to env only when the row is absent, those values become sticky the
+moment setup completes:
+
+| Order | Result |
+|---|---|
+| TLS on **before** the wizard | Everything derives to `https://…` on its own. Zero manual configuration |
+| TLS on **after** the wizard | Three rows still hold the HTTP values, and `.env` cannot override them — they must be corrected via Admin → Integrations and Admin → Security |
+
+Concretely, an install set up over HTTP leaves rows like
+`enablebanking.redirect-uri = http://localhost:8080/sync/callback` and
+`cors.allowed-origins = http://localhost:8080,…`, plus `app.secure-cookies = false`. The operator
+symptom is a `REDIRECT_URI_NOT_ALLOWED` that "ignores" the corrected `ENABLEBANKING_REDIRECT_URI`
+in `.env`. README step 3f documents the recovery path.
+
+### HSTS is opt-in (`HSTS_ENABLED`, default off)
+
+The header has **two independent emitters**, and both must be gated or the flag is a lie:
+
+1. **nginx**, for SPA/static responses. `nginx.conf` includes
+   `/etc/nginx/snippets/picsou-hsts.conf` in the server block and the static-asset `location`
+   block; `entrypoint.sh` rewrites that snippet on every boot (header line when enabled, empty file
+   otherwise). `Dockerfile` creates it empty at build time so `nginx -t` is valid without the
+   entrypoint.
+2. **Spring Security**, for `/api/*` and `/actuator`. `SecurityConfig` reads
+   `app.hsts-enabled` (`${HSTS_ENABLED:false}`) and calls `hsts.disable()` when off.
+
+Gating only nginx is **not sufficient** — a mistake worth not repeating. Spring Security's
+`HstsHeaderWriter` fires on any request where `isSecure()` is true, and
+`forward-headers-strategy: framework` makes that true from `X-Forwarded-Proto: https`, which is
+exactly what the proxy sends. `nginx.conf` does not `proxy_hide_header` it, so it reaches the
+browser. Since the SPA calls the API on load, the browser would pin the policy on the very first
+page view regardless of the nginx setting.
+
+It was previously emitted unconditionally, which is a **lockout trap** once a locally-issued
+certificate is in play: the browser stores the HSTS policy, then refuses to offer the "proceed
+anyway" bypass for the untrusted cert — leaving no in-app recovery, only clearing HSTS state in
+browser internals. Enable it only behind a publicly-trusted certificate.
+
+Because `HSTS_ENABLED` only reaches the app through `env_file`, changing it may not recreate the
+container. Use `up -d --force-recreate app` so the entrypoint re-runs and Spring re-reads the
+property. **`restart app` does not work** — it reuses the existing container, whose environment was
+fixed at create time, so the new value is never seen.
+
+> **Behavior change:** deployments already behind a TLS proxy stop receiving HSTS until they set
+> `HSTS_ENABLED=true`. Intentional — the header only helps when the certificate is already trusted,
+> and defaulting it on is what created the trap.
+
 ### Key files
 
 - `docker/Dockerfile` — main image, 3-stage build
-- `docker/docker-compose.yml` — orchestration (app + tr-auth + PostgreSQL + volumes)
+- `docker/docker-compose.yml` — orchestration (app + proxy + tr-auth + PostgreSQL + volumes)
+- `docker/Caddyfile` — optional TLS terminator (profile `tls`)
 - `services/tr-auth/Dockerfile` — tr-auth sidecar image
 - `docker/nginx.conf` — Nginx reverse proxy config
 - `docker/supervisord.conf` — supervisor (nginx + backend)
-- `docker/entrypoint.sh` — secret bootstrap + exec supervisord
+- `docker/entrypoint.sh` — secret bootstrap + HSTS snippet + exec supervisord
 
 ### Flow
 
@@ -118,6 +199,10 @@ docker build -f docker/Dockerfile --build-arg APP_VERSION=1.0.13 .
 - **Frontend lock file is `bun.lock`.** The Dockerfile must use `oven/bun` and `bun install --frozen-lockfile`. npm will fail.
 - **`VITE_DEMO_MODE` build arg** defaults to `false`. Pass `--build-arg VITE_DEMO_MODE=true` for a demo build.
 - **Nginx listens on 8080**, backend on 9090. The backend port is set via `SERVER_PORT` in `entrypoint.sh`, not `application.yml`.
+- **`caddy_data` must persist.** It holds issued certificates *and the internal CA's root key*. Deleting the volume regenerates the root, invalidating the certificate every device was told to trust — everyone has to re-install it.
+- **Closing the plain-HTTP `:8080` publish uses an overlay file**, `docker/docker-compose.no-http.yml` (`ports: !reset []`), not an env var. Compose cannot vary `ports` by profile, and two env-var forms were tried and rejected: `${VAR:-0.0.0.0}:8080:8080` binds IPv4 only and silently drops the `[::]` binding the unqualified short form gives (breaking IPv6 clients on *every* deployment), while the prefix form `${VAR:-}8080:8080` turns a value missing its trailing colon into `127.0.0.18080:8080` — an opaque "invalid published port" that aborts the whole stack, db and tr-auth included. Long-syntax `host_ip: ""` is rejected as an invalid IP. Requires Compose v2.24+ for `!reset`.
+- **`picsou.localhost` (the `PICSOU_DOMAIN` default) only resolves on the Docker host itself** — browsers map `*.localhost` to loopback. Fine for verifying the profile works; set a LAN IP or a real domain for access from other devices. Enable Banking's portal may also refuse to register a `.localhost` redirect URL.
+- **Enabling the `tls` profile against a pre-built GHCR image does not get the HSTS fix.** `HSTS_ENABLED` gating lives in `nginx.conf` + `entrypoint.sh`, so an image built before that change still sends HSTS unconditionally — which is precisely the lockout combination with an internal-CA certificate. Pull a current image, or rebuild with `--build`.
 - **`TR_AUTH_URL` default in entrypoint is `http://127.0.0.1:8001`** (legacy single-container fallback). In docker-compose it is overridden to `http://tr-auth:8001` via the `environment:` block.
 - **Secrets are never regenerated.** If `/data/.secrets/jwt_secret` exists, it is reused. Deleting it will log out all users and invalidate all encrypted secrets in the DB.
 - **Spring Boot env var naming:** Properties under `app.*` require the `APP_` prefix. `app.finary.email` → `APP_FINARY_EMAIL`. Variables like `JWT_SECRET` work because `application.yml` maps them explicitly.
