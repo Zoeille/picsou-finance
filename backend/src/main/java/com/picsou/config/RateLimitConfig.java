@@ -1,5 +1,6 @@
 package com.picsou.config;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import org.springframework.context.annotation.Bean;
@@ -13,12 +14,41 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RateLimitConfig {
 
     /**
+     * Idle buckets refill to full anyway (Bucket4j resets state on the bucket's own refill
+     * schedule), so forgetting one after an hour of inactivity changes nothing a client would
+     * observe — it only reclaims memory from IPs/users that stopped calling.
+     */
+    private static final Duration BUCKET_STORE_EXPIRE_AFTER_ACCESS = Duration.ofHours(1);
+
+    /**
+     * Ceiling on distinct keys held at once per store. 50k covers a large multiple of any
+     * realistic concurrent client population for a self-hosted single-/family app; beyond that,
+     * Caffeine evicts least-recently-used entries rather than growing without bound.
+     */
+    private static final long BUCKET_STORE_MAX_SIZE = 50_000;
+
+    /**
+     * Bounded, self-evicting replacement for {@code new ConcurrentHashMap<>()}: an unbounded map
+     * of per-key Bucket4j buckets never shrinks, so a key an attacker fully controls (e.g. an
+     * unauthenticated caller's IP) is an unbounded memory-growth vector. Caffeine's
+     * {@code asMap()} view is a drop-in {@code Map<String, Bucket>} — same {@code computeIfAbsent}
+     * call sites, no behavior change for any key still within its idle window.
+     */
+    private static <K> Map<K, Bucket> boundedBucketStore() {
+        return Caffeine.newBuilder()
+            .expireAfterAccess(BUCKET_STORE_EXPIRE_AFTER_ACCESS)
+            .maximumSize(BUCKET_STORE_MAX_SIZE)
+            .<K, Bucket>build()
+            .asMap();
+    }
+
+    /**
      * Per-IP login rate limiter: 5 attempts per 15 minutes.
-     * Uses a ConcurrentHashMap of Bucket4j buckets keyed by IP address.
+     * Bounded Caffeine-backed map of Bucket4j buckets keyed by IP address (see ClientIp).
      */
     @Bean("loginBuckets")
     public Map<String, Bucket> loginBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
@@ -26,7 +56,7 @@ public class RateLimitConfig {
      */
     @Bean("syncBuckets")
     public Map<String, Bucket> syncBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
@@ -35,7 +65,7 @@ public class RateLimitConfig {
      */
     @Bean("trAuthBuckets")
     public Map<String, Bucket> trAuthBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
@@ -43,7 +73,7 @@ public class RateLimitConfig {
      */
     @Bean("boursoAuthBuckets")
     public Map<String, Bucket> boursoAuthBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
@@ -54,7 +84,7 @@ public class RateLimitConfig {
      */
     @Bean("setupBuckets")
     public Map<String, Bucket> setupBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
@@ -64,7 +94,7 @@ public class RateLimitConfig {
      */
     @Bean("mfaVerifyBuckets")
     public Map<String, Bucket> mfaVerifyBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
@@ -74,18 +104,20 @@ public class RateLimitConfig {
      */
     @Bean("mfaEnrollBuckets")
     public Map<String, Bucket> mfaEnrollBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
      * Per-user GDPR data export rate limiter: 5 exports per hour.
      * Each export streams the user's full graph (accounts, holdings,
      * transactions, ...) — expensive to build and to ship over the wire,
-     * and a successful re-auth shouldn't unlock unbounded dumps.
+     * and a successful re-auth shouldn't unlock unbounded dumps. Bounded
+     * store here too: same unbounded-ConcurrentHashMap shape as the
+     * per-IP stores above, just keyed by user id instead of IP.
      */
     @Bean("exportBuckets")
     public Map<String, Bucket> exportBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**

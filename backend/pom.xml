@@ -134,6 +134,12 @@
             <version>${bucket4j.version}</version>
         </dependency>
 
+        <!-- Bounded, self-evicting rate-limit bucket stores (RateLimitConfig) -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- TOTP (RFC 6238) for 2FA: secret generation, QR code, code verification -->
         <dependency>
             <groupId>dev.samstevens.totp</groupId>
