@@ -35,6 +35,8 @@ trusted for EUR valuation.
 - `db/migration/V56__ibkr_connection.sql` — `ibkr_connection` table
 - Reuses: `OpenFigiIsinConverter` (ISIN→ticker), `HoldingDedup` (VWAP), `CryptoEncryption`,
   `AccountService.liveBalanceEur` (net-worth valuation), `SchedulerService` (daily auto-sync)
+- `frontend/src/pages/sync/IbkrTab.tsx` — Sync-page connection tab (token + query id form →
+  connect, then sync/disconnect); `sync.ibkr.*` i18n keys in all four locales
 
 ### Flow
 
@@ -100,6 +102,12 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
 
 - Related ADR: [Flex Web Service for IBKR](../decisions/2026-07-19-ibkr-flex-web-service.md)
 - IBKR Flex attribute reference: [csingley/ibflex](https://github.com/csingley/ibflex)
-- **Not yet done:** frontend connection card (settings) + i18n keys (fr/en/de/es) +
-  `IntegrationsService`/`SetupService` registry entry (`"ibkr"`). Backend is usable via the
-  `/api/ibkr/*` endpoints in the meantime.
+- **Frontend:** a tab on the Sync page (`IbkrTab.tsx`) — token + query id form → connect,
+  then sync/disconnect — with `sync.ibkr.*` keys in fr/en/de/es. Verified by typecheck,
+  ESLint and `IbkrTab.test.tsx` (3 render/interaction tests).
+- **Deliberately skipped:** the `SetupService.INTEGRATIONS` / `IntegrationsService` registry
+  entry (`"ibkr"`). The Sync-page tab is not gated on it (like the TR/Finary tabs), and
+  adding it would surface an unlabeled toggle in the setup wizard.
+- **Not yet exercised against a live IBKR account** — the parser is fixture-tested; a real
+  Flex statement is the true end-to-end validation (verify the `GetStatement` `q` param and
+  error codes on first live run).

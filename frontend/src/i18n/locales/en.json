@@ -451,6 +451,28 @@
         "unknownError": "An unexpected error occurred."
       }
     },
+    "ibkr": {
+      "title": "Interactive Brokers",
+      "setupHint": "In IBKR Client Portal, create an \"Open Positions\" Flex Query and generate a Flex Web Service token, then paste both below.",
+      "token": "Flex Web Service token",
+      "tokenPlaceholder": "e.g. 123456789012345678901234",
+      "queryId": "Flex Query ID",
+      "queryIdPlaceholder": "e.g. 987654",
+      "connect": "Connect",
+      "sync": "Sync",
+      "syncing": "Syncing…",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Remove the stored Interactive Brokers connection?",
+      "connected": "Connected",
+      "statusError": "Last sync failed",
+      "lastSync": "Last sync",
+      "neverSynced": "Never synced",
+      "syncedToast": "Interactive Brokers synced: {{count}} account(s)",
+      "errors": {
+        "connectFailed": "Could not save the connection. Check the token and query id.",
+        "syncFailed": "Interactive Brokers sync failed. Check your token or try again."
+      }
+    },
     "exchanges": {
       "title": "Exchanges",
       "add": "Add exchange",

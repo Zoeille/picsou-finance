@@ -254,6 +254,14 @@ export interface TrSessionStatus {
   expiresAt: string | null
 }
 
+export interface IbkrConnectionStatus {
+  connected: boolean
+  connectionId: number | null
+  status: string | null
+  lastSyncedAt: string | null
+  maskedToken: string | null
+}
+
 export interface BoursoSessionStatus {
   isActive: boolean
   expiresAt: string | null
