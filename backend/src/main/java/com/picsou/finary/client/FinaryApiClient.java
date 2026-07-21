@@ -128,7 +128,8 @@ public class FinaryApiClient {
             ClerkSignInResponse signIn = apiResp.response;
 
             if (signIn.status == null) {
-                log.warn("Finary sign-in returned no status: {}", signInResponse);
+                // Do not log the raw Clerk response — it can carry session tokens / PII.
+                log.warn("Finary sign-in returned no status field in the Clerk response");
                 throw new SyncException("Finary sign-in failed. Please check your credentials and try again.");
             }
 
@@ -459,6 +460,12 @@ public class FinaryApiClient {
         return response.body();
     }
 
+    /** Bounds a response body for safe inclusion in logs / error messages. */
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max) + "…(" + s.length() + " chars)";
+    }
+
     /**
      * Finary GET helper
      */
@@ -479,8 +486,12 @@ public class FinaryApiClient {
 
         HttpResponse<String> response = sendWithRetry(finaryHttpClient, request);
         if (response.statusCode() >= 400) {
-            log.error("Finary API error {}: {}", response.statusCode(), response.body());
-            throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+            // Bound the body: the full authenticated error payload should not be
+            // dumped to logs, and it also flows into user-facing error messages
+            // (FinaryApiSyncService wraps this IOException's message).
+            String bodySnippet = truncate(response.body(), 200);
+            log.error("Finary API error {}: {}", response.statusCode(), bodySnippet);
+            throw new IOException("HTTP " + response.statusCode() + ": " + bodySnippet);
         }
         return response.body();
     }

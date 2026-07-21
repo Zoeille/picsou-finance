@@ -266,7 +266,8 @@ public class EnableBankingBankConnector implements BankConnectorPort {
         String name = "Account";
         String iban = null;
 
-        log.info("Balances for account {}: {}", accountId, balances);
+        log.debug("Fetched balances for account {} ({} entries)", accountId,
+            balances != null && balances.balances() != null ? balances.balances().size() : 0);
         if (balances != null && balances.balances() != null && !balances.balances().isEmpty()) {
             var b = balances.balances().stream()
                 .filter(bl -> "closingBooked".equals(bl.balanceType()) || "expected".equals(bl.balanceType()))

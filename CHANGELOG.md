@@ -131,6 +131,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (generic `422`) as defense-in-depth, so a bad RPC response can never surface as a
   raw `500` even on an unwrapped call path.
 
+### Security
+
+- **Sync logs no longer dump full third-party payloads.** Three log statements
+  wrote entire provider responses at INFO/WARN/ERROR in production:
+  `EnableBankingBankConnector` logged the full balances object (account amounts)
+  — now a debug-level entry count; `FinaryApiClient` logged the raw Clerk
+  sign-in response (which can carry session tokens) — now a body-free message;
+  and the Finary API error body is now bounded to 200 chars before it reaches
+  logs *and* the user-facing error message it feeds. Defense-in-depth against
+  financial PII and third-party secrets landing in logs.
+
 ## [1.0.13] — 2026-07-07
 
 ### Changed
