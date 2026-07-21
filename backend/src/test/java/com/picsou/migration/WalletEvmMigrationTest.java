@@ -268,22 +268,56 @@ class WalletEvmMigrationTest {
 
     @Test
     @Order(Integer.MAX_VALUE - 2)
-    void latestSchema_hardensBourseDirectWithoutLosingExistingSessionsOrHoldings() throws Exception {
+    void latestSchema_hardensAndBackfillsOnlyReconciledBourseDirectData() throws Exception {
         migrateTo("58");
         long memberId;
+        long reconciledAccountId;
+        long unreconciledAccountId;
         try (Connection conn = connect()) {
             memberId = insertReturningId(conn,
                 "INSERT INTO family_member (display_name) VALUES ('Bourse Direct') RETURNING id");
             exec(conn, "INSERT INTO bourse_direct_session (member_id, session_state) VALUES ("
                 + memberId + ", 'encrypted-state')");
+
+            reconciledAccountId = insertReturningId(conn,
+                "INSERT INTO account (name, type, provider, currency, current_balance, cash_balance, "
+                    + "external_account_id, is_manual, member_id) VALUES "
+                    + "('Legacy PEA', 'PEA'::account_type, 'Bourse Direct', 'EUR', 1250, 250, "
+                    + "'bd-legacy-reconciled', false, " + memberId + ") RETURNING id");
+            exec(conn, "INSERT INTO account_holding "
+                + "(account_id, ticker, quantity, average_buy_in, current_price) VALUES ("
+                + reconciledAccountId + ", 'FR0000000001', 10, 80, 100)");
+
+            // Same legacy shape, but 10 x 100 does not equal total 1500 - cash 250.
+            // V60 must refuse to guess that the broker's unlabelled quote was EUR.
+            unreconciledAccountId = insertReturningId(conn,
+                "INSERT INTO account (name, type, provider, currency, current_balance, cash_balance, "
+                    + "external_account_id, is_manual, member_id) VALUES "
+                    + "('Legacy CTO', 'COMPTE_TITRES'::account_type, 'Bourse Direct', 'EUR', 1500, 250, "
+                    + "'bd-legacy-unreconciled', false, " + memberId + ") RETURNING id");
+            exec(conn, "INSERT INTO account_holding "
+                + "(account_id, ticker, quantity, average_buy_in, current_price) VALUES ("
+                + unreconciledAccountId + ", 'US0000000001', 10, 80, 100)");
         }
 
-        migrateTo("59");
+        migrateTo("60");
 
         assertThat(queryString("SELECT sync_status FROM bourse_direct_session WHERE member_id = " + memberId))
             .isEqualTo("IDLE");
         assertThat(queryString("SELECT is_active::text FROM bourse_direct_session WHERE member_id = " + memberId))
             .isEqualTo("true");
+        assertThat(queryBigDecimal(
+            "SELECT provider_value_eur FROM account_holding WHERE account_id = " + reconciledAccountId))
+            .isEqualByComparingTo("1000");
+        assertThat(queryBigDecimal(
+            "SELECT provider_pnl_eur FROM account_holding WHERE account_id = " + reconciledAccountId))
+            .isEqualByComparingTo("200");
+        assertThat(queryString(
+            "SELECT quote_currency FROM account_holding WHERE account_id = " + reconciledAccountId))
+            .isEqualTo("EUR");
+        assertThat(queryString(
+            "SELECT provider_value_eur::text FROM account_holding WHERE account_id = " + unreconciledAccountId))
+            .isNull();
 
         try (Connection conn = connect()) {
             exec(conn, "UPDATE account_holding SET quote_currency = 'USD', "

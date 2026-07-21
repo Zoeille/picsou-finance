@@ -100,6 +100,31 @@ class AccountServiceTest {
     }
 
     @Test
+    void getHoldings_usesBrokerEurSnapshot_whenLivePriceIsUnavailable() {
+        when(accountRepository.findByIdAndMemberId(1L, 1L)).thenReturn(Optional.of(ownedAccount()));
+        AccountHolding holding = AccountHolding.builder()
+            .id(10L)
+            .ticker("FR0000000001")
+            .quantity(new BigDecimal("10"))
+            .averageBuyIn(new BigDecimal("90"))
+            .currentPrice(new BigDecimal("100"))
+            .quoteCurrency("EUR")
+            .providerValueEur(new BigDecimal("1000"))
+            .providerPnlEur(new BigDecimal("200"))
+            .build();
+        when(holdingRepository.findByAccountIdOrderByCurrentPriceDesc(1L))
+            .thenReturn(List.of(holding));
+        when(priceService.getPriceEur("FR0000000001")).thenReturn(null);
+
+        HoldingResponse result = accountService.getHoldings(1L, 1L).getFirst();
+
+        assertThat(result.currentValueEur()).isEqualByComparingTo("1000");
+        assertThat(result.costBasisEur()).isEqualByComparingTo("800");
+        assertThat(result.pnlEur()).isEqualByComparingTo("200");
+        assertThat(result.pnlPercent()).isEqualByComparingTo("25");
+    }
+
+    @Test
     void getHoldings_computesValue_whenPriceServiceHasPrice() {
         when(accountRepository.findByIdAndMemberId(1L, 1L)).thenReturn(Optional.of(ownedAccount()));
         AccountHolding holding = AccountHolding.builder()
