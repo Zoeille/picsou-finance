@@ -125,6 +125,30 @@ class IbkrSyncServiceTest {
         verifyNoInteractions(statusWriter);
     }
 
+    /**
+     * Positive connect() path: credentials are trimmed, encrypted before storage, and the
+     * connection lands with status CONNECTED — nothing plaintext ever reaches the repository.
+     */
+    @Test
+    void connect_encryptsTrimmedCredentials_andStoresConnectedConnection() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
+        when(encryption.encrypt("flex-token")).thenReturn("enc-token");
+        when(encryption.encrypt("1234567")).thenReturn("enc-query");
+
+        service.connect("  flex-token  ", " 1234567 ", memberId);
+
+        ArgumentCaptor<IbkrConnection> captor = ArgumentCaptor.forClass(IbkrConnection.class);
+        verify(connectionRepository).save(captor.capture());
+        IbkrConnection saved = captor.getValue();
+        assertThat(saved.getToken()).isEqualTo("enc-token");
+        assertThat(saved.getQueryId()).isEqualTo("enc-query");
+        assertThat(saved.getStatus()).isEqualTo("CONNECTED");
+        assertThat(saved.getMember()).isSameAs(member);
+    }
+
     @Test
     void sync_withoutConnection_throws() {
         when(connectionRepository.findByMemberId(99L)).thenReturn(Optional.empty());

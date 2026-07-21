@@ -463,7 +463,8 @@
       "syncedToast": "Interactive Brokers synchronisiert: {{count}} Konto/Konten",
       "errors": {
         "connectFailed": "Verbindung konnte nicht gespeichert werden. Prüfen Sie Token und Abfrage-ID.",
-        "syncFailed": "Interactive-Brokers-Synchronisierung fehlgeschlagen. Prüfen Sie Ihr Token oder versuchen Sie es erneut."
+        "syncFailed": "Interactive-Brokers-Synchronisierung fehlgeschlagen. Prüfen Sie Ihr Token oder versuchen Sie es erneut.",
+        "disconnectFailed": "Verbindung konnte nicht entfernt werden. Bitte versuchen Sie es erneut."
       }
     },
     "exchanges": {

@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -142,7 +143,7 @@ public class IbkrFlexClient implements IbkrFlexPort {
         }
         // Deliberately broad substring matching ("generat" covers "generating"/"generation"):
         // forward compatibility with rewordings of the transient not-ready message.
-        String lower = message.toLowerCase();
+        String lower = message.toLowerCase(Locale.ROOT);
         return lower.contains("in progress") || lower.contains("try again") || lower.contains("generat");
     }
 
@@ -254,7 +255,13 @@ public class IbkrFlexClient implements IbkrFlexPort {
                 throw new SyncException("Interactive Brokers returned HTTP " + response.statusCode()
                     + ". Please check your token and try again.");
             }
-            return response.body();
+            String body = response.body();
+            // BodyHandlers.ofString() never yields null, but an empty 200 body would only
+            // fail later in parse() with a misleading "non-XML response" — fail clearly here.
+            if (body == null || body.isBlank()) {
+                throw new SyncException("Interactive Brokers returned an empty response. Please try again.");
+            }
+            return body;
         } catch (SyncException e) {
             throw e;
         } catch (java.io.IOException e) {
@@ -281,7 +288,10 @@ public class IbkrFlexClient implements IbkrFlexPort {
             return doc;
         } catch (Exception e) {
             // A non-XML body usually means an HTML error page or a network interception.
-            log.error("Failed to parse IBKR Flex response as XML: {}",
+            // Deliberately truncated: a real statement carries the user's positions, and
+            // full payloads do not belong in server logs — the length tells the rest.
+            log.error("Failed to parse IBKR Flex response as XML ({} chars, first 300 shown): {}",
+                xml == null ? 0 : xml.length(),
                 xml == null ? "null" : xml.substring(0, Math.min(300, xml.length())));
             throw new SyncException("Interactive Brokers returned an unexpected (non-XML) response.", e);
         }

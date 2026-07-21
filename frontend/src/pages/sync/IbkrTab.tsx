@@ -62,6 +62,11 @@ export function IbkrTab() {
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['sync', 'ibkr', 'status'] })
     },
+    onError: (err: unknown) => {
+      // Close the dialog so the page-level error banner is actually visible.
+      setShowDisconnectConfirm(false)
+      setError(extractErrorMessage(err, t('sync.ibkr.errors.disconnectFailed')))
+    },
   })
 
   function handleConnect(e: React.FormEvent) {

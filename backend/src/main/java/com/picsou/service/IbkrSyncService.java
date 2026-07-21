@@ -142,8 +142,13 @@ public class IbkrSyncService {
         }
         try {
             syncWithConnection(connection.get(), memberId);
-        } catch (Exception ex) {
+        } catch (SyncException ex) {
+            // Expected operational failures (expired token, IBKR down, non-EUR guard):
+            // the message is the whole story, status is already ERROR.
             log.warn("IBKR auto-sync failed for member {}: {}", memberId, ex.getMessage());
+        } catch (RuntimeException ex) {
+            // Anything else is a bug or infrastructure problem — keep the stack trace.
+            log.error("IBKR auto-sync hit an unexpected error for member {}", memberId, ex);
         }
     }
 
@@ -157,6 +162,7 @@ public class IbkrSyncService {
             // manual path: the rethrow marks this @Transactional method rollback-only,
             // so the status write never commits. statusWriter runs in its own
             // REQUIRES_NEW transaction, which survives the rollback.
+            log.error("IBKR sync failed for connection {} — marking ERROR status", connection.getId(), ex);
             statusWriter.markError(connection.getId());
             throw ex;
         }

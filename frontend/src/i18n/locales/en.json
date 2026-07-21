@@ -470,7 +470,8 @@
       "syncedToast": "Interactive Brokers synced: {{count}} account(s)",
       "errors": {
         "connectFailed": "Could not save the connection. Check the token and query id.",
-        "syncFailed": "Interactive Brokers sync failed. Check your token or try again."
+        "syncFailed": "Interactive Brokers sync failed. Check your token or try again.",
+        "disconnectFailed": "Could not remove the connection. Please try again."
       }
     },
     "exchanges": {

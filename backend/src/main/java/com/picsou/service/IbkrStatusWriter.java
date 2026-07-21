@@ -2,6 +2,7 @@ package com.picsou.service;
 
 import com.picsou.repository.IbkrConnectionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,15 +22,18 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class IbkrStatusWriter {
 
     private final IbkrConnectionRepository connectionRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markError(Long connectionId) {
-        connectionRepository.findById(connectionId).ifPresent(c -> {
+        connectionRepository.findById(connectionId).ifPresentOrElse(c -> {
             c.setStatus("ERROR");
             connectionRepository.save(c);
-        });
+        }, () -> log.error("Cannot mark IBKR connection {} as ERROR: row not found "
+            + "(connection deleted mid-sync?) — the user will not see an error status",
+            connectionId));
     }
 }

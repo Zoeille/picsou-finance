@@ -470,7 +470,8 @@
       "syncedToast": "Interactive Brokers synchronisé : {{count}} compte(s)",
       "errors": {
         "connectFailed": "Impossible d'enregistrer la connexion. Vérifiez le jeton et l'ID de requête.",
-        "syncFailed": "Échec de la synchronisation Interactive Brokers. Vérifiez votre jeton ou réessayez."
+        "syncFailed": "Échec de la synchronisation Interactive Brokers. Vérifiez votre jeton ou réessayez.",
+        "disconnectFailed": "Impossible de supprimer la connexion. Réessayez."
       }
     },
     "exchanges": {
