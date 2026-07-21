@@ -8,7 +8,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
 public class RateLimitConfig {
@@ -123,22 +122,25 @@ public class RateLimitConfig {
     /**
      * Per-key MCP rate limiter: keyed by access-key id (not IP), since one key may serve many
      * tool calls from a single AI client. Lives in the {@code AccessKeyAuthFilter}, which creates
-     * a bucket lazily on first use and shares it across that key's requests.
+     * a bucket lazily on first use — only after the key has resolved to a valid one, so the key
+     * space is server-assigned, not attacker-mintable. Bounded anyway: uniformity is cheaper to
+     * audit than a per-store judgment call about whose keys are "safe" to keep forever.
      */
     @Bean("mcpKeyBuckets")
     public Map<Long, Bucket> mcpKeyBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
      * Per-member access-key creation limiter: keyed by member id (not IP), because the
      * {@code POST /api/access-keys} endpoint is cookie-authenticated and self-service — the member is
      * the correct abuse boundary, so an attacker with a stolen session can't mint keys faster than this
-     * regardless of IP rotation.
+     * regardless of IP rotation. Member ids are server-assigned (bounded by the family's size), but
+     * the store is bounded like every other for uniformity.
      */
     @Bean("accessKeyCreateBuckets")
     public Map<Long, Bucket> accessKeyCreateBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     public static Bucket createLoginBucket() {

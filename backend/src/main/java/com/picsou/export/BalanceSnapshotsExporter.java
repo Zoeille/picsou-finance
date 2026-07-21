@@ -48,15 +48,19 @@ class BalanceSnapshotsExporter implements EntityExporter {
     @Override
     public void writeCsv(AppUser user, ExportContext ctx, CsvWriter csv) throws IOException {
         for (Account account : accounts(user)) {
-            for (BalanceSnapshot s : balanceSnapshotRepository.findByAccountIdOrderByDateAsc(account.getId())) {
-                csv.writeRow(List.of(
-                    String.valueOf(s.getId()),
-                    String.valueOf(s.getAccount().getId()),
-                    s.getDate() == null ? "" : s.getDate().toString(),
-                    s.getBalance() == null ? "" : s.getBalance().toPlainString(),
-                    s.getInvestedAmount() == null ? "" : s.getInvestedAmount().toPlainString(),
-                    s.getCreatedAt() == null ? "" : s.getCreatedAt().toString()
-                ));
+            try {
+                for (BalanceSnapshot s : balanceSnapshotRepository.findByAccountIdOrderByDateAsc(account.getId())) {
+                    csv.writeRow(List.of(
+                        String.valueOf(s.getId()),
+                        String.valueOf(s.getAccount().getId()),
+                        s.getDate() == null ? "" : s.getDate().toString(),
+                        s.getBalance() == null ? "" : s.getBalance().toPlainString(),
+                        s.getInvestedAmount() == null ? "" : s.getInvestedAmount().toPlainString(),
+                        s.getCreatedAt() == null ? "" : s.getCreatedAt().toString()
+                    ));
+                }
+            } catch (RuntimeException | IOException ex) {
+                throw withAccountContext(account, ex);
             }
         }
     }
@@ -65,18 +69,31 @@ class BalanceSnapshotsExporter implements EntityExporter {
     public void writeJson(AppUser user, ExportContext ctx, JsonGenerator json) throws IOException {
         json.writeStartArray();
         for (Account account : accounts(user)) {
-            for (BalanceSnapshot s : balanceSnapshotRepository.findByAccountIdOrderByDateAsc(account.getId())) {
-                json.writeStartObject();
-                json.writeNumberField("id", s.getId());
-                json.writeNumberField("account_id", s.getAccount().getId());
-                json.writeStringField("date", s.getDate() == null ? null : s.getDate().toString());
-                writeBigDecimal(json, "balance", s.getBalance());
-                writeBigDecimal(json, "invested_amount", s.getInvestedAmount());
-                json.writeStringField("created_at", s.getCreatedAt() == null ? null : s.getCreatedAt().toString());
-                json.writeEndObject();
+            try {
+                for (BalanceSnapshot s : balanceSnapshotRepository.findByAccountIdOrderByDateAsc(account.getId())) {
+                    json.writeStartObject();
+                    json.writeNumberField("id", s.getId());
+                    json.writeNumberField("account_id", s.getAccount().getId());
+                    json.writeStringField("date", s.getDate() == null ? null : s.getDate().toString());
+                    writeBigDecimal(json, "balance", s.getBalance());
+                    writeBigDecimal(json, "invested_amount", s.getInvestedAmount());
+                    json.writeStringField("created_at", s.getCreatedAt() == null ? null : s.getCreatedAt().toString());
+                    json.writeEndObject();
+                }
+            } catch (RuntimeException | IOException ex) {
+                throw withAccountContext(account, ex);
             }
         }
         json.writeEndArray();
+    }
+
+    /**
+     * Adds the failing account's id to the exception so support can pinpoint it.
+     * Deliberately id-only: the account NAME is user data and exception messages
+     * end up in server logs (same philosophy as the no-secret-leak export tests).
+     */
+    private static IOException withAccountContext(Account account, Exception ex) {
+        return new IOException("balance_snapshots export failed for account id=" + account.getId(), ex);
     }
 
     /**

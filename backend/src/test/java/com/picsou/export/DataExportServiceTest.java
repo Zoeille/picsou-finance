@@ -1,5 +1,6 @@
 package com.picsou.export;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.picsou.model.*;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,6 +35,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -249,6 +252,34 @@ class DataExportServiceTest {
         JsonNode parsed = new ObjectMapper().readTree(entries.get("data.json"));
         assertThat(parsed.get("accounts")).hasSize(0);
         assertThat(parsed.get("holdings")).hasSize(0);
+    }
+
+    /**
+     * A mid-stream exporter failure cannot change the HTTP status (headers are gone with
+     * the first ZIP byte) — the contract is: rethrow so the controller logs it, but first
+     * stamp an {@code __EXPORT_FAILED__.txt} entry into the archive so the user can tell
+     * a truncated download from a complete one.
+     */
+    @Test
+    void exporterFailureMidStream_stampsFailureMarkerAndRethrows() throws Exception {
+        EntityExporter failing = new EntityExporter() {
+            @Override public String name() { return "failing"; }
+            @Override public List<String> csvHeader() { return List.of("x"); }
+            @Override public void writeCsv(AppUser u, ExportContext c, CsvWriter w) { }
+            @Override public void writeJson(AppUser u, ExportContext c, JsonGenerator json) throws IOException {
+                throw new IOException("simulated mid-stream failure");
+            }
+        };
+        DataExportService failingService = new DataExportService(List.of(failing));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        assertThatThrownBy(() -> failingService.export(user, ExportContext.defaults(), out))
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("simulated mid-stream failure");
+
+        Map<String, byte[]> entries = readZip(out.toByteArray());
+        assertThat(entries).containsKey("__EXPORT_FAILED__.txt");
+        assertThat(new String(entries.get("__EXPORT_FAILED__.txt"))).contains("incomplete");
     }
 
     private static Map<String, byte[]> readZip(byte[] bytes) throws Exception {

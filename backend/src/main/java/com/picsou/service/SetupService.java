@@ -106,6 +106,10 @@ public class SetupService {
             SetupState.IN_PROGRESS.name()
         );
         if (claimed == 0 && state == SetupState.PENDING_ADMIN) {
+            // Two concurrent seeding attempts raced on the PENDING_ADMIN → IN_PROGRESS CAS
+            // (e.g. double-submitted wizard tabs). Log it so the resulting 5xx is
+            // distinguishable from a genuine server error in the logs.
+            log.warn("Setup: concurrent admin-seeding attempt lost the setup-state CAS (state={})", state);
             throw new IllegalStateException("Another setup session is already in progress.");
         }
 
