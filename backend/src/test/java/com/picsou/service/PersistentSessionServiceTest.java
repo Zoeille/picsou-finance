@@ -37,7 +37,7 @@ class PersistentSessionServiceTest {
     @BeforeEach
     void setUp() {
         Clock fixed = Clock.fixed(NOW, ZoneOffset.UTC);
-        service = new PersistentSessionService(repository, fixed, 90);
+        service = new PersistentSessionService(repository, fixed, 90, 30);
         user = AppUser.builder().id(99L).username("alice").passwordHash("h").build();
     }
 
@@ -136,6 +136,80 @@ class PersistentSessionServiceTest {
         assertThat(out).isEmpty();
         assertThat(session.getRevokedAt()).isEqualTo(NOW); // series wiped
         verify(repository, times(1)).save(session);
+    }
+
+    @Test
+    void validateAndRotate_acceptsRecentPreviousToken_forConcurrentMultiTabRestore() {
+        UUID series = UUID.randomUUID();
+        String previousToken = "the-just-superseded-token";
+        // The series was rotated 10s ago (within the 30s grace window): a second tab
+        // restoring at the same time still holds the pre-rotation token.
+        PersistentSession session = PersistentSession.builder()
+            .id(1L).seriesId(series).user(user)
+            .tokenHash(PersistentSessionService.sha256Hex("current-token"))
+            .previousTokenHash(PersistentSessionService.sha256Hex(previousToken))
+            .previousTokenAt(NOW.minus(10, ChronoUnit.SECONDS))
+            .createdAt(NOW.minus(10, ChronoUnit.DAYS))
+            .lastUsedAt(NOW.minus(10, ChronoUnit.SECONDS))
+            .expiresAt(NOW.plus(80, ChronoUnit.DAYS))
+            .build();
+        when(repository.findBySeriesId(series)).thenReturn(Optional.of(session));
+        when(repository.save(any(PersistentSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Optional<PersistentSessionService.ValidationResult> out =
+            service.validateAndRotate(series + ":" + previousToken);
+
+        // Accepted (not revoked) and rotated to a fresh token.
+        assertThat(out).isPresent();
+        assertThat(session.getRevokedAt()).isNull();
+        String[] parts = out.get().rotatedCookieValue().split(":", 2);
+        assertThat(PersistentSessionService.sha256Hex(parts[1])).isEqualTo(session.getTokenHash());
+    }
+
+    @Test
+    void validateAndRotate_previousTokenAfterGraceWindowIsTreatedAsTheft() {
+        UUID series = UUID.randomUUID();
+        String previousToken = "an-old-superseded-token";
+        // The previous token was superseded 60s ago — beyond the 30s grace window.
+        PersistentSession session = PersistentSession.builder()
+            .id(1L).seriesId(series).user(user)
+            .tokenHash(PersistentSessionService.sha256Hex("current-token"))
+            .previousTokenHash(PersistentSessionService.sha256Hex(previousToken))
+            .previousTokenAt(NOW.minus(60, ChronoUnit.SECONDS))
+            .createdAt(NOW.minus(10, ChronoUnit.DAYS))
+            .lastUsedAt(NOW.minus(60, ChronoUnit.SECONDS))
+            .expiresAt(NOW.plus(80, ChronoUnit.DAYS))
+            .build();
+        when(repository.findBySeriesId(series)).thenReturn(Optional.of(session));
+        when(repository.save(any(PersistentSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Optional<PersistentSessionService.ValidationResult> out =
+            service.validateAndRotate(series + ":" + previousToken);
+
+        assertThat(out).isEmpty();
+        assertThat(session.getRevokedAt()).isEqualTo(NOW); // series wiped
+    }
+
+    @Test
+    void validateAndRotate_rememberPreviousHashOnRotation() {
+        UUID series = UUID.randomUUID();
+        String token = "raw-token-value";
+        String currentHash = PersistentSessionService.sha256Hex(token);
+        PersistentSession session = PersistentSession.builder()
+            .id(1L).seriesId(series).user(user)
+            .tokenHash(currentHash)
+            .createdAt(NOW.minus(10, ChronoUnit.DAYS))
+            .lastUsedAt(NOW.minus(5, ChronoUnit.DAYS))
+            .expiresAt(NOW.plus(80, ChronoUnit.DAYS))
+            .build();
+        when(repository.findBySeriesId(series)).thenReturn(Optional.of(session));
+        when(repository.save(any(PersistentSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.validateAndRotate(series + ":" + token);
+
+        // The just-rotated-away token is remembered so a concurrent tab can still use it.
+        assertThat(session.getPreviousTokenHash()).isEqualTo(currentHash);
+        assertThat(session.getPreviousTokenAt()).isEqualTo(NOW);
     }
 
     @Test
