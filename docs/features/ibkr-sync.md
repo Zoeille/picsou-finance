@@ -1,6 +1,6 @@
 # Feature: Interactive Brokers (IBKR) sync
 
-> Last updated: 2026-07-19
+> Last updated: 2026-07-21
 
 ## Context
 
@@ -119,7 +119,7 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
   transaction instead, so the `ERROR` status commits independently of the outer
   rollback on both the manual and scheduled paths.
 - **`GetStatement` `q` parameter.** Uses the **reference code** returned by `SendRequest`
-  (not the query id). Verify against a real statement on first live run.
+  (not the query id). Confirmed against a live statement on 2026-07-21.
 
 ## Tests
 
@@ -141,6 +141,14 @@ See the [ADR](../decisions/2026-07-19-ibkr-flex-web-service.md) for the full API
 - **Deliberately skipped:** the `SetupService.INTEGRATIONS` / `IntegrationsService` registry
   entry (`"ibkr"`). The Sync-page tab is not gated on it (like the TR/Finary tabs), and
   adding it would surface an unlabeled toggle in the setup wizard.
-- **Not yet exercised against a live IBKR account** — the parser is fixture-tested; a real
-  Flex statement is the true end-to-end validation (verify the `GetStatement` `q` param and
-  error codes on first live run).
+- **Validated against a live IBKR account (2026-07-21).** Full flow exercised on a real
+  Flex statement (dev instance, real credentials): `SendRequest` → reference code →
+  `GetStatement` returned the statement on the first poll; parsed 1 open position
+  (fractional `STK` share) into one `ibkr_<accountId>` account. `AccountInformation`
+  was present with `currency="EUR"`, so the base-currency guard took its happy path
+  (no WARN). Cost basis matched (`invested = quantity × averageBuyIn` to the cent),
+  live EUR valuation resolved via Yahoo, the daily `balance_snapshot` row was written,
+  and an immediate re-sync was idempotent (same account row, still one holding, no
+  duplicate snapshot thanks to the `(account_id, date)` unique constraint). Not yet
+  observed live: the 1019 "still generating" poll path and token-expiry `ERROR`
+  handling (fixture-tested only).
