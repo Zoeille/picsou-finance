@@ -429,7 +429,9 @@ public class FinaryApiClient {
             throw new SyncException("Invalid Finary credentials. Please check your email and password.");
         }
         if (response.statusCode() >= 400) {
-            throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+            // Bound the Clerk error body: it propagates into SyncException messages
+            // (logs + user-facing 422), and Clerk responses can carry auth material.
+            throw new IOException("HTTP " + response.statusCode() + ": " + truncate(response.body(), 200));
         }
         return response.body();
     }
@@ -455,7 +457,9 @@ public class FinaryApiClient {
             throw new SyncException("Invalid Finary credentials. Please check your email and password.");
         }
         if (response.statusCode() >= 400) {
-            throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+            // Bound the Clerk error body: it propagates into SyncException messages
+            // (logs + user-facing 422), and Clerk responses can carry auth material.
+            throw new IOException("HTTP " + response.statusCode() + ": " + truncate(response.body(), 200));
         }
         return response.body();
     }
@@ -488,8 +492,11 @@ public class FinaryApiClient {
         if (response.statusCode() >= 400) {
             // Bound the body: the full authenticated error payload should not be
             // dumped to logs, and it also flows into user-facing error messages
-            // (FinaryApiSyncService wraps this IOException's message).
-            String bodySnippet = truncate(response.body(), 200);
+            // (FinaryApiSyncService wraps this IOException's message). 500 chars,
+            // not 200: this is the Finary data API, whose error bodies carry the
+            // actionable message — enough room not to cut it mid-sentence, still
+            // bounded so a runaway payload can't flood logs.
+            String bodySnippet = truncate(response.body(), 500);
             log.error("Finary API error {}: {}", response.statusCode(), bodySnippet);
             throw new IOException("HTTP " + response.statusCode() + ": " + bodySnippet);
         }
@@ -507,7 +514,7 @@ public class FinaryApiClient {
                         Thread.sleep((long) Math.pow(2, attempt) * 1000);
                         continue;
                     }
-                    throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+                    throw new IOException("HTTP " + response.statusCode() + ": " + truncate(response.body(), 200));
                 }
                 return response;
             } catch (InterruptedException e) {

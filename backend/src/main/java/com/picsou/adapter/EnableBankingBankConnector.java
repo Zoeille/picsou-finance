@@ -266,8 +266,11 @@ public class EnableBankingBankConnector implements BankConnectorPort {
         String name = "Account";
         String iban = null;
 
-        log.debug("Fetched balances for account {} ({} entries)", accountId,
-            balances != null && balances.balances() != null ? balances.balances().size() : 0);
+        // Keep per-account visibility at INFO (operators need it to diagnose Enable
+        // Banking's async linking), but log only the balance count — never the full
+        // balances object, which carries the account's amounts (financial PII).
+        log.info("Fetched {} balances for account {}",
+            balances != null && balances.balances() != null ? balances.balances().size() : 0, accountId);
         if (balances != null && balances.balances() != null && !balances.balances().isEmpty()) {
             var b = balances.balances().stream()
                 .filter(bl -> "closingBooked".equals(bl.balanceType()) || "expected".equals(bl.balanceType()))
