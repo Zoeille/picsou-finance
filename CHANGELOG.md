@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Editable cost basis for imported crypto wallets (#59).** A wallet/exchange
+  holding starts with its average buy-in set to the market price at import time,
+  which zeroes out gain/loss on existing holdings. The holding editor now lets
+  you correct it by entering either the average buy-in **or** the total invested
+  — the two stay in sync through the quantity. For synced accounts the quantity
+  is read-only (it's owned by the chain/exchange), so only the cost basis
+  changes, and the corrected value survives future syncs. Dashboard, P&L and KPIs
+  then reflect what you actually invested.
 - **BNB Chain support and EVM multichain wallets.** On-chain wallets gained an
   `EVM` chain that tracks a single `0x` address across every enabled EVM network
   — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche —
