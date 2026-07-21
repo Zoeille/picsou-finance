@@ -37,7 +37,7 @@ All three providers (`CoinGeckoPriceProvider`, `YahooFinancePriceProvider`, `Com
 
 ### Key files
 
-- `backend/src/main/java/com/picsou/service/PriceService.java` -- Price routing, caching, conversion
+- `backend/src/main/java/com/picsou/service/PriceService.java` -- Caching, EUR conversion, snapshot persistence (routing delegated to the port)
 - `backend/src/main/java/com/picsou/service/SchedulerService.java` -- Hourly price refresh cron
 - `backend/src/main/java/com/picsou/adapter/CoinGeckoPriceProvider.java` -- CoinGecko `/simple/price` with ticker-to-ID mapping
 - `backend/src/main/java/com/picsou/adapter/YahooFinancePriceProvider.java` -- Yahoo Finance `/v8/finance/chart/{ticker}`
@@ -60,7 +60,7 @@ Check cache: CachedPrice for "BTC"
         +-- miss or expired
                 |
                 v
-        CoinGeckoPriceProvider.supports("BTC") --> true
+        PriceProviderPort.getPricesEur({"BTC"})  (CompositePriceProvider routes: supports("BTC") --> CoinGecko)
                 |
                 v
         GET api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur
@@ -80,7 +80,7 @@ Collect all non-null tickers from accounts
 PriceService.refreshPrices(tickers)
         |
         v
-Partition: crypto --> CoinGecko | stocks --> Yahoo
+PriceProviderPort.getPricesEur(tickers)  (CompositePriceProvider partitions: crypto --> CoinGecko | rest --> Yahoo)
         |
         v
 Bulk fetch, update cache
