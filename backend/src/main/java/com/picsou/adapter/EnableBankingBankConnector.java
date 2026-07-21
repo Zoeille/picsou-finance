@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.picsou.config.EnableBankingConfigProvider;
 import com.picsou.exception.SyncException;
 import com.picsou.port.BankConnectorPort;
+import com.picsou.util.LogSanitizer;
 import io.jsonwebtoken.Jwts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,7 +143,7 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             throw new SyncException("Empty session response from Enable Banking /sessions");
         }
 
-        log.info("Enable Banking session created: {}", session.sessionId());
+        log.info("Enable Banking session created: {}", LogSanitizer.fingerprint(session.sessionId()));
         return session.sessionId();
     }
 
@@ -184,12 +185,12 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
             if (session != null && session.accounts() != null && !session.accounts().isEmpty()) {
                 log.info("Session {} has {} accounts (attempt {}, status={})",
-                    sessionId, session.accounts().size(), attempt, session.status());
+                    LogSanitizer.fingerprint(sessionId), session.accounts().size(), attempt, session.status());
                 return session.accounts();
             }
 
             log.info("Session {} has no accounts yet (attempt {}/{}, status={})",
-                sessionId, attempt, maxAttempts,
+                LogSanitizer.fingerprint(sessionId), attempt, maxAttempts,
                 session != null ? session.status() : "null");
 
             if (attempt < maxAttempts) {
@@ -198,7 +199,7 @@ public class EnableBankingBankConnector implements BankConnectorPort {
         }
 
         log.warn("Session {} still has no accounts after {} attempts — returning empty so the caller can retry asynchronously",
-            sessionId, maxAttempts);
+            LogSanitizer.fingerprint(sessionId), maxAttempts);
         return List.of();
     }
 

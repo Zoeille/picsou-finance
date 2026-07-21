@@ -131,6 +131,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (generic `422`) as defense-in-depth, so a bad RPC response can never surface as a
   raw `500` even on an unwrapped call path.
 
+### Security
+
+- **Enable Banking session ids are no longer written to logs in the clear.** The
+  raw session id (stored as `Requisition.requisitionId`) was printed by several
+  sync log statements; it is now replaced with the non-sensitive requisition
+  database id in `SyncService`, and with a short non-reversible SHA-256
+  fingerprint in the low-level connector where only the raw value is available.
+  A new `LogSanitizer.fingerprint(...)` helper keeps the fingerprints stable so
+  log lines can still be correlated during debugging. Defense-in-depth against
+  log aggregators with weaker access control than the primary database (#44).
+
 ## [1.0.13] — 2026-07-07
 
 ### Changed
