@@ -131,6 +131,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (generic `422`) as defense-in-depth, so a bad RPC response can never surface as a
   raw `500` even on an unwrapped call path.
 
+### Security
+
+- **At-rest encryption now pins UTF-8 and validates the key length at startup.**
+  `CryptoEncryption` encoded/decoded secrets with the platform-default charset,
+  so a non-ASCII secret (e.g. a passphrase with accented characters) could
+  round-trip incorrectly on a non-UTF-8 JVM; both directions now use
+  `StandardCharsets.UTF_8`. `CRYPTO_ENCRYPTION_KEY` is also validated at bean
+  construction — an invalid-base64 or wrong-length key fails fast with a clear
+  message instead of silently selecting a weaker AES variant or throwing a
+  cryptic `InvalidKeyException` at the first encrypt/decrypt.
+
 ## [1.0.13] — 2026-07-07
 
 ### Changed
