@@ -108,7 +108,8 @@ Bulk fetch, update cache
 
 ## Tests
 
-- `PriceServiceTest` -- unit tests for caching, routing, conversion
+- `PriceServiceTest` -- unit tests for caching, conversion, backfill guard
+- `CompositePriceProviderTest` -- unit tests for crypto/stock routing and batching
 - `CoinGeckoPriceProviderTest` -- unit tests for ticker mapping
 - `YahooFinancePriceProviderTest` -- unit tests for response parsing
 
