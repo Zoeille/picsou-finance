@@ -1,5 +1,6 @@
 package com.picsou.controller;
 
+import com.picsou.config.ClientIp;
 import com.picsou.config.RateLimitConfig;
 import com.picsou.dto.AccountResponse;
 import com.picsou.dto.IbkrConnectRequest;
@@ -75,7 +76,7 @@ public class IbkrController {
     }
 
     private boolean checkSyncRateLimit(HttpServletRequest request) {
-        String ip = request.getRemoteAddr();
+        String ip = ClientIp.resolve(request);
         Bucket bucket = ibkrSyncBuckets.computeIfAbsent(ip, k -> RateLimitConfig.createIbkrSyncBucket());
         return bucket.tryConsume(1);
     }

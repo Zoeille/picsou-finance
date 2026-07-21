@@ -83,7 +83,7 @@ public class RateLimitConfig {
      */
     @Bean("ibkrSyncBuckets")
     public Map<String, Bucket> ibkrSyncBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**
