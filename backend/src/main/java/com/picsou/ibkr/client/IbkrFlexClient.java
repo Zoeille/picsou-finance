@@ -140,6 +140,8 @@ public class IbkrFlexClient implements IbkrFlexPort {
         if (message == null) {
             return false;
         }
+        // Deliberately broad substring matching ("generat" covers "generating"/"generation"):
+        // forward compatibility with rewordings of the transient not-ready message.
         String lower = message.toLowerCase();
         return lower.contains("in progress") || lower.contains("try again") || lower.contains("generat");
     }

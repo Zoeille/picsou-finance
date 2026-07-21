@@ -105,7 +105,15 @@ public class IbkrSyncService {
             return new IbkrConnectionStatusResponse(false, null, null, null, null);
         }
         IbkrConnection c = connection.get();
-        String maskedToken = maskToken(encryption.decrypt(c.getToken()));
+        String maskedToken;
+        try {
+            maskedToken = maskToken(encryption.decrypt(c.getToken()));
+        } catch (RuntimeException ex) {
+            // A rotated encryption key / corrupted row must degrade into a visible ERROR
+            // status, not a 500 on the read-only endpoint the Sync page always calls.
+            log.error("IBKR: cannot decrypt stored token for connection {}", c.getId(), ex);
+            return new IbkrConnectionStatusResponse(true, c.getId(), "ERROR", c.getLastSyncedAt(), "••••");
+        }
         return new IbkrConnectionStatusResponse(true, c.getId(), c.getStatus(), c.getLastSyncedAt(), maskedToken);
     }
 
@@ -140,19 +148,32 @@ public class IbkrSyncService {
     }
 
     private List<AccountResponse> syncWithConnection(IbkrConnection connection, Long memberId) {
-        String token = encryption.decrypt(connection.getToken());
-        String queryId = encryption.decrypt(connection.getQueryId());
-
-        List<IbkrAccountData> accounts;
         try {
-            accounts = ibkrFlexPort.fetchOpenPositions(token, queryId);
+            return doSync(connection, memberId);
         } catch (RuntimeException ex) {
-            // A plain save here would be lost on the manual path: the rethrow marks this
-            // @Transactional method rollback-only, so the ERROR status never commits.
-            // statusWriter runs in its own REQUIRES_NEW transaction, which survives.
+            // Any failure — decryption, the Flex fetch, the non-EUR base-currency guard,
+            // a DB error while mapping — must leave a visible ERROR status, on both the
+            // manual and the scheduled path. A plain save here would be lost on the
+            // manual path: the rethrow marks this @Transactional method rollback-only,
+            // so the status write never commits. statusWriter runs in its own
+            // REQUIRES_NEW transaction, which survives the rollback.
             statusWriter.markError(connection.getId());
             throw ex;
         }
+    }
+
+    private List<AccountResponse> doSync(IbkrConnection connection, Long memberId) {
+        String token;
+        String queryId;
+        try {
+            token = encryption.decrypt(connection.getToken());
+            queryId = encryption.decrypt(connection.getQueryId());
+        } catch (RuntimeException ex) {
+            throw new SyncException("Could not decrypt the stored IBKR credentials — the encryption "
+                + "key may have changed. Please reconnect with a fresh token.", ex);
+        }
+
+        List<IbkrAccountData> accounts = ibkrFlexPort.fetchOpenPositions(token, queryId);
 
         List<AccountResponse> responses = accounts.stream()
             .map(data -> upsertAccount(data, memberId))

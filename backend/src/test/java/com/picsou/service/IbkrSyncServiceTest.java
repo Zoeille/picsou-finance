@@ -166,6 +166,53 @@ class IbkrSyncServiceTest {
     }
 
     /**
+     * A credential that no longer decrypts (rotated CRYPTO_ENCRYPTION_KEY, corrupted row)
+     * must not bubble up as a raw crypto RuntimeException: the user gets an actionable
+     * SyncException telling them to reconnect, and the connection status flips to ERROR
+     * exactly like any other sync failure.
+     */
+    @Test
+    void sync_whenDecryptFails_marksErrorAndThrowsActionableSyncException() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .id(42L)
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenThrow(new IllegalStateException("bad key"));
+
+        assertThatThrownBy(() -> service.sync(memberId))
+            .isInstanceOf(com.picsou.exception.SyncException.class)
+            .hasMessageContaining("decrypt")
+            .hasMessageContaining("reconnect");
+
+        verify(statusWriter, times(1)).markError(42L);
+        verifyNoInteractions(ibkrFlexPort);
+    }
+
+    /**
+     * The read-only status endpoint must never 500 because a stored token stopped
+     * decrypting: it degrades to connected=true with an ERROR status and a fully
+     * masked token, so the Sync page can tell the user to reconnect.
+     */
+    @Test
+    void getConnectionStatus_whenDecryptFails_reportsErrorInsteadOfThrowing() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .id(42L)
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenThrow(new IllegalStateException("bad key"));
+
+        var status = service.getConnectionStatus(memberId);
+
+        assertThat(status.connected()).isTrue();
+        assertThat(status.status()).isEqualTo("ERROR");
+        assertThat(status.maskedToken()).doesNotContain("enc-token");
+    }
+
+    /**
      * Hardening against real-world Flex variety in one account: an ISIN that OpenFIGI
      * resolves, an ISIN that OpenFIGI misses (→ symbol fallback), a symbol-only line, a
      * cash line, a zero-quantity line, and an over-long derivative symbol. Only the three
@@ -323,6 +370,9 @@ class IbkrSyncServiceTest {
 
         verify(holdingRepository, never()).save(any(AccountHolding.class));
         verify(accountRepository, never()).save(any(Account.class));
+        // The guard failure is a sync failure like any other: the user must see ERROR
+        // in the UI, on the scheduled path too (where the exception is swallowed).
+        verify(statusWriter, times(1)).markError(any());
     }
 
     /** B: an explicit "EUR" base currency syncs exactly like today (no behavior change). */

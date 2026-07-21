@@ -9,6 +9,7 @@ import com.picsou.service.IbkrSyncService;
 import com.picsou.service.UserContext;
 import io.github.bucket4j.Bucket;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -45,7 +46,7 @@ public class IbkrController {
 
     /** Store (or replace) the Flex token + query id. Credentials are encrypted at rest. */
     @PostMapping("/connect")
-    public ResponseEntity<Void> connect(@RequestBody IbkrConnectRequest req) {
+    public ResponseEntity<Void> connect(@Valid @RequestBody IbkrConnectRequest req) {
         ibkrService.connect(req.token(), req.queryId(), userContext.currentMemberId());
         return ResponseEntity.noContent().build();
     }

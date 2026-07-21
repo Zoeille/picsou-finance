@@ -77,9 +77,10 @@ public class RateLimitConfig {
 
     /**
      * Per-IP IBKR Flex sync rate limiter: 6 requests per minute.
-     * IBKR itself rate-limits the Flex Web Service to roughly one request per second
-     * per token and a sync fans out into SendRequest + several GetStatement polls, so a
-     * handful of manual syncs per minute is the sane ceiling.
+     * IBKR itself enforces a separate per-token limit (~1 request/sec) on the Flex Web
+     * Service; this application-level per-IP cap is additive and defensive — it keeps one
+     * caller from burning the shared token's budget, while leaving room for the
+     * SendRequest + several GetStatement polls a single sync fans out into.
      */
     @Bean("ibkrSyncBuckets")
     public Map<String, Bucket> ibkrSyncBuckets() {
