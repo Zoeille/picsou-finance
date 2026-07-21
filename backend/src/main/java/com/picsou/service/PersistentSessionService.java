@@ -87,7 +87,10 @@ public class PersistentSessionService {
         ParsedCookie parsed = parseCookie(cookieValue).orElse(null);
         if (parsed == null) return Optional.empty();
 
-        Optional<PersistentSession> opt = repository.findBySeriesId(parsed.seriesId());
+        // Row-level lock so concurrent restores of the same series serialize —
+        // otherwise both read the same pre-rotation state and the second rotation
+        // orphans the first token, which then trips theft detection below.
+        Optional<PersistentSession> opt = repository.findBySeriesIdForUpdate(parsed.seriesId());
         if (opt.isEmpty()) return Optional.empty();
 
         PersistentSession session = opt.get();
@@ -111,12 +114,21 @@ public class PersistentSessionService {
             return Optional.empty();
         }
 
-        // Rotate. Remember the outgoing current token as the previous one, so a
-        // concurrent tab still holding it is accepted within the grace window
-        // instead of tripping theft detection above.
         String newToken = generateToken();
-        session.setPreviousTokenHash(session.getTokenHash());
-        session.setPreviousTokenAt(now);
+        if (matchesCurrent) {
+            // A genuine rotation: arm the grace window with the token we're rotating
+            // away from, so concurrent tabs still holding it are accepted below.
+            session.setPreviousTokenHash(session.getTokenHash());
+            session.setPreviousTokenAt(now);
+        }
+        // On a grace (previous-match) acceptance we deliberately leave
+        // previous_token_hash/at ANCHORED. Two consequences, both intended:
+        //   - EVERY concurrent tab presenting the same pre-rotation token is
+        //     accepted (not just the first two), because `previous` keeps pointing
+        //     at that token instead of advancing to each freshly-minted one;
+        //   - the window can't be slid forward by replaying the previous token —
+        //     it stays pinned to the rotation that opened it (rotationGraceSeconds
+        //     from the first rotation, not from the last acceptance).
         session.setTokenHash(sha256Hex(newToken));
         session.setLastUsedAt(now);
         repository.save(session);
