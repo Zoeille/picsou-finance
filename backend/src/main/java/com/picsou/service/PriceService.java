@@ -1,8 +1,7 @@
 package com.picsou.service;
 
-import com.picsou.adapter.CoinGeckoPriceProvider;
-import com.picsou.adapter.YahooFinancePriceProvider;
 import com.picsou.model.PriceSnapshot;
+import com.picsou.port.PriceProviderPort;
 import com.picsou.repository.PriceSnapshotRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,17 +20,15 @@ public class PriceService {
     private static final Logger log = LoggerFactory.getLogger(PriceService.class);
     private static final long CACHE_TTL_SECONDS = 900; // 15 minutes
 
-    private final CoinGeckoPriceProvider coinGecko;
-    private final YahooFinancePriceProvider yahoo;
+    private final PriceProviderPort priceProvider;
     private final PriceSnapshotRepository priceSnapshotRepository;
 
     // Simple in-memory price cache: ticker → (price, cachedAt)
     private final Map<String, CachedPrice> priceCache = new ConcurrentHashMap<>();
 
-    public PriceService(CoinGeckoPriceProvider coinGecko, YahooFinancePriceProvider yahoo,
+    public PriceService(PriceProviderPort priceProvider,
                         PriceSnapshotRepository priceSnapshotRepository) {
-        this.coinGecko = coinGecko;
-        this.yahoo = yahoo;
+        this.priceProvider = priceProvider;
         this.priceSnapshotRepository = priceSnapshotRepository;
     }
 
@@ -53,15 +50,8 @@ public class PriceService {
             return cached.price();
         }
 
-        // Fetch from appropriate provider
-        Set<String> singleTicker = Set.of(upper);
-        Map<String, BigDecimal> prices;
-
-        if (coinGecko.supports(upper)) {
-            prices = coinGecko.getPricesEur(singleTicker);
-        } else {
-            prices = yahoo.getPricesEur(singleTicker);
-        }
+        // Fetch through the port; the composite provider routes crypto vs. stock.
+        Map<String, BigDecimal> prices = priceProvider.getPricesEur(Set.of(upper));
 
         BigDecimal price = prices.get(upper);
         if (price != null) {
@@ -78,29 +68,20 @@ public class PriceService {
 
         Map<String, BigDecimal> result = new HashMap<>();
 
-        Set<String> cryptoTickers = new HashSet<>();
-        Set<String> stockTickers = new HashSet<>();
-
+        // EUR needs no conversion; everything else goes through the port, which
+        // routes crypto to CoinGecko and the rest to Yahoo and batches each call.
+        Set<String> toFetch = new HashSet<>();
         for (String ticker : tickers) {
             String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) {
                 result.put(upper, BigDecimal.ONE);
-            } else if (coinGecko.supports(upper)) {
-                cryptoTickers.add(upper);
             } else {
-                stockTickers.add(upper);
+                toFetch.add(upper);
             }
         }
 
-        if (!cryptoTickers.isEmpty()) {
-            coinGecko.getPricesEur(cryptoTickers).forEach((k, v) -> {
-                priceCache.put(k, new CachedPrice(v, Instant.now()));
-                result.put(k, v);
-            });
-        }
-
-        if (!stockTickers.isEmpty()) {
-            yahoo.getPricesEur(stockTickers).forEach((k, v) -> {
+        if (!toFetch.isEmpty()) {
+            priceProvider.getPricesEur(toFetch).forEach((k, v) -> {
                 priceCache.put(k, new CachedPrice(v, Instant.now()));
                 result.put(k, v);
             });
@@ -178,12 +159,7 @@ public class PriceService {
             // Guard per ticker: this runs from PriceBackfillRunner, an ApplicationRunner, so
             // an unguarded throw here would fail Spring Boot startup outright.
             try {
-                Map<LocalDate, BigDecimal> prices;
-                if (coinGecko.supports(upper)) {
-                    prices = coinGecko.getHistoricalPricesEur(upper, from, to);
-                } else {
-                    prices = yahoo.getHistoricalPricesEur(upper, from, to);
-                }
+                Map<LocalDate, BigDecimal> prices = priceProvider.getHistoricalPricesEur(upper, from, to);
 
                 for (var entry : prices.entrySet()) {
                     if (priceSnapshotRepository.findByTickerAndDate(upper, entry.getKey()).isEmpty()) {
@@ -234,7 +210,7 @@ public class PriceService {
 
     /**
      * Fetch intraday (hourly) prices for a ticker over the given time range.
-     * Routes to CoinGecko for crypto, Yahoo Finance for stocks/ETFs.
+     * The port's composite provider routes crypto to CoinGecko, the rest to Yahoo.
      */
     public Map<LocalDateTime, BigDecimal> getIntradayPricesEur(String ticker, LocalDateTime from, LocalDateTime to) {
         if (ticker == null || ticker.isBlank() || "EUR".equalsIgnoreCase(ticker)) {
@@ -242,11 +218,6 @@ public class PriceService {
         }
 
         String upper = ticker.toUpperCase(Locale.ROOT);
-
-        if (coinGecko.supports(upper)) {
-            return coinGecko.getIntradayPricesEur(upper, from, to);
-        } else {
-            return yahoo.getIntradayPricesEur(upper, from, to);
-        }
+        return priceProvider.getIntradayPricesEur(upper, from, to);
     }
 }
