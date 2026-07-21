@@ -131,6 +131,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (generic `422`) as defense-in-depth, so a bad RPC response can never surface as a
   raw `500` even on an unwrapped call path.
 
+### Security
+
+- **At-rest encryption now pins UTF-8 and validates the key length at startup.**
+  `CryptoEncryption` encoded/decoded secrets with the platform-default charset.
+  A single JVM with a stable charset round-trips fine, but the moment the
+  charset differs across the boundary — a non-UTF-8 JVM writing and a UTF-8 one
+  reading (or vice versa), or interop with any UTF-8 consumer — a non-ASCII
+  secret (e.g. an accented passphrase) decodes to garbage. Both directions now
+  pin `StandardCharsets.UTF_8` for deterministic behaviour. (Migration note:
+  any non-ASCII ciphertext written by a *non*-UTF-8 JVM before this change would
+  now read back mangled — effectively impossible on Java 21, whose default is
+  UTF-8, unless `-Dfile.encoding` was overridden.) `CRYPTO_ENCRYPTION_KEY` is
+  also validated at bean construction — an invalid-base64 or wrong-length key
+  fails fast with a clear message instead of silently selecting a weaker AES
+  variant or throwing a cryptic `InvalidKeyException` at the first
+  encrypt/decrypt.
+
 ## [1.0.13] — 2026-07-07
 
 ### Changed
