@@ -75,6 +75,11 @@ public class RateLimitConfig {
         return boundedBucketStore();
     }
 
+    @Bean("bourseDirectAuthBuckets")
+    public Map<String, Bucket> bourseDirectAuthBuckets() {
+        return new ConcurrentHashMap<>();
+    }
+
     /**
      * Per-IP setup wizard rate limiter: 10 mutating requests per minute.
      * Tight because the endpoints are unauthenticated until setup completes
@@ -171,6 +176,15 @@ public class RateLimitConfig {
     }
 
     public static Bucket createBoursoAuthBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(5)
+                .refillIntervally(5, Duration.ofMinutes(15))
+                .build())
+            .build();
+    }
+
+    public static Bucket createBourseDirectAuthBucket() {
         return Bucket.builder()
             .addLimit(Bandwidth.builder()
                 .capacity(5)

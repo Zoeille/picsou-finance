@@ -173,6 +173,7 @@
     "color": "Color",
     "total": "Total",
     "currentBalance": "Current balance",
+    "cashBalance": "Cash in the PEA/securities account",
     "snapshots": "Monthly snapshots",
     "addSnapshot": "Save",
     "monthlyHistory": "Month-end balance",
@@ -402,6 +403,7 @@
       "exchanges": "Binance, Kraken...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
+      "bourseDirect": "Sync your PEA and securities accounts",
       "finary": "Import from Finary",
       "manual": "Create an account manually"
     }
@@ -553,6 +555,36 @@
         "invalidMfaCode": "Invalid or expired MFA code.",
         "sessionExpired": "Session expired. Please reconnect.",
         "serverError": "BoursoBank server error. Please try again."
+      }
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct",
+      "login": "Login",
+      "password": "Password",
+      "otpCode": "6-digit security code",
+      "otpPrompt": "Enter the code sent by Bourse Direct. This device will not be marked as trusted.",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "validate": "Validate code",
+      "validating": "Validating…",
+      "sync": "Sync",
+      "queued": "Synchronization queued…",
+      "syncing": "Syncing…",
+      "syncSuccess": "Portfolio synchronized.",
+      "clearSession": "Disconnect",
+      "noSession": "No active session",
+      "sessionActive": "Active session",
+      "scope": "Syncs positions, average cost, price, valuation and cash for PEA and securities accounts.",
+      "errors": {
+        "tooManyAttempts": "Too many attempts. Please wait.",
+        "invalidCredentials": "Invalid Bourse Direct credentials.",
+        "invalidCode": "Invalid or expired security code. Start the login again.",
+        "authAttemptExpired": "The authentication attempt expired. Start the login again.",
+        "sessionExpired": "The Bourse Direct session expired. Please reconnect.",
+        "portfolioIncomplete": "Bourse Direct returned an incomplete portfolio. Your existing data was kept unchanged.",
+        "formatChanged": "Bourse Direct changed its portfolio format. Your existing data was kept unchanged.",
+        "invalidData": "Bourse Direct returned inconsistent portfolio data. Your existing data was kept unchanged.",
+        "serverError": "Could not reach Bourse Direct. Please try again."
       }
     }
   },
@@ -785,6 +817,7 @@
       "description": "Enable or disable data connectors",
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
+      "boursedirect": "Bourse Direct",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Crypto"
@@ -955,7 +988,11 @@
         },
         "traderepublic": {
           "title": "Trade Republic",
-          "description": "Sync your Trade Republic portfolio using your login. You'll add credentials when you create the account."
+          "description": "Sync your Trade Republic portfolio with your credentials. You will add them when creating the account."
+        },
+        "boursedirect": {
+          "title": "Bourse Direct",
+          "description": "Directly sync your PEA and securities-account positions with two-factor authentication."
         },
         "finary": {
           "title": "Finary",
@@ -1058,6 +1095,13 @@
       "retry": "Retry",
       "continue": "Continue",
       "skip": "Skip for now"
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct is ready.",
+      "body": "After setup, sign in with your Bourse Direct credentials and the 6-digit security code.",
+      "tip": "Picsou only stores an encrypted session. Your password and 2FA code are never stored. Imported accounts remain attached to their PEA or securities account.",
+      "cta": "Enable Bourse Direct",
+      "skip": "Don't enable Bourse Direct"
     },
     "tr": {
       "title": "Trade Republic is ready to go.",

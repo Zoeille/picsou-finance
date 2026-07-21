@@ -92,7 +92,7 @@ export function useGenerateCryptoKey() {
 export function useAcknowledgeIntegration() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (key: 'traderepublic' | 'finary') => setupApi.acknowledgeIntegration(key),
+    mutationFn: (key: 'traderepublic' | 'finary' | 'boursedirect') => setupApi.acknowledgeIntegration(key),
     onSuccess: () => qc.invalidateQueries({ queryKey: SETUP_STATUS_KEY }),
   })
 }

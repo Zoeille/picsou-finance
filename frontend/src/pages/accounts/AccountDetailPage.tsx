@@ -62,12 +62,8 @@ export function AccountDetailPage() {
   const showHoldings = account ? HOLDING_ACCOUNT_TYPES.includes(account.type) : false
   const recentSnapshots = [...(history ?? [])].reverse().slice(0, 10)
 
-  // Live value from holdings (with live prices) — not from stale snapshots
-  const liveTotal = holdings ? holdings.reduce((sum, h) => sum + (h.currentValueEur ?? 0), 0) : 0
-  // For holding accounts, use live total value as the displayed balance
-  const displayBalance = (showHoldings && holdings && holdings.length > 0 && liveTotal > 0)
-    ? liveTotal
-    : (account?.currentBalanceEur ?? 0)
+  // The backend owns EUR valuation and falls back atomically to the broker snapshot.
+  const displayBalance = account?.currentBalanceEur ?? 0
 
   // PnL from unified history endpoint (pre-computed by backend)
   const pnlLatest = pnlData && pnlData.length > 0 ? pnlData[pnlData.length - 1] : null
@@ -131,6 +127,11 @@ export function AccountDetailPage() {
               value={displayBalance}
               className={`text-3xl font-bold ${isLoan ? 'text-red-500' : 'text-foreground'}`}
             />
+            {showHoldings && account.cashBalance != null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('accounts.cashBalance')}: <CurrencyDisplay value={account.cashBalance} />
+              </p>
+            )}
             {account.currency !== 'EUR' && (
               <p className="text-xs text-muted-foreground mt-0.5">
                 {account.currentBalance} {account.currency}

@@ -250,9 +250,9 @@ public class SetupController {
         if (!consumeRateLimitToken(httpRequest)) return rateLimited();
         requireNotComplete();
 
-        if (!"traderepublic".equals(key) && !"finary".equals(key)) {
+        if (!"traderepublic".equals(key) && !"finary".equals(key) && !"boursedirect".equals(key)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "This step only applies to the Trade Republic and Finary integrations.");
+                "This step only applies to integrations configured after signing in.");
         }
         integrationsService.enable(key);
         auditService.record("setup.integration.enabled", null, httpRequest, "key=" + key);

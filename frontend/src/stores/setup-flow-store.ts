@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 export type IntegrationKey =
   | 'enablebanking'
   | 'boursobank'
+  | 'boursedirect'
   | 'traderepublic'
   | 'finary'
   | 'crypto'
@@ -11,6 +12,7 @@ export type IntegrationKey =
 export const ALL_INTEGRATIONS: IntegrationKey[] = [
   'enablebanking',
   'boursobank',
+  'boursedirect',
   'traderepublic',
   'finary',
   'crypto',

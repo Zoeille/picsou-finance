@@ -166,6 +166,7 @@
     "color": "Farbe",
     "total": "Gesamt",
     "currentBalance": "Aktueller Saldo",
+    "cashBalance": "Bargeld im PEA/Wertpapierkonto",
     "snapshots": "Monatliche Stände",
     "addSnapshot": "Speichern",
     "monthlyHistory": "Saldo zum Monatsende",
@@ -395,6 +396,7 @@
       "exchanges": "Binance, Kraken...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
+      "bourseDirect": "PEA- und Wertpapierkonten synchronisieren",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen"
     }
@@ -546,6 +548,36 @@
         "invalidMfaCode": "Ungültiger oder abgelaufener MFA-Code.",
         "sessionExpired": "Sitzung abgelaufen. Bitte verbinde dich erneut.",
         "serverError": "BoursoBank-Serverfehler. Bitte versuche es erneut."
+      }
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct",
+      "login": "Login",
+      "password": "Passwort",
+      "otpCode": "6-stelliger Sicherheitscode",
+      "otpPrompt": "Gib den von Bourse Direct gesendeten Code ein. Dieses Gerät wird nicht als vertrauenswürdig markiert.",
+      "connect": "Verbinden",
+      "connecting": "Verbindung wird hergestellt…",
+      "validate": "Code bestätigen",
+      "validating": "Code wird geprüft…",
+      "sync": "Synchronisieren",
+      "queued": "Synchronisierung in Warteschlange…",
+      "syncing": "Synchronisierung läuft…",
+      "syncSuccess": "Portfolio synchronisiert.",
+      "clearSession": "Trennen",
+      "noSession": "Keine aktive Sitzung",
+      "sessionActive": "Aktive Sitzung",
+      "scope": "Synchronisiert Positionen, Einstandspreis, Kurs, Bewertung und Bargeld für PEA- und Wertpapierkonten.",
+      "errors": {
+        "tooManyAttempts": "Zu viele Versuche. Bitte warten.",
+        "invalidCredentials": "Ungültige Bourse-Direct-Zugangsdaten.",
+        "invalidCode": "Ungültiger oder abgelaufener Sicherheitscode. Anmeldung erneut starten.",
+        "authAttemptExpired": "Der Anmeldeversuch ist abgelaufen. Anmeldung erneut starten.",
+        "sessionExpired": "Die Bourse-Direct-Sitzung ist abgelaufen. Bitte erneut verbinden.",
+        "portfolioIncomplete": "Bourse Direct hat ein unvollständiges Portfolio geliefert. Deine vorhandenen Daten wurden nicht verändert.",
+        "formatChanged": "Bourse Direct hat sein Portfolioformat geändert. Deine vorhandenen Daten wurden nicht verändert.",
+        "invalidData": "Bourse Direct hat widersprüchliche Portfoliodaten geliefert. Deine vorhandenen Daten wurden nicht verändert.",
+        "serverError": "Bourse Direct konnte nicht erreicht werden. Bitte erneut versuchen."
       }
     }
   },
@@ -778,6 +810,7 @@
       "description": "Datenkonnektoren aktivieren oder deaktivieren",
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
+      "boursedirect": "Bourse Direct",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Krypto"
@@ -946,6 +979,10 @@
           "title": "BoursoBank (Sidecar)",
           "description": "Direkte Synchronisierung über den mitgelieferten bourso-auth-Container. Kein externes Konto nötig."
         },
+        "boursedirect": {
+          "title": "Bourse Direct",
+          "description": "PEA- und Wertpapierpositionen direkt mit Zwei-Faktor-Authentifizierung synchronisieren."
+        },
         "traderepublic": {
           "title": "Trade Republic",
           "description": "Synchronisiere dein Trade-Republic-Portfolio mit deinen Login-Daten. Die Zugangsdaten gibst du beim Erstellen des Kontos ein."
@@ -1051,6 +1088,13 @@
       "retry": "Erneut versuchen",
       "continue": "Weiter",
       "skip": "Vorerst überspringen"
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct ist bereit.",
+      "body": "Melde dich nach der Einrichtung mit deinen Bourse-Direct-Zugangsdaten und dem 6-stelligen Sicherheitscode an.",
+      "tip": "Picsou speichert nur eine verschlüsselte Sitzung. Passwort und 2FA-Code werden nie gespeichert. Importierte Konten bleiben ihrem PEA- oder Wertpapierkonto zugeordnet.",
+      "cta": "Bourse Direct aktivieren",
+      "skip": "Bourse Direct nicht aktivieren"
     },
     "tr": {
       "title": "Trade Republic ist startklar.",

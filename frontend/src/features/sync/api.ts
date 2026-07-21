@@ -13,6 +13,8 @@ import type {
   FinaryAutoSyncResponse,
   BoursoSessionStatus,
   BoursoAuthInitResponse,
+  BourseDirectSessionStatus,
+  BourseDirectAuthInitResponse,
 } from '@/types/api'
 
 // --- Bank Sync (Enable Banking) ---
@@ -148,6 +150,32 @@ export const boursoApi = {
 
   clearSession: () =>
     api.delete('/bourso/session'),
+}
+
+// --- Bourse Direct ---
+
+export const bourseDirectApi = {
+  initiateAuth: (login: string, password: string) =>
+    api
+      .post<BourseDirectAuthInitResponse>('/bourse-direct/auth/initiate', { login, password })
+      .then(r => r.data),
+
+  completeAuth: (processId: string, code: string) =>
+    api
+      .post<BourseDirectSessionStatus>('/bourse-direct/auth/complete', { processId, code })
+      .then(r => r.data),
+
+  sync: () =>
+    api.post<BourseDirectSessionStatus>('/bourse-direct/sync').then(r => r.data),
+
+  getStatus: () =>
+    api
+      .get<BourseDirectSessionStatus>('/bourse-direct/status', {
+        skipGlobalErrorRedirect: true,
+      })
+      .then(r => r.data),
+
+  clearSession: () => api.delete('/bourse-direct/session'),
 }
 
 // --- Finary ---

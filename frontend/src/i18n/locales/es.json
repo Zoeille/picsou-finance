@@ -166,6 +166,7 @@
     "color": "Color",
     "total": "Total",
     "currentBalance": "Saldo actual",
+    "cashBalance": "Efectivo en la cuenta PEA/de valores",
     "snapshots": "Registros mensuales",
     "addSnapshot": "Guardar",
     "monthlyHistory": "Saldo a fin de mes",
@@ -395,6 +396,7 @@
       "exchanges": "Binance, Kraken...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
+      "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
       "finary": "Importar desde Finary",
       "manual": "Crear una cuenta manualmente"
     }
@@ -546,6 +548,36 @@
         "invalidMfaCode": "Código MFA no válido o caducado.",
         "sessionExpired": "Sesión caducada. Vuelve a conectarte.",
         "serverError": "Error del servidor de BoursoBank. Inténtalo de nuevo."
+      }
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct",
+      "login": "Usuario",
+      "password": "Contraseña",
+      "otpCode": "Código de seguridad de 6 dígitos",
+      "otpPrompt": "Introduce el código enviado por Bourse Direct. Este dispositivo no se marcará como de confianza.",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "validate": "Validar código",
+      "validating": "Validando…",
+      "sync": "Sincronizar",
+      "queued": "Sincronización en cola…",
+      "syncing": "Sincronizando…",
+      "syncSuccess": "Cartera sincronizada.",
+      "clearSession": "Desconectar",
+      "noSession": "No hay sesión activa",
+      "sessionActive": "Sesión activa",
+      "scope": "Sincroniza posiciones, coste medio, cotización, valoración y efectivo de cuentas PEA y de valores.",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espera un momento.",
+        "invalidCredentials": "Credenciales de Bourse Direct no válidas.",
+        "invalidCode": "Código de seguridad no válido o caducado. Reinicia el acceso.",
+        "authAttemptExpired": "El intento de autenticación ha caducado. Reinicia el acceso.",
+        "sessionExpired": "La sesión de Bourse Direct ha caducado. Vuelve a conectarte.",
+        "portfolioIncomplete": "Bourse Direct devolvió una cartera incompleta. Tus datos existentes no se modificaron.",
+        "formatChanged": "Bourse Direct cambió el formato de la cartera. Tus datos existentes no se modificaron.",
+        "invalidData": "Bourse Direct devolvió datos de cartera incoherentes. Tus datos existentes no se modificaron.",
+        "serverError": "No se pudo contactar con Bourse Direct. Inténtalo de nuevo."
       }
     }
   },
@@ -778,6 +810,7 @@
       "description": "Activa o desactiva los conectores de datos",
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
+      "boursedirect": "Bourse Direct",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Cripto"
@@ -946,6 +979,10 @@
           "title": "BoursoBank (sidecar)",
           "description": "Sincronización directa mediante el contenedor bourso-auth incluido. No necesitas ninguna cuenta externa."
         },
+        "boursedirect": {
+          "title": "Bourse Direct",
+          "description": "Sincroniza directamente posiciones PEA y de valores con autenticación de dos factores."
+        },
         "traderepublic": {
           "title": "Trade Republic",
           "description": "Sincroniza tu cartera de Trade Republic con tus credenciales. Las añadirás al crear la cuenta."
@@ -1051,6 +1088,13 @@
       "retry": "Reintentar",
       "continue": "Continuar",
       "skip": "Omitir por ahora"
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct está listo.",
+      "body": "Tras la configuración, inicia sesión con tus credenciales de Bourse Direct y el código de seguridad de 6 dígitos.",
+      "tip": "Picsou solo guarda una sesión cifrada. La contraseña y el código 2FA nunca se almacenan. Las cuentas importadas permanecen vinculadas a su PEA o cuenta de valores.",
+      "cta": "Activar Bourse Direct",
+      "skip": "No activar Bourse Direct"
     },
     "tr": {
       "title": "Trade Republic está listo.",

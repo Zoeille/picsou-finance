@@ -33,7 +33,7 @@ A `@RestControllerAdvice` that extends `ResponseEntityExceptionHandler`. Returns
 | Handler method | Exception | Status | Detail |
 |---------------|-----------|--------|--------|
 | `handleNotFound` | `ResourceNotFoundException` | 404 | `ex.getMessage()` |
-| `handleSync` | `SyncException` | 422 | `ex.getMessage()` (logged at WARN) |
+| `handleSync` | `SyncException` | 422 | `ex.getMessage()` plus optional stable `code` (logged at WARN) |
 | `handleWalletRpc` | `WalletRpcException` | 422 | generic `"Could not reach the blockchain network…"` (logged at WARN) |
 | `handleBadCredentials` | `BadCredentialsException` | 401 | `"Invalid credentials"` |
 | `handleIllegalArgument` | `IllegalArgumentException` | 400 | `ex.getMessage()` |
@@ -81,9 +81,13 @@ factories ID-free for the same reason.
 // Wraps upstream provider failures
 new SyncException("Enable Banking API error: ...");
 new SyncException("Binance API timeout", cause);  // with original cause
+new SyncException("Incomplete portfolio", cause, "PORTFOLIO_INCOMPLETE");
 ```
 
 Logged at WARN level so upstream flakiness is trackable without alert fatigue.
+Use the optional code for domain errors that the frontend must translate or
+react to. Codes are API contracts; messages remain English diagnostics and must
+not be parsed.
 
 ## Adding a new exception type
 

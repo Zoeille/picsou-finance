@@ -23,6 +23,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies the two data-mutating migrations in the EVM fan-out change:
@@ -263,6 +264,43 @@ class WalletEvmMigrationTest {
             .isEqualTo("ETHEREUM Wallet");
         assertThat(queryString("SELECT name FROM account WHERE id = " + bankAccountId))
             .isEqualTo("Checking");
+    }
+
+    @Test
+    @Order(Integer.MAX_VALUE - 2)
+    void latestSchema_hardensBourseDirectWithoutLosingExistingSessionsOrHoldings() throws Exception {
+        migrateTo("58");
+        long memberId;
+        try (Connection conn = connect()) {
+            memberId = insertReturningId(conn,
+                "INSERT INTO family_member (display_name) VALUES ('Bourse Direct') RETURNING id");
+            exec(conn, "INSERT INTO bourse_direct_session (member_id, session_state) VALUES ("
+                + memberId + ", 'encrypted-state')");
+        }
+
+        migrateTo("59");
+
+        assertThat(queryString("SELECT sync_status FROM bourse_direct_session WHERE member_id = " + memberId))
+            .isEqualTo("IDLE");
+        assertThat(queryString("SELECT is_active::text FROM bourse_direct_session WHERE member_id = " + memberId))
+            .isEqualTo("true");
+
+        try (Connection conn = connect()) {
+            exec(conn, "UPDATE account_holding SET quote_currency = 'USD', "
+                + "provider_value_eur = 1900, provider_pnl_eur = 120 WHERE account_id = " + ethAccountId);
+            assertThatThrownBy(() -> exec(conn,
+                "UPDATE account_holding SET quote_currency = 'usd' WHERE account_id = " + ethAccountId))
+                .isInstanceOf(SQLException.class);
+            exec(conn, "DELETE FROM family_member WHERE id = " + memberId);
+        }
+
+        assertThat(queryString("SELECT quote_currency FROM account_holding WHERE account_id = " + ethAccountId))
+            .isEqualTo("USD");
+        assertThat(queryBigDecimal(
+            "SELECT provider_value_eur FROM account_holding WHERE account_id = " + ethAccountId))
+            .isEqualByComparingTo("1900");
+        assertThat(queryLong("SELECT COUNT(*) FROM bourse_direct_session WHERE member_id = " + memberId))
+            .isZero();
     }
 
     /** Executes a migration file from the classpath verbatim, as Flyway would. */

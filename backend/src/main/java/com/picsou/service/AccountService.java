@@ -231,11 +231,22 @@ public class AccountService {
         if (holdings.isEmpty()) {
             return account.getCurrentBalance();
         }
-        return holdings.stream()
-            .map(h -> h.getAverageBuyIn() != null
-                ? h.getAverageBuyIn().multiply(h.getQuantity())
-                : BigDecimal.ZERO)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal invested = account.getCashBalance() != null
+            ? account.getCashBalance()
+            : BigDecimal.ZERO;
+        for (AccountHolding holding : holdings) {
+            BigDecimal costBasis = providerCostBasisEur(holding);
+            if (costBasis == null && holding.getAverageBuyIn() != null) {
+                costBasis = holding.getAverageBuyIn().multiply(holding.getQuantity());
+            }
+            if (costBasis == null) {
+                // A partial cost basis creates a fictitious gain. Until every
+                // position is known, use the account value as a neutral baseline.
+                return account.getCurrentBalance();
+            }
+            invested = invested.add(costBasis);
+        }
+        return invested;
     }
 
     BalanceSnapshot upsertSnapshot(Account account, BigDecimal balance, LocalDate date) {
@@ -283,11 +294,13 @@ public class AccountService {
         if (holdings.isEmpty()) {
             return priceService.toEur(account.getCurrentBalance(), account.getCurrency(), account.getTicker());
         }
-        BigDecimal liveValue = BigDecimal.ZERO;
+        BigDecimal liveValue = account.getCashBalance() != null ? account.getCashBalance() : BigDecimal.ZERO;
+        boolean allHoldingsPriced = true;
         for (AccountHolding h : holdings) {
             BigDecimal qty = h.getQuantity();
             BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
             if (livePrice == null) {
+                allHoldingsPriced = false;
                 // Skipping is deliberate -- a held-but-unpriced asset must not be valued at a
                 // guess -- but it is not free: during a price-provider outage the balance (and
                 // any snapshot taken from it) silently shrinks by whatever those holdings were
@@ -299,6 +312,12 @@ public class AccountService {
                 continue;
             }
             liveValue = liveValue.add(qty.multiply(livePrice));
+        }
+        // Bourse Direct reports an authoritative total in EUR. If Yahoo/OpenFIGI cannot
+        // price even one instrument, prefer that last successful broker valuation over a
+        // misleading partial total (cash + only the symbols Yahoo happened to resolve).
+        if ("Bourse Direct".equals(account.getProvider()) && !allHoldingsPriced) {
+            return account.getCurrentBalance();
         }
         return liveValue;
     }
@@ -344,6 +363,10 @@ public class AccountService {
             .orElseThrow(() -> new ResourceNotFoundException("Holding not found"));
         h.setQuantity(quantity);
         if (averageBuyIn != null) h.setAverageBuyIn(averageBuyIn);
+        // A user edit invalidates broker-derived valuation/P&L as a coherent
+        // pair. A subsequent provider sync will repopulate both fields.
+        h.setProviderValueEur(null);
+        h.setProviderPnlEur(null);
         holdingRepository.save(h);
         return toHoldingResponse(h);
     }
@@ -432,14 +455,17 @@ public class AccountService {
 
         BigDecimal quantity = holding.getQuantity();
         BigDecimal averageBuyIn = holding.getAverageBuyIn();
-        BigDecimal costBasis = (averageBuyIn != null ? averageBuyIn : BigDecimal.ZERO).multiply(quantity);
+        BigDecimal costBasis = providerCostBasisEur(holding);
+        if (costBasis == null && averageBuyIn != null) {
+            costBasis = averageBuyIn.multiply(quantity);
+        }
         BigDecimal currentValueEur = currentPriceEur != null
             ? currentPriceEur.multiply(quantity)
-            : null;
-        BigDecimal pnlEur = currentValueEur != null
+            : holding.getProviderValueEur();
+        BigDecimal pnlEur = currentValueEur != null && costBasis != null
             ? currentValueEur.subtract(costBasis)
-            : null;
-        BigDecimal pnlPercent = (pnlEur != null && costBasis.signum() != 0)
+            : holding.getProviderPnlEur();
+        BigDecimal pnlPercent = (pnlEur != null && costBasis != null && costBasis.signum() != 0)
             ? pnlEur.divide(costBasis, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
             : null;
 
@@ -449,11 +475,19 @@ public class AccountService {
             quantity,
             averageBuyIn,
             currentPrice,
+            holding.getQuoteCurrency(),
             currentValueEur,
             costBasis,
             pnlEur,
             pnlPercent,
             priceUpdatedAt
         );
+    }
+
+    private BigDecimal providerCostBasisEur(AccountHolding holding) {
+        if (holding.getProviderValueEur() == null || holding.getProviderPnlEur() == null) {
+            return null;
+        }
+        return holding.getProviderValueEur().subtract(holding.getProviderPnlEur());
     }
 }

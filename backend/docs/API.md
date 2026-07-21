@@ -280,14 +280,19 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
     "name": "Apple Inc.",
     "quantity": 10,
     "averageBuyIn": 150.00,
-    "currentPrice": 180.00,
+    "currentPrice": 195.00,
+    "quoteCurrency": "USD",
     "currentValueEur": 1800.00,
     "costBasisEur": 1500.00,
     "pnlEur": 300.00,
-    "pnlPercent": 20.00
+    "pnlPercent": 20.00,
+    "priceUpdatedAt": "2026-07-20T10:00:00Z"
   }
 ]
 ```
+
+`currentPrice` is expressed in `quoteCurrency`. `averageBuyIn`,
+`currentValueEur`, `costBasisEur` and `pnlEur` are EUR-denominated.
 
 ---
 
@@ -661,7 +666,91 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 
 ---
 
-### 7. Crypto Wallets — `/api/crypto/wallet`
+### 7. Bourse Direct — `/api/bourse-direct`
+
+The connector is read-only. Authentication persists an encrypted browser
+session, then portfolio import continues asynchronously.
+
+#### `POST /api/bourse-direct/auth/initiate`
+
+- **Auth:** Required
+- **Rate limit:** Per IP
+
+**Request body:**
+```json
+{ "login": "client-id", "password": "secret" }
+```
+
+**Response `200` — `BourseDirectAuthInitResponse`:**
+```json
+{ "processId": "uuid", "mfaRequired": true, "mfaType": "OTP" }
+```
+
+When `mfaRequired` is false, the encrypted session is already stored and its
+first portfolio import is queued.
+
+---
+
+#### `POST /api/bourse-direct/auth/complete`
+
+- **Auth:** Required
+- **Rate limit:** Per IP
+
+**Request body:**
+```json
+{ "processId": "uuid", "code": "123456" }
+```
+
+**Response `200` — `BourseDirectSessionStatus`**, normally with
+`syncStatus: "QUEUED"`.
+
+---
+
+#### `POST /api/bourse-direct/sync`
+
+- **Auth:** Required
+- **Body:** none
+
+**Response `202` — `BourseDirectSessionStatus`.** An already queued or running
+job is not duplicated; its current status is returned.
+
+---
+
+#### `GET /api/bourse-direct/status`
+
+- **Auth:** Required
+
+**Response `200` — `BourseDirectSessionStatus`:**
+```json
+{
+  "isActive": true,
+  "expiresAt": null,
+  "syncStatus": "SUCCESS",
+  "lastSyncStartedAt": "2026-07-20T09:59:40Z",
+  "lastSyncCompletedAt": "2026-07-20T10:00:00Z",
+  "lastSyncError": null
+}
+```
+
+`syncStatus` is one of `IDLE`, `QUEUED`, `RUNNING`, `SUCCESS`, or `FAILED`.
+
+---
+
+#### `DELETE /api/bourse-direct/session`
+
+- **Auth:** Required
+
+**Response `204`.** Imported accounts and history are retained.
+
+Domain failures use `422` RFC 7807 responses with a stable `code` property:
+`INVALID_CREDENTIALS`, `INVALID_OTP`, `AUTH_ATTEMPT_EXPIRED`,
+`SESSION_EXPIRED`, `PORTFOLIO_INCOMPLETE`, `UPSTREAM_FORMAT_CHANGED`,
+`UPSTREAM_UNAVAILABLE`, `INVALID_DATA`, or `INTERNAL_ERROR`. Authentication
+rate limiting returns `429`.
+
+---
+
+### 8. Crypto Wallets — `/api/crypto/wallet`
 
 #### `POST /api/crypto/wallet`
 
@@ -714,7 +803,7 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 
 ---
 
-### 8. Crypto Exchanges — `/api/crypto/exchange`
+### 9. Crypto Exchanges — `/api/crypto/exchange`
 
 #### `POST /api/crypto/exchange`
 
@@ -766,7 +855,7 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 
 ---
 
-### 9. Prices — `/api/prices`
+### 10. Prices — `/api/prices`
 
 #### `GET /api/prices`
 
@@ -790,7 +879,7 @@ Prices are in EUR. Results are cached for 15 minutes.
 
 ---
 
-### 10. Finary — `/api/finary`
+### 11. Finary — `/api/finary`
 
 Two import modes: **file-based** (XLSX upload) and **API-based** (direct sync). Both use a two-phase flow: preview then execute with account mappings.
 

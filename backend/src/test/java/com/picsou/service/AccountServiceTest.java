@@ -215,6 +215,74 @@ class AccountServiceTest {
         assertThat(result).isEqualByComparingTo("2300");
     }
 
+    @Test
+    void liveBalanceEur_bourseDirect_addsCashWhenAllPositionsArePriced() {
+        Account account = Account.builder().id(3L).name("PEA Bourse Direct")
+            .type(AccountType.PEA).provider("Bourse Direct").currency("EUR")
+            .currentBalance(new BigDecimal("1250")).cashBalance(new BigDecimal("250")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("ACME").quantity(new BigDecimal("10")).build();
+        when(holdingRepository.findByAccount_Id(3L)).thenReturn(List.of(holding));
+        when(priceService.getPriceEur("ACME")).thenReturn(new BigDecimal("100"));
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1250");
+    }
+
+    @Test
+    void liveBalanceEur_bourseDirect_usesBrokerTotalWhenAnyPositionIsUnpriced() {
+        Account account = Account.builder().id(3L).name("PEA Bourse Direct")
+            .type(AccountType.PEA).provider("Bourse Direct").currency("EUR")
+            .currentBalance(new BigDecimal("1250")).cashBalance(new BigDecimal("250")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("UNKNOWN").quantity(new BigDecimal("10")).build();
+        when(holdingRepository.findByAccount_Id(3L)).thenReturn(List.of(holding));
+        when(priceService.getPriceEur("UNKNOWN")).thenReturn(null);
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1250");
+    }
+
+    @Test
+    void calculateInvestedAmount_includesCashAndPrefersBrokerEurCostBasis() {
+        Account account = Account.builder().id(3L)
+            .currentBalance(new BigDecimal("1250"))
+            .cashBalance(new BigDecimal("250"))
+            .build();
+        AccountHolding holding = AccountHolding.builder()
+            .quantity(new BigDecimal("10"))
+            .averageBuyIn(new BigDecimal("90"))
+            .providerValueEur(new BigDecimal("1000"))
+            .providerPnlEur(new BigDecimal("200"))
+            .build();
+        when(holdingRepository.findByAccount_Id(3L)).thenReturn(List.of(holding));
+
+        assertThat(accountService.calculateInvestedAmount(account))
+            .isEqualByComparingTo("1050");
+    }
+
+    @Test
+    void updateHolding_clearsBrokerValuesThatNoLongerMatchTheUserEdit() {
+        Account account = ownedAccount();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("ACME")
+            .quantity(new BigDecimal("10"))
+            .averageBuyIn(new BigDecimal("80"))
+            .providerValueEur(new BigDecimal("1000"))
+            .providerPnlEur(new BigDecimal("200"))
+            .build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(holdingRepository.findByAccountIdAndTicker(1L, "ACME")).thenReturn(Optional.of(holding));
+        when(holdingRepository.save(holding)).thenReturn(holding);
+
+        accountService.updateHolding(
+            1L, 7L, "ACME", new BigDecimal("8"), new BigDecimal("75")
+        );
+
+        assertThat(holding.getQuantity()).isEqualByComparingTo("8");
+        assertThat(holding.getAverageBuyIn()).isEqualByComparingTo("75");
+        assertThat(holding.getProviderValueEur()).isNull();
+        assertThat(holding.getProviderPnlEur()).isNull();
+    }
+
     // ─── signedLiveBalanceEur ─────────────────────────────────────────────────
 
     @Test

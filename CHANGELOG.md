@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
+  handles login and the six-digit security code, then imports PEA/CTO positions,
+  average cost, current price, valuation and account cash. Credentials and OTPs
+  are never persisted; only the complete browser session is encrypted at rest.
+  Sessions support manual and daily sync, and accounts remain explicitly typed
+  as PEA or securities accounts. Imports expose queued/running/success/failure
+  progress, reject unreconciled partial portfolios, preserve the last valid
+  holdings on failure, and retain native quote currencies alongside broker EUR
+  valuations. See [feature notes](docs/features/bourse-direct.md) and the
+  [ADR](docs/decisions/2026-07-21-bourse-direct-isolated-atomic-sync.md).
 - **BNB Chain support and EVM multichain wallets.** On-chain wallets gained an
   `EVM` chain that tracks a single `0x` address across every enabled EVM network
   — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche —

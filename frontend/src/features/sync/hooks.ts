@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   bankSyncApi,
@@ -6,6 +7,7 @@ import {
   cryptoWalletApi,
   finaryApi,
   boursoApi,
+  bourseDirectApi,
 } from './api'
 import type {
   ExchangeType,
@@ -24,6 +26,7 @@ export const syncKeys = {
   institutions: (q: string) => [...syncKeys.all, 'institutions', q] as const,
   tr: () => [...syncKeys.all, 'tr'] as const,
   bourso: () => [...syncKeys.all, 'bourso'] as const,
+  bourseDirect: () => [...syncKeys.all, 'bourse-direct'] as const,
   exchanges: () => [...syncKeys.all, 'exchanges'] as const,
   wallets: () => [...syncKeys.all, 'wallets'] as const,
   finary: () => [...syncKeys.all, 'finary'] as const,
@@ -212,6 +215,79 @@ export function useSyncBourso() {
     mutationFn: () => boursoApi.sync(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: syncKeys.bourso() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Bourse Direct
+// ---------------------------------------------------------------------------
+
+export function useBourseDirectStatus() {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: syncKeys.bourseDirect(),
+    queryFn: bourseDirectApi.getStatus,
+    staleTime: 0,
+    refetchInterval: currentQuery => {
+      const state = currentQuery.state.data?.syncStatus
+      return state === 'QUEUED' || state === 'RUNNING' ? 1_500 : 30_000
+    },
+  })
+  const completedAt = query.data?.lastSyncCompletedAt
+  const succeeded = query.data?.syncStatus === 'SUCCESS'
+
+  useEffect(() => {
+    if (!succeeded || !completedAt) return
+    queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+  }, [completedAt, queryClient, succeeded])
+
+  return query
+}
+
+export function useInitiateBourseDirectAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ login, password }: { login: string; password: string }) =>
+      bourseDirectApi.initiateAuth(login, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.bourseDirect() })
+    },
+  })
+}
+
+export function useCompleteBourseDirectAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ processId, code }: { processId: string; code: string }) =>
+      bourseDirectApi.completeAuth(processId, code),
+    onSuccess: status => {
+      queryClient.setQueryData(syncKeys.bourseDirect(), status)
+      queryClient.invalidateQueries({ queryKey: syncKeys.bourseDirect() })
+    },
+  })
+}
+
+export function useSyncBourseDirect() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: bourseDirectApi.sync,
+    onSuccess: status => {
+      queryClient.setQueryData(syncKeys.bourseDirect(), status)
+      queryClient.invalidateQueries({ queryKey: syncKeys.bourseDirect() })
+    },
+  })
+}
+
+export function useClearBourseDirectSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: bourseDirectApi.clearSession,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.bourseDirect() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },

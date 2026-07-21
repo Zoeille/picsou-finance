@@ -53,16 +53,16 @@ export function HoldingsTable({ holdings, onEdit, onDelete }: HoldingsTableProps
                 <TableCell>{h.name ?? h.ticker}</TableCell>
                 <TableCell className="text-right">{h.quantity}</TableCell>
                 <TableCell className="text-right">
-                  {h.averageBuyIn ? <CurrencyDisplay value={h.averageBuyIn} className="text-sm" /> : '\u2014'}
+                  {h.averageBuyIn != null ? <CurrencyDisplay value={h.averageBuyIn} className="text-sm" /> : '\u2014'}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex items-center gap-1.5">
                     <PriceFreshnessDot priceUpdatedAt={h.priceUpdatedAt} />
-                    {h.currentPrice ? <CurrencyDisplay value={h.currentPrice} className="text-sm" /> : '\u2014'}
+                    {h.currentPrice != null ? <CurrencyDisplay value={h.currentPrice} currency={h.quoteCurrency ?? undefined} className="text-sm" /> : '\u2014'}
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {h.currentValueEur ? <CurrencyDisplay value={h.currentValueEur} className="text-sm" /> : '\u2014'}
+                  {h.currentValueEur != null ? <CurrencyDisplay value={h.currentValueEur} className="text-sm" /> : '\u2014'}
                 </TableCell>
                 <TableCell className={cn('text-right', h.pnlEur != null && h.pnlEur >= 0 ? 'text-emerald-500' : h.pnlEur != null && h.pnlEur < 0 ? 'text-red-500' : '')}>
                   {h.pnlEur != null ? <CurrencyDisplay value={h.pnlEur} showSign className="text-sm" /> : '\u2014'}

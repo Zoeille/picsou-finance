@@ -141,6 +141,8 @@ app:
     url: ${TR_AUTH_URL:http://tr-auth:8001}
   bourso-auth:
     url: ${BOURSO_AUTH_URL:http://bourso-auth:8001}
+  bourse-direct-auth:
+    url: ${BOURSE_DIRECT_AUTH_URL:http://bourse-direct-auth:8001}
   enablebanking:
     application-id: ${ENABLEBANKING_APPLICATION_ID:}
     key-id: ${ENABLEBANKING_KEY_ID:}

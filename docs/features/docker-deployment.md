@@ -1,14 +1,15 @@
 # Feature: Docker deployment
 
-> Last updated: 2026-07-19 (optional Caddy TLS profile, HSTS made opt-in)
+> Last updated: 2026-07-21 (Bourse Direct internal sidecar)
 
 ## Context
 
-Picsou deploys as two Docker images orchestrated by `docker/docker-compose.yml`:
+Picsou deploys as three Docker images orchestrated by `docker/docker-compose.yml`:
 - **`picsou:latest`** — main app: frontend (Nginx) + backend (Spring Boot), no Python. Published to GHCR as `ghcr.io/zoeille/picsou-finance`.
 - **`docker-tr-auth`** — Trade Republic auth sidecar: headless Chromium + Python/uvicorn. Published to GHCR as `ghcr.io/zoeille/picsou-finance/tr-auth`.
+- **`bourse-direct-auth`** — isolated Bourse Direct login/2FA sidecar, published to GHCR as `ghcr.io/zoeille/picsou-finance/bourse-direct-auth` and reachable only on the Compose network.
 
-A third container is PostgreSQL 16 (official image, not built).
+A fourth container is PostgreSQL 16 (official image, not built).
 
 ## How it works
 
@@ -28,6 +29,13 @@ A third container is PostgreSQL 16 (official image, not built).
 ### tr-auth sidecar — `services/tr-auth/Dockerfile`
 
 Based on `python:3.12-slim`. Installs only Chromium (not Firefox/WebKit) via `playwright install chromium`, with system deps pre-installed via apt. The sidecar exposes port 8001 and is reached by the backend via `TR_AUTH_URL=http://tr-auth:8001`.
+
+### Bourse Direct sidecar — `services/bourse-direct-auth/Dockerfile`
+
+Based on `python:3.12-slim-bookworm`, with Chromium only. It runs as a
+dedicated non-root user and is reached by the backend at
+`BOURSE_DIRECT_AUTH_URL=http://bourse-direct-auth:8001`. Compose does not
+publish its port, so login, 2FA and portfolio endpoints remain internal.
 
 ### Entrypoint (`docker/entrypoint.sh`)
 
@@ -138,9 +146,10 @@ fixed at create time, so the new value is never seen.
 ### Key files
 
 - `docker/Dockerfile` — main image, 3-stage build
-- `docker/docker-compose.yml` — orchestration (app + proxy + tr-auth + PostgreSQL + volumes)
+- `docker/docker-compose.yml` — orchestration (app + proxy + both broker sidecars + PostgreSQL + volumes)
 - `docker/Caddyfile` — optional TLS terminator (profile `tls`)
 - `services/tr-auth/Dockerfile` — tr-auth sidecar image
+- `services/bourse-direct-auth/Dockerfile` — Bourse Direct sidecar image
 - `docker/nginx.conf` — Nginx reverse proxy config
 - `docker/supervisord.conf` — supervisor (nginx + backend)
 - `docker/entrypoint.sh` — secret bootstrap + HSTS snippet + exec supervisord
@@ -151,6 +160,7 @@ fixed at create time, so the new value is never seen.
 docker compose -f docker/docker-compose.yml up
   → picsou:latest  (nginx:8080 → backend:9090)
   → docker-tr-auth (uvicorn:8001)
+  → bourse-direct-auth (uvicorn:8001, internal only)
   → postgres:16-alpine (:5432)
 ```
 
@@ -158,23 +168,25 @@ docker compose -f docker/docker-compose.yml up
 
 ```bash
 docker compose -f docker/docker-compose.yml build
-docker save picsou:latest docker-tr-auth:latest | gzip > picsou-release.tar.gz
+docker save ghcr.io/zoeille/picsou-finance:latest \
+  ghcr.io/zoeille/picsou-finance/tr-auth:latest \
+  ghcr.io/zoeille/picsou-finance/bourse-direct-auth:latest \
+  | gzip > picsou-release.tar.gz
 # On target machine:
 docker load < picsou-release.tar.gz
 ```
 
 ### Pulling from GHCR
 
-Both images are published by `.github/workflows/docker.yml` on every push (matrix build, one entry per image). To deploy from the registry instead of building or loading a tar.gz:
+All three images are published by `.github/workflows/docker.yml` on every push
+(matrix build, one entry per image). To deploy from the registry instead of
+building or loading a tar.gz:
 
 ```bash
 # Replace 1.0.0 with the desired tag (nightly, branch name, or semver).
 docker pull ghcr.io/zoeille/picsou-finance:1.0.0
 docker pull ghcr.io/zoeille/picsou-finance/tr-auth:1.0.0
-
-# Re-tag to the local names referenced by docker-compose.yml:
-docker tag ghcr.io/zoeille/picsou-finance:1.0.0       picsou:latest
-docker tag ghcr.io/zoeille/picsou-finance/tr-auth:1.0.0 docker-tr-auth:latest
+docker pull ghcr.io/zoeille/picsou-finance/bourse-direct-auth:1.0.0
 ```
 
 Tag scheme:
@@ -205,7 +217,7 @@ docker build -f docker/Dockerfile --build-arg APP_VERSION=1.0.13 .
 | Choice | Why | Rejected alternative |
 |--------|-----|----------------------|
 | Bun for frontend build | Project uses bun exclusively (`bun.lock`) | npm (would need a separate lock file) |
-| tr-auth as a separate container | Keeps the main image slim (JRE only, no Python/Playwright) | Embed tr-auth in the main image via supervisord — was done previously, bloated the main image to 1.5GB+ |
+| Browser connectors as separate containers | Keeps the main image slim (JRE only, no Python/Playwright) and isolates unofficial browser protocols | Embed browser automation in the main image via supervisord |
 | `python:3.12-slim` + Chromium only | Only Chromium is used (`p.chromium.launch()`); base image is ~5× smaller than `mcr.microsoft.com/playwright/python` which pre-installs all three browsers | `mcr.microsoft.com/playwright/python:v1.44.0-jammy` — included Firefox + WebKit unnecessarily (+~1.5GB uncompressed) |
 | Auto-generated secrets on first boot | Zero-config install: user runs `docker compose up` with no pre-configuration | Require operator to set secrets manually before first boot |
 | `.dockerignore` excludes `docker/Dockerfile` | Prevents the Dockerfile from being part of its own build context | No exclusion (harmless but unnecessary) |
@@ -221,6 +233,7 @@ docker build -f docker/Dockerfile --build-arg APP_VERSION=1.0.13 .
 - **`picsou.localhost` (the `PICSOU_DOMAIN` default) only resolves on the Docker host itself** — browsers map `*.localhost` to loopback. Fine for verifying the profile works; set a LAN IP or a real domain for access from other devices. Enable Banking's portal may also refuse to register a `.localhost` redirect URL.
 - **Enabling the `tls` profile against a pre-built GHCR image does not get the HSTS fix.** `HSTS_ENABLED` gating lives in `nginx.conf` + `entrypoint.sh`, so an image built before that change still sends HSTS unconditionally — which is precisely the lockout combination with an internal-CA certificate. Pull a current image, or rebuild with `--build`.
 - **`TR_AUTH_URL` default in entrypoint is `http://127.0.0.1:8001`** (legacy single-container fallback). In docker-compose it is overridden to `http://tr-auth:8001` via the `environment:` block.
+- **Bourse Direct 2FA state is process-local.** Keep `bourse-direct-auth` at one replica unless request affinity or shared pending state is added.
 - **Secrets are never regenerated.** If `/data/.secrets/jwt_secret` exists, it is reused. Deleting it will log out all users and invalidate all encrypted secrets in the DB.
 - **Spring Boot env var naming:** Properties under `app.*` require the `APP_` prefix. `app.finary.email` → `APP_FINARY_EMAIL`. Variables like `JWT_SECRET` work because `application.yml` maps them explicitly.
 - **Stale env vars removed (2026-04-19):** `TR_PHONE_NUMBER`, `TR_PIN`, `FINARY_TOTP`, `POWENS_*`, `FINARY_EMAIL`, `FINARY_PASSWORD`. Do not re-add them.

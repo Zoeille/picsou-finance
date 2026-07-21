@@ -1,6 +1,7 @@
 interface ApiErrorBody {
   detail?: string | null
   message?: string | null
+  code?: string | null
 }
 
 function tryParseJson(s: string): ApiErrorBody | null {
@@ -9,7 +10,7 @@ function tryParseJson(s: string): ApiErrorBody | null {
 
 // Strings matching this leak server internals or are raw axios noise — they must
 // never be shown to the user. Callers fall back to a friendly i18n string instead.
-const LEAK_PATTERN = /Exception|\.java\b|\bjava\.|\borg\.|com\.picsou|Request failed with status code|stack ?trace/i
+const LEAK_PATTERN = /Exception|\.java\b|\bjava\.|\borg\.|com\.picsou|Request failed with status code|stack ?trace|Network Error|AxiosError|Failed to fetch/i
 
 function isSafeMessage(s: string): boolean {
   return s.trim().length > 0 && !LEAK_PATTERN.test(s)
@@ -64,6 +65,12 @@ export function getErrorStatus(err: unknown): number | undefined {
 export function getErrorDetail(err: unknown): string | undefined {
   const detail = (err as { response?: { data?: ApiErrorBody } })?.response?.data?.detail
   return typeof detail === 'string' ? detail : undefined
+}
+
+/** Stable machine-readable code attached to a ProblemDetail response. */
+export function getErrorCode(err: unknown): string | undefined {
+  const code = (err as { response?: { data?: ApiErrorBody } })?.response?.data?.code
+  return typeof code === 'string' ? code : undefined
 }
 
 // formatApiError only ever calls t with a single key argument, so we type it as

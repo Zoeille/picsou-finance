@@ -47,7 +47,7 @@ class SetupServiceTest {
 
         assertThat(response.state()).isEqualTo(SetupState.PENDING_ADMIN);
         assertThat(response.needsSetup()).isTrue();
-        assertThat(response.integrations()).containsKeys("enablebanking", "boursobank", "traderepublic", "finary", "crypto");
+        assertThat(response.integrations()).containsKeys("enablebanking", "boursobank", "boursedirect", "traderepublic", "finary", "crypto");
         assertThat(response.integrations().values()).allMatch(b -> !b);
     }
 

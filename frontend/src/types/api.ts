@@ -32,6 +32,7 @@ export interface Account {
   currency: string
   currentBalance: number
   currentBalanceEur: number
+  cashBalance?: number | null
   lastSyncedAt: string | null
   isManual: boolean
   color: string
@@ -191,6 +192,7 @@ export interface HoldingResponse {
   quantity: number
   averageBuyIn: number | null
   currentPrice: number | null
+  quoteCurrency?: string | null
   currentValueEur: number | null
   costBasisEur: number | null
   pnlEur: number | null
@@ -264,6 +266,32 @@ export interface BoursoAuthInitResponse {
   mfaRequired: boolean
   mfaType: string | null
   contact: string | null
+}
+
+export interface BourseDirectSessionStatus {
+  isActive: boolean
+  expiresAt: string | null
+  syncStatus: 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED'
+  lastSyncStartedAt: string | null
+  lastSyncCompletedAt: string | null
+  lastSyncError: BourseDirectErrorCode | null
+}
+
+export type BourseDirectErrorCode =
+  | 'INVALID_CREDENTIALS'
+  | 'INVALID_OTP'
+  | 'AUTH_ATTEMPT_EXPIRED'
+  | 'SESSION_EXPIRED'
+  | 'PORTFOLIO_INCOMPLETE'
+  | 'UPSTREAM_FORMAT_CHANGED'
+  | 'UPSTREAM_UNAVAILABLE'
+  | 'INVALID_DATA'
+  | 'INTERNAL_ERROR'
+
+export interface BourseDirectAuthInitResponse {
+  processId: string | null
+  mfaRequired: boolean
+  mfaType: string | null
 }
 
 export interface FinaryAccountPreview {

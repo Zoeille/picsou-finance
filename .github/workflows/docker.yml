@@ -30,6 +30,11 @@ jobs:
             context: services/tr-auth
             dockerfile: services/tr-auth/Dockerfile
             versioned: false
+          - name: bourse-direct-auth
+            image: ${{ github.repository }}/bourse-direct-auth
+            context: services/bourse-direct-auth
+            dockerfile: services/bourse-direct-auth/Dockerfile
+            versioned: false
 
     steps:
       - name: Checkout

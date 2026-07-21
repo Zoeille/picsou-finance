@@ -107,6 +107,7 @@ class DataExportServiceTest {
         Account a = Account.builder()
             .id(100L).member(member).name("Crypto wallet").type(AccountType.CRYPTO)
             .currency("EUR").currentBalance(new BigDecimal("12345.67"))
+            .cashBalance(new BigDecimal("345.67"))
             .ticker("BTC").color("#fa0").isManual(true).provider("manual")
             .lastSyncedAt(Instant.parse("2026-01-01T00:00:00Z"))
             .build();
@@ -114,6 +115,9 @@ class DataExportServiceTest {
             .id(200L).account(a).ticker("BTC").name("Bitcoin")
             .quantity(new BigDecimal("0.5")).averageBuyIn(new BigDecimal("30000"))
             .currentPrice(new BigDecimal("65000"))
+            .quoteCurrency("USD")
+            .providerValueEur(new BigDecimal("30000"))
+            .providerPnlEur(new BigDecimal("15000"))
             .build();
         Requisition connection = Requisition.builder()
             .id(300L).member(member)
@@ -224,9 +228,17 @@ class DataExportServiceTest {
         assertThat(parsed.get("profile").get("username").asText()).isEqualTo("chloe");
         assertThat(parsed.get("accounts")).hasSize(1);
         assertThat(parsed.get("holdings")).hasSize(1);
+        assertThat(parsed.get("accounts").get(0).get("cash_balance").decimalValue())
+            .isEqualByComparingTo("345.67");
+        assertThat(parsed.get("holdings").get(0).get("quote_currency").asText())
+            .isEqualTo("USD");
+        assertThat(parsed.get("holdings").get(0).get("provider_value_eur").decimalValue())
+            .isEqualByComparingTo("30000");
 
         String accountsCsv = new String(entries.get("accounts.csv"));
         assertThat(accountsCsv).contains("Crypto wallet").contains("BTC").contains("12345.67");
+        String holdingsCsv = new String(entries.get("holdings.csv"));
+        assertThat(holdingsCsv).contains("USD").contains("30000").contains("15000");
 
         // Whole-archive byte-grep: NONE of the known secret tokens may appear anywhere
         // (data.json, csv files, README, ZIP metadata) — this is the GDPR safety net.

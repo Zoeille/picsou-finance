@@ -39,6 +39,12 @@ vi.mock('react-i18next', () => ({
   }),
 }))
 
+vi.mock('@/components/sync/BourseDirectPanel', () => ({
+  BourseDirectPanel: ({ onConnected }: { onConnected?: () => void }) => (
+    <button onClick={onConnected}>bourse-direct-wizard</button>
+  ),
+}))
+
 vi.stubGlobal('ResizeObserver', class {
   observe() {}
   unobserve() {}
@@ -122,5 +128,17 @@ describe('AddAccountModal Trade Republic wizard', () => {
       { processId: 'process-123', tan: '9876' },
       expect.any(Object),
     )
+  })
+})
+
+describe('AddAccountModal Bourse Direct wizard', () => {
+  it('opens the connector and closes after authentication', () => {
+    const onOpenChange = vi.fn()
+    render(<AddAccountModal open onOpenChange={onOpenChange} />)
+
+    fireEvent.click(screen.getByText('sync.bourseDirect.title'))
+    fireEvent.click(screen.getByRole('button', { name: 'bourse-direct-wizard' }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

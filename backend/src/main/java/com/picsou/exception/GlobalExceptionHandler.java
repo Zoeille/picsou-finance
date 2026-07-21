@@ -38,7 +38,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(SyncException.class)
     ProblemDetail handleSync(SyncException ex) {
         log.warn("Sync error: {}", ex.getMessage());
-        return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        if (ex.getCode() != null) {
+            detail.setProperty("code", ex.getCode());
+        }
+        return detail;
     }
 
     // Defense-in-depth: WalletSyncService.sync() already catches WalletRpcException and

@@ -15,7 +15,7 @@ com.picsou/
 │                   BalanceSnapshot, Goal, GoalManualContribution, GoalContributor,
 │                   Debt, RealEstateMetadata, WalletAddress;
 │                   integrations: Requisition, TradeRepublicSession, CryptoExchangeSession,
-│                   FinarySession, BoursoSession, PriceSnapshot;
+│                   FinarySession, BoursoSession, BourseDirectSession, PriceSnapshot;
 │                   identity & sharing: AppUser, FamilyMember, UserRole, SharingSettings,
 │                   SharingLevel, SharedResource, UserMfa, UserMfaRecoveryCode,
 │                   PersistentSession;
@@ -27,6 +27,7 @@ com.picsou/
 │                   SchedulerService;
 │                   integrations: SyncService, TradeRepublicSyncService,
 │                   CryptoExchangeSyncService, WalletSyncService, BoursoSyncService,
+│                   BourseDirectSyncService,
 │                   FinaryImportService, FinaryApiSyncService;
 │                   identity & family: UserContext, FamilyService, FamilyViewService,
 │                   MfaService, PersistentSessionService, ReAuthService;
@@ -35,11 +36,12 @@ com.picsou/
 │                   EnableBankingKeyPairService
 ├── controller/     REST controllers under /api/ — auth, mfa, sessions, family,
 │                   accounts, transactions, holdings, goals, debts, dashboard, history,
-│                   sync, tr, bourso, crypto-exchange, wallet, finary-import,
+│                   sync, tr, bourso, bourse-direct, crypto-exchange, wallet, finary-import,
 │                   finary-api-sync, setup, admin, admin-mfa, me-export, price
 ├── dto/            Request/response records (records are the convention)
 ├── port/           Port interfaces (BankConnectorPort, PriceProviderPort,
-│                   TradeRepublicPort, CryptoExchangePort, WalletPort, BoursoPort)
+│                   TradeRepublicPort, CryptoExchangePort, WalletPort, BoursoPort,
+│                   BourseDirectPort)
 ├── adapter/        Port implementations + util/BitcoinKeyUtils
 │   ├── EnableBankingBankConnector (bank sync)
 │   ├── PowensBankConnector (Powens / Budget Insight — experimental, disabled in 1.0.0)
@@ -47,6 +49,7 @@ com.picsou/
 │   ├── CoinGeckoPriceProvider, YahooFinancePriceProvider (prices)
 │   ├── OpenFigiIsinConverter (ISIN → Yahoo ticker)
 │   ├── TradeRepublicAdapter (broker)
+│   ├── BourseDirectAdapter (broker sidecar)
 │   ├── BinanceAdapter (crypto exchange)
 │   ├── BitcoinWalletAdapter, EvmWalletAdapter, SolanaWalletAdapter (on-chain)
 │   └── util/BitcoinKeyUtils (BIP32 key derivation, Base58Check, Bech32)
@@ -80,7 +83,7 @@ frontend/src/
 ├── lib/             api-client, utils, constants, query-client
 ├── types/           api.ts (DTOs), app.ts (frontend types)
 ├── demo/            Demo mode interceptor + mock data
-├── i18n/            i18next setup + FR/EN translations
+├── i18n/            i18next setup + FR/EN/DE/ES translations
 └── main.tsx         Bootstrap + demo mode setup
 ```
 
@@ -110,7 +113,21 @@ Client → TradeRepublicController → TRSyncService → TRAdapter → tr-auth (
 
 Broker sync via Python microservice (Playwright automation). Two modes: automatic WebSocket sync and CSV import fallback. Session persisted in `TradeRepublicSession` entity.
 
-### 4. Crypto exchange
+### 4. Bourse Direct
+
+```text
+Client -> BourseDirectController -> BourseDirectSyncService -> BourseDirectPort
+       -> BourseDirectAdapter -> internal FastAPI/Playwright sidecar -> Bourse Direct
+```
+
+The sidecar owns browser login, one-time-code completion and normalization of
+modern/legacy portfolio streams. It returns only strict, reconciled snapshots.
+The Java service queues imports, performs external calls outside database
+transactions, then atomically replaces holdings and writes the daily account
+snapshot. The encrypted browser state and observable job status live in
+`BourseDirectSession`. See the [Bourse Direct ADR](./decisions/2026-07-21-bourse-direct-isolated-atomic-sync.md).
+
+### 5. Crypto exchange
 
 ```
 Client → CryptoExchangeController → CryptoSyncService → BinanceAdapter → Binance API
@@ -118,7 +135,7 @@ Client → CryptoExchangeController → CryptoSyncService → BinanceAdapter →
 
 Binance API credentials encrypted at rest with AES-256-GCM (`CryptoEncryption`). `CRYPTO_ENCRYPTION_KEY` env var required.
 
-### 5. Wallet sync
+### 6. Wallet sync
 
 ```
 Client → WalletController → WalletSyncService → WalletPort → blockchain RPCs
@@ -126,7 +143,7 @@ Client → WalletController → WalletSyncService → WalletPort → blockchain 
 
 Three adapters: Bitcoin (Blockstream Esplora, BIP32 xpub/zpub/descriptors), EVM (keyless PublicNode RPCs — one `0x` address fanned out across Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche; native + curated ERC-20 tokens), Solana (RPC + curated SPL tokens). See the [EVM multichain wallets ADR](./decisions/2026-07-17-evm-multichain-wallets.md).
 
-### 6. Dashboard
+### 7. Dashboard
 
 ```
 Client → DashboardController → DashboardService → Account + Snapshot + PriceService aggregation
@@ -134,7 +151,7 @@ Client → DashboardController → DashboardService → Account + Snapshot + Pri
 
 Aggregates all account balances, applies current prices via `PriceService`, computes net worth and allocation breakdown.
 
-### 7. Goals
+### 8. Goals
 
 ```
 Client → GoalController → GoalService → Goal + GoalMonthOverride repos
@@ -142,7 +159,7 @@ Client → GoalController → GoalService → Goal + GoalMonthOverride repos
 
 Savings goals with deadlines, linked to accounts via M:N join table (`goal_account`). Monthly tracking with optional per-month overrides.
 
-### 8. First-launch setup wizard
+### 9. First-launch setup wizard
 
 ```
 Browser → SetupFilter → /setup → SetupController → SetupService → AppSetting / SetupAudit
@@ -153,7 +170,7 @@ Browser → SetupFilter → /setup → SetupController → SetupService → AppS
 
 `SetupFilter` redirects every request to `/setup` until `SetupState.completed = true`. The wizard collects admin credentials, security settings (CORS, encryption key), and per-integration credentials. Each step is appended to `setup_audit` (actor, IP, timestamp). After completion, the filter becomes a no-op.
 
-### 9. Authentication & MFA
+### 10. Authentication & MFA
 
 ```
 POST /api/auth/login → AuthController → (if 2FA) issue mfa_challenge JWT → 401 + cookie
@@ -165,7 +182,7 @@ Every request → JwtAuthenticationFilter → check tv claim vs AppUser.tokenVer
 
 Password change in `AuthController.changePassword` bumps `AppUser.tokenVersion`, revokes all `PersistentSession`s for the user, clears the persistent cookie, and re-issues fresh access/refresh cookies.
 
-### 10. Family sharing
+### 11. Family sharing
 
 ```
 Member viewing dashboard → DashboardService scopes by UserContext.currentMemberId()
@@ -176,7 +193,7 @@ Family dashboard → FamilyViewController → FamilyViewService
 
 Admins can use `/admin/impersonate/{memberId}` to view another member's data; `UserContext.getMemberIdOverride()` returns the override; audit trail in `setup_audit`.
 
-### 11. GDPR data export
+### 12. GDPR data export
 
 ```
 POST /api/me/export/reauth → ReAuthService verifies password (+ TOTP if enabled)
@@ -186,7 +203,7 @@ GET  /api/me/export        → DataExportService runs each EntityExporter
 
 Wrapped in a read-only Spring transaction; rate-limited via `RateLimitConfig`.
 
-### 12. Loan amortization
+### 13. Loan amortization
 
 ```
 GET /api/accounts/{id}/loan-schedule → AccountController → LoanAmortizationService
@@ -200,10 +217,11 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 | Service | Usage | Config |
 |---------|-------|--------|
 | PostgreSQL 16 | Persistence | `SPRING_DATASOURCE_URL` |
-| Flyway | Schema migrations | `db/migration/` (latest V32) |
+| Flyway | Schema migrations | `db/migration/` (latest V59) |
 | Enable Banking | PSD2 bank sync (optional) | `ENABLEBANKING_*` |
 | Powens / Budget Insight | Scraping bank sync (**experimental, disabled in 1.0.0**) | `POWENS_*` |
 | Trade Republic | Broker sync via Python microservice | `TR_AUTH_URL` |
+| Bourse Direct | PEA/CTO sync via internal Python sidecar | `BOURSE_DIRECT_AUTH_URL` |
 | BoursoBank | Bank sync via Python sidecar (**disabled in 1.0.0**) | `BOURSO_AUTH_URL` |
 | Binance | Crypto exchange balances | Via CryptoExchangePort |
 | CoinGecko | Crypto prices (free) | No config |
