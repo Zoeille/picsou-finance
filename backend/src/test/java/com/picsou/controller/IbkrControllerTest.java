@@ -115,6 +115,22 @@ class IbkrControllerTest {
         verify(ibkrService, times(SYNC_BUDGET_PER_MINUTE)).sync(42L);
     }
 
+    /**
+     * Service failures must propagate untouched: the controller does no catching, so
+     * a SyncException reaches GlobalExceptionHandler (mapped there, not here) instead
+     * of being swallowed or rewrapped. Pinned by identity, not just by type.
+     */
+    @Test
+    void sync_propagatesServiceExceptions_untouched() {
+        when(userContext.currentMemberId()).thenReturn(42L);
+        com.picsou.exception.SyncException boom =
+            new com.picsou.exception.SyncException("Token expired. Please reconnect.");
+        when(ibkrService.sync(42L)).thenThrow(boom);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.sync(httpReq))
+            .isSameAs(boom);
+    }
+
     /** The budget is per client IP: exhausting one IP must not throttle another. */
     @Test
     void sync_rateLimitIsKeyedPerClientIp() {

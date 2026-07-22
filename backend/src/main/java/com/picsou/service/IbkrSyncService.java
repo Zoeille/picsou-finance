@@ -135,10 +135,12 @@ public class IbkrSyncService {
     }
 
     /**
-     * Scheduler entry point — no-op if the member has no connection. NEVER throws:
-     * {@code SchedulerService.dailyBankSync} calls it unwrapped (like the TR/Bourso
-     * siblings), so an escaping exception — including a DB error on the connection
-     * lookup itself — would halt the loop and skip every remaining member's sync.
+     * Scheduler entry point — no-op if the member has no connection. Swallows and logs
+     * sync failures so they do not propagate — but this is best effort, NOT a hard
+     * no-throw contract: when a repository call fails inside the sync, the shared
+     * transaction is marked rollback-only through the repository's own proxy, and
+     * Spring throws {@code UnexpectedRollbackException} at THIS method's proxy exit,
+     * after the catch below. Call sites must wrap accordingly (SchedulerService does).
      */
     public void resyncIfConnected(Long memberId) {
         try {

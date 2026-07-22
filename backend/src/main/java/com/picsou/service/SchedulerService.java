@@ -94,7 +94,18 @@ public class SchedulerService {
 
             trSyncService.resyncIfSessionActive(memberId);
             boursoSyncService.resyncIfSessionActive(memberId);
-            ibkrSyncService.resyncIfConnected(memberId);
+
+            try {
+                ibkrSyncService.resyncIfConnected(memberId);
+            } catch (Exception ex) {
+                // resyncIfConnected swallows sync failures itself, but Spring can still
+                // throw UnexpectedRollbackException AT THE PROXY EXIT: a repository call
+                // failing inside the sync marks the shared transaction rollback-only
+                // through the repository's own proxy, and the commit attempt happens
+                // after the method's internal catch. Without this wrapper that breaks
+                // the loop for every remaining member.
+                log.error("Daily IBKR auto-sync failed for member {}", memberId, ex);
+            }
 
             try {
                 cryptoExchangeSyncService.resyncAll(memberId);

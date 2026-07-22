@@ -476,6 +476,51 @@ class IbkrSyncServiceTest {
         verify(holdingRepository, times(1)).save(any(AccountHolding.class));
     }
 
+    // ─── resyncIfConnected (scheduler entry point) ───────────────────────────
+    // NB: these Mockito tests cover the in-method swallowing only. The proxy-level
+    // UnexpectedRollbackException (rollback-only marked through a repository proxy,
+    // thrown at method exit) cannot exist without Spring proxies — that path is
+    // guarded by the call-site wrapper in SchedulerService.
+
+    @Test
+    void resyncIfConnected_withoutConnection_isANoOp() {
+        when(connectionRepository.findByMemberId(7L)).thenReturn(Optional.empty());
+
+        service.resyncIfConnected(7L);
+
+        verifyNoInteractions(ibkrFlexPort);
+        verifyNoInteractions(statusWriter);
+    }
+
+    @Test
+    void resyncIfConnected_swallowsSyncException_afterMarkingError() {
+        FamilyMember member = FamilyMember.builder().id(7L).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .id(42L).member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(7L)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenThrow(new IllegalStateException("bad key"));
+
+        service.resyncIfConnected(7L);  // must not throw
+
+        verify(statusWriter).markError(42L);
+    }
+
+    @Test
+    void resyncIfConnected_swallowsUnexpectedRuntimeExceptions() {
+        FamilyMember member = FamilyMember.builder().id(7L).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .id(42L).member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(7L)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query"))
+            .thenThrow(new NullPointerException("bug"));
+
+        service.resyncIfConnected(7L);  // must not throw
+
+        verify(statusWriter).markError(42L);
+    }
+
     /** Convenience builder for an account "U1" SUMMARY position. */
     private static IbkrPosition pos(String isin, String symbol, String assetCategory,
                                     BigDecimal position, BigDecimal costBasisPrice, BigDecimal fxRateToBase) {
