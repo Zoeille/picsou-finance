@@ -243,7 +243,8 @@ class IbkrSyncServiceTest {
      * resolves, an ISIN that OpenFIGI misses (→ symbol fallback), a symbol-only line, a
      * cash line, a zero-quantity line, and an over-long derivative symbol. Only the three
      * price-able equities become holdings; cash / zero-qty / over-long are dropped, and a
-     * null fxRateToBase leaves the cost basis unscaled.
+     * null fxRateToBase on a NON-EUR position leaves the cost basis unknown (null) —
+     * treating the missing rate as 1 would store a USD price as if it were EUR.
      */
     @Test
     void sync_handlesMixedAssetClassesAndSkipsUnsupportedRows() {
@@ -288,8 +289,8 @@ class IbkrSyncServiceTest {
         assertThat(byTicker.keySet()).containsExactlyInAnyOrder("AAPL", "TSLA", "PLTR");
         // ISIN hit: 150 × 0.90 = 135 EUR cost basis.
         assertThat(byTicker.get("AAPL").getAverageBuyIn()).isEqualByComparingTo("135");
-        // No fxRateToBase → cost basis left unscaled (× 1).
-        assertThat(byTicker.get("PLTR").getAverageBuyIn()).isEqualByComparingTo("40");
+        // No fxRateToBase on a USD position → cost basis is unknown, not "40 EUR".
+        assertThat(byTicker.get("PLTR").getAverageBuyIn()).isNull();
     }
 
     /**

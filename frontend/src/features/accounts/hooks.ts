@@ -36,8 +36,10 @@ function recomputeWithLivePrice(
   const costBasisEur = input.averageBuyIn != null ? input.quantity * input.averageBuyIn : null
   const currentValueEur = input.quantity * livePrice
   const pnlEur = costBasisEur != null ? currentValueEur - costBasisEur : null
+  // Math.abs: a short position has a negative cost basis — dividing by it would flip
+  // the sign and show a winning short as a loss. Mirrors the backend formula.
   const pnlPercent = costBasisEur != null && costBasisEur !== 0
-    ? (pnlEur! / costBasisEur) * 100
+    ? (pnlEur! / Math.abs(costBasisEur)) * 100
     : null
   return { currentValueEur, costBasisEur, pnlEur, pnlPercent }
 }

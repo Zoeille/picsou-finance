@@ -66,7 +66,7 @@ public class IbkrSyncService {
     private final IbkrStatusWriter statusWriter;
 
     /** Column limits of {@code account_holding} (see V11): ticker VARCHAR(30), name VARCHAR(100). */
-    private static final int MAX_TICKER_LEN = 100000; // JUDGE-TEMP: guard disabled to prove no test covers it
+    private static final int MAX_TICKER_LEN = 30;
     private static final int MAX_NAME_LEN = 100;
 
     /**
@@ -379,13 +379,19 @@ public class IbkrSyncService {
         return new TickerResult(p.symbol(), p.description());
     }
 
-    /** Cost basis per unit in the account base currency (≈EUR). Null when unknown. */
+    /**
+     * Cost basis per unit in the account base currency (≈EUR). Null when unknown —
+     * including a non-EUR position WITHOUT {@code fxRateToBase}: "FX Rate to Base" is a
+     * column the user must tick on the Flex Query, and treating a missing rate as 1 would
+     * silently store a USD (or worse, JPY) price as if it were EUR. An unknown cost basis
+     * (no invested/P&L figures) is honest; a wrong one is not.
+     */
     private BigDecimal eurCostBasis(IbkrPosition p) {
         if (p.costBasisPrice() == null) {
             return null;
         }
-        BigDecimal rate = p.fxRateToBase() != null ? p.fxRateToBase() : BigDecimal.ONE;
-        return p.costBasisPrice().multiply(rate);
+        BigDecimal rate = fxToBaseOrNull(p);
+        return rate == null ? null : p.costBasisPrice().multiply(rate);
     }
 
     /**
@@ -397,8 +403,26 @@ public class IbkrSyncService {
         if (p.markPrice() == null) {
             return null;
         }
-        BigDecimal rate = p.fxRateToBase() != null ? p.fxRateToBase() : BigDecimal.ONE;
-        return p.markPrice().multiply(rate);
+        BigDecimal rate = fxToBaseOrNull(p);
+        return rate == null ? null : p.markPrice().multiply(rate);
+    }
+
+    /**
+     * FX rate to the account base currency, or null when it is genuinely unknown:
+     * absent rate + non-EUR position currency. Absent rate + EUR (or unspecified)
+     * currency keeps the historical assume-1 behavior.
+     */
+    private BigDecimal fxToBaseOrNull(IbkrPosition p) {
+        if (p.fxRateToBase() != null) {
+            return p.fxRateToBase();
+        }
+        if (p.currency() != null && !"EUR".equalsIgnoreCase(p.currency())) {
+            log.warn("IBKR: position {} is in {} but the statement has no fxRateToBase — enable "
+                + "the 'FX Rate to Base' column on the Flex Query; storing cost basis as unknown",
+                p.symbol(), p.currency());
+            return null;
+        }
+        return BigDecimal.ONE;
     }
 
     /** Truncates {@code s} to {@code max} chars so it fits its DB column; null-safe. */

@@ -194,9 +194,19 @@ public class IbkrFlexClient implements IbkrFlexPort {
                 continue;
             }
             String stmtAccount = blankToNull(attr((Element) node, "accountId"));
-            if (stmtAccount != null) {
-                byAccount.computeIfAbsent(stmtAccount, k -> new ArrayList<>());
+            if (stmtAccount == null) {
+                continue;
             }
+            if (byAccount.containsKey(stmtAccount)) {
+                // Several FlexStatement sections for the SAME account = a multi-day query
+                // ("Breakout by Day" / date-ranged period): each day carries a full
+                // positions snapshot, and merging them would silently multiply every
+                // quantity by the number of days. Fail with the remedy instead.
+                throw new SyncException("The Flex statement contains several sections for account "
+                    + stmtAccount + " — set the Flex Query period to 'Last Business Day' "
+                    + "(and disable any day-by-day breakout) so positions are a single snapshot.");
+            }
+            byAccount.put(stmtAccount, new ArrayList<>());
         }
 
         for (int i = 0; i < positions.getLength(); i++) {

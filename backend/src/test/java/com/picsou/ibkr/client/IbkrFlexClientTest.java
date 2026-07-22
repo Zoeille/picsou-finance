@@ -1,5 +1,6 @@
 package com.picsou.ibkr.client;
 
+import com.picsou.exception.SyncException;
 import com.picsou.port.IbkrFlexPort.IbkrAccountData;
 import com.picsou.port.IbkrFlexPort.IbkrPosition;
 import org.junit.jupiter.api.Test;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Parser tests for {@link IbkrFlexClient}. The fixture uses the exact IBKR Flex
@@ -30,7 +32,7 @@ class IbkrFlexClientTest {
                     isin="US0378331005" position="10" markPrice="200.00"
                     costBasisPrice="150.00" costBasisMoney="1500.00" levelOfDetail="SUMMARY" />
                 <OpenPosition accountId="U1234567" currency="EUR" fxRateToBase="1"
-                    assetCategory="ETF" symbol="IWDA" description="ISHARES CORE MSCI WORLD"
+                    assetCategory="STK" symbol="IWDA" description="ISHARES CORE MSCI WORLD"
                     conid="100292928" isin="IE00B4L5Y983" position="5" markPrice="90.00"
                     costBasisPrice="80.00" costBasisMoney="400.00" levelOfDetail="SUMMARY" />
                 <OpenPosition accountId="U1234567" currency="USD" fxRateToBase="0.92"
@@ -101,6 +103,29 @@ class IbkrFlexClientTest {
         assertThat(accounts).hasSize(1);
         assertThat(accounts.get(0).accountId()).isEqualTo("U1234567");
         assertThat(accounts.get(0).positions()).isEmpty();
+    }
+
+    /**
+     * A multi-day query ("Breakout by Day" / date-ranged period) emits one FlexStatement
+     * PER DAY for the same account, each with a full positions snapshot — merging them
+     * would multiply every quantity by the number of days. The parser must refuse with
+     * an actionable message instead of silently inflating the portfolio.
+     */
+    @Test
+    void parse_multipleStatementsForSameAccount_throwsActionable() {
+        String breakout = """
+            <FlexQueryResponse queryName="OpenPositions" type="AF">
+              <FlexStatements count="2">
+                <FlexStatement accountId="U1234567"><OpenPositions/></FlexStatement>
+                <FlexStatement accountId="U1234567"><OpenPositions/></FlexStatement>
+              </FlexStatements>
+            </FlexQueryResponse>
+            """;
+
+        assertThatThrownBy(() -> client.parseOpenPositions(breakout))
+            .isInstanceOf(SyncException.class)
+            .hasMessageContaining("U1234567")
+            .hasMessageContaining("Last Business Day");
     }
 
     @Test

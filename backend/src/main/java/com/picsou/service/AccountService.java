@@ -292,7 +292,10 @@ public class AccountService {
                 // guess -- but it is not free: during a price-provider outage the balance (and
                 // any snapshot taken from it) silently shrinks by whatever those holdings were
                 // worth. Log it so the dip is explicable rather than mysterious.
-                if (qty != null && qty.signum() > 0) {
+                // signum() != 0 (not > 0): omitting an unpriced SHORT overstates the
+                // balance — a liability valued at 0 — which deserves the trace at least
+                // as much as the understated long.
+                if (qty != null && qty.signum() != 0) {
                     log.warn("No EUR price for holding {} (account {}) -- excluding it from the live balance",
                         h.getTicker(), account.getId());
                 }
@@ -439,8 +442,11 @@ public class AccountService {
         BigDecimal pnlEur = currentValueEur != null
             ? currentValueEur.subtract(costBasis)
             : null;
+        // abs(): a short position has a negative cost basis, and dividing by it would
+        // flip the sign — a winning short would display as a loss. The percentage must
+        // carry the sign of the P&L itself, the denominator is only a magnitude.
         BigDecimal pnlPercent = (pnlEur != null && costBasis.signum() != 0)
-            ? pnlEur.divide(costBasis, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+            ? pnlEur.divide(costBasis.abs(), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
             : null;
 
         return new HoldingResponse(

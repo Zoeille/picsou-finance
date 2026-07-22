@@ -335,6 +335,16 @@ handlers.set(key('POST', '/sync/1/retry'), () => [])
 // Sync - delete
 handlers.set(key('DELETE', '/sync/1'), () => null)
 
+// Interactive Brokers — same demo convention as Trade Republic below: reads report a
+// disconnected state, mutations fake-succeed with the real response shapes (without
+// these, unmapped routes resolve `{}` and the tab silently misbehaves).
+handlers.set(key('GET', '/ibkr/status'), () => ({
+  connected: false, connectionId: null, status: null, lastSyncedAt: null, maskedToken: null,
+}))
+handlers.set(key('POST', '/ibkr/connect'), () => null)
+handlers.set(key('POST', '/ibkr/sync'), () => [])
+handlers.set(key('DELETE', '/ibkr/connection'), () => null)
+
 // Trade Republic - session status
 handlers.set(key('GET', '/tr/status'), () => ({ isActive: false, expiresAt: null }))
 
