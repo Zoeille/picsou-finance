@@ -476,6 +476,44 @@ class IbkrSyncServiceTest {
         verify(holdingRepository, times(1)).save(any(AccountHolding.class));
     }
 
+    /**
+     * A member who deleted their IBKR account must not have it silently resurrected by
+     * the next daily sync. When the account is absent but a soft-deleted row exists, that
+     * account is skipped entirely — no account row, no holdings — yet the sync still
+     * completes normally and leaves the connection CONNECTED (a deliberate skip is not a
+     * failure). Every other test stubs the soft-delete check to false, so this is the
+     * only one that exercises the guard branch.
+     */
+    @Test
+    void sync_softDeletedAccount_isSkippedButConnectionStaysConnected() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        IbkrPosition aapl = pos("US0378331005", "AAPL", "STK", bd("10"), bd("150"), bd("1"));
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query"))
+            .thenReturn(List.of(new IbkrAccountData("U1", List.of(aapl))));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId("ibkr_U1", memberId))
+            .thenReturn(Optional.empty());
+        when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("ibkr_U1", memberId))
+            .thenReturn(true);
+
+        List<AccountResponse> result = service.sync(memberId);
+
+        assertThat(result).isEmpty();
+        verify(accountRepository, never()).save(any(Account.class));
+        verify(holdingRepository, never()).save(any(AccountHolding.class));
+        // Deliberate skip, not a failure: connection is left healthy and freshly synced.
+        assertThat(connection.getStatus()).isEqualTo("CONNECTED");
+        assertThat(connection.getLastSyncedAt()).isNotNull();
+        verifyNoInteractions(statusWriter);
+    }
+
     // ─── resyncIfConnected (scheduler entry point) ───────────────────────────
     // NB: these Mockito tests cover the in-method swallowing only. The proxy-level
     // UnexpectedRollbackException (rollback-only marked through a repository proxy,
