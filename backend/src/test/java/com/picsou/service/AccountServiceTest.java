@@ -247,4 +247,35 @@ class AccountServiceTest {
 
         assertThat(result).isEqualByComparingTo("2500");
     }
+
+    @Test
+    void updateHolding_manualAccount_updatesQuantityAndCostBasis() {
+        Account manual = Account.builder().id(1L).type(AccountType.COMPTE_TITRES).currency("EUR").isManual(true).build();
+        AccountHolding h = AccountHolding.builder()
+            .account(manual).ticker("IWDA").quantity(new BigDecimal("10")).averageBuyIn(new BigDecimal("80")).build();
+        when(accountRepository.findByIdAndMemberId(1L, 9L)).thenReturn(Optional.of(manual));
+        when(holdingRepository.findByAccountIdAndTicker(1L, "IWDA")).thenReturn(Optional.of(h));
+        when(holdingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.updateHolding(1L, 9L, "IWDA", new BigDecimal("12"), new BigDecimal("85"));
+
+        assertThat(h.getQuantity()).isEqualByComparingTo("12"); // manual: quantity editable
+        assertThat(h.getAverageBuyIn()).isEqualByComparingTo("85");
+    }
+
+    @Test
+    void updateHolding_syncedAccount_ignoresClientQuantity_butSetsCostBasis() {
+        Account synced = Account.builder().id(1L).type(AccountType.CRYPTO).currency("EUR").isManual(false).build();
+        AccountHolding h = AccountHolding.builder()
+            .account(synced).ticker("BTC").quantity(new BigDecimal("0.5")).averageBuyIn(new BigDecimal("60000")).build();
+        when(accountRepository.findByIdAndMemberId(1L, 9L)).thenReturn(Optional.of(synced));
+        when(holdingRepository.findByAccountIdAndTicker(1L, "BTC")).thenReturn(Optional.of(h));
+        when(holdingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Client sends a stale/tampered quantity; only the cost basis must take effect.
+        accountService.updateHolding(1L, 9L, "BTC", new BigDecimal("0.4"), new BigDecimal("30000"));
+
+        assertThat(h.getQuantity()).isEqualByComparingTo("0.5"); // synced: chain owns it, unchanged
+        assertThat(h.getAverageBuyIn()).isEqualByComparingTo("30000");
+    }
 }
