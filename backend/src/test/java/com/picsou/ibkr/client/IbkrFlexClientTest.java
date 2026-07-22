@@ -79,8 +79,15 @@ class IbkrFlexClientTest {
         assertThat(positions).filteredOn(p -> "SUMMARY".equals(p.levelOfDetail())).hasSize(2);
     }
 
+    /**
+     * A fully liquidated portfolio is a valid FlexQueryResponse whose statement carries
+     * an empty {@code <OpenPositions/>}. The account MUST still be returned (with zero
+     * positions) so the sync purges its stale holdings — deriving accounts from
+     * {@code <OpenPosition>} rows alone made an emptied account vanish from the result
+     * and its old holdings were kept (and valued) forever.
+     */
     @Test
-    void parse_emptyPositionsYieldsNoAccounts() {
+    void parse_emptyPositionsYieldsTheAccountWithNoPositions() {
         String empty = """
             <FlexQueryResponse queryName="OpenPositions" type="AF">
               <FlexStatements count="1">
@@ -89,7 +96,11 @@ class IbkrFlexClientTest {
             </FlexQueryResponse>
             """;
 
-        assertThat(client.parseOpenPositions(empty)).isEmpty();
+        List<IbkrAccountData> accounts = client.parseOpenPositions(empty);
+
+        assertThat(accounts).hasSize(1);
+        assertThat(accounts.get(0).accountId()).isEqualTo("U1234567");
+        assertThat(accounts.get(0).positions()).isEmpty();
     }
 
     @Test

@@ -34,7 +34,7 @@ trusted for EUR valuation.
 - `ibkr/client/IbkrFlexClient.java` — Flex Web Service HTTP + XML parsing (`IbkrFlexPort`)
 - `port/IbkrFlexPort.java` — provider abstraction + `IbkrPosition` / `IbkrAccountData`
 - `model/IbkrConnection.java`, `repository/IbkrConnectionRepository.java` — encrypted token + query id
-- `db/migration/V56__ibkr_connection.sql` — `ibkr_connection` table
+- `db/migration/V57__ibkr_connection.sql` — `ibkr_connection` table
 - Reuses: `OpenFigiIsinConverter` (ISIN→ticker), `HoldingDedup` (VWAP), `CryptoEncryption`,
   `AccountService.liveBalanceEur` (net-worth valuation), `SchedulerService` (daily auto-sync)
 - `frontend/src/pages/sync/IbkrTab.tsx` — Sync-page connection tab (token + query id form →

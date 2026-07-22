@@ -134,13 +134,18 @@ public class IbkrSyncService {
         return syncWithConnection(connection, memberId);
     }
 
-    /** Scheduler entry point — no-op if the member has no connection. */
+    /**
+     * Scheduler entry point — no-op if the member has no connection. NEVER throws:
+     * {@code SchedulerService.dailyBankSync} calls it unwrapped (like the TR/Bourso
+     * siblings), so an escaping exception — including a DB error on the connection
+     * lookup itself — would halt the loop and skip every remaining member's sync.
+     */
     public void resyncIfConnected(Long memberId) {
-        Optional<IbkrConnection> connection = connectionRepository.findByMemberId(memberId);
-        if (connection.isEmpty()) {
-            return;
-        }
         try {
+            Optional<IbkrConnection> connection = connectionRepository.findByMemberId(memberId);
+            if (connection.isEmpty()) {
+                return;
+            }
             syncWithConnection(connection.get(), memberId);
         } catch (SyncException ex) {
             // Expected operational failures (expired token, IBKR down, non-EUR guard):
@@ -234,7 +239,6 @@ public class IbkrSyncService {
 
         // Replace holdings wholesale — the statement is the full current picture.
         holdingRepository.deleteByAccountId(account.getId());
-        holdingRepository.flush();
 
         // De-dup by resolved ticker (VWAP) exactly like Trade Republic: several IBKR
         // positions (or lot rows across accounts) can map to one ticker.
@@ -260,6 +264,7 @@ public class IbkrSyncService {
                 new HoldingDedup.HoldingAgg(p.position(), eurCostBasis(p), eurMark(p), resolved.name()),
                 HoldingDedup::vwapMerge);
         }
+        int persisted = 0;
         for (Map.Entry<String, HoldingDedup.HoldingAgg> entry : deduped.entrySet()) {
             HoldingDedup.HoldingAgg agg = entry.getValue();
             if (agg.quantity().signum() == 0) {
@@ -277,13 +282,18 @@ public class IbkrSyncService {
                 .currentPrice(agg.currentPrice())
                 .lastSyncedAt(Instant.now())
                 .build());
+            persisted++;
         }
         holdingRepository.flush();
 
         // Net-worth-critical figures use the trusted live-EUR path (Yahoo/CoinGecko,
         // FX-converted), never IBKR's base currency — so net worth is right even if the
-        // user's IBKR base currency is not EUR.
-        BigDecimal liveEur = accountService.liveBalanceEur(account);
+        // user's IBKR base currency is not EUR. With ZERO holdings the live path would
+        // fall back to the account's stored currentBalance (see liveBalanceEur), which
+        // for a fully liquidated statement account is exactly the stale value we must
+        // NOT keep — a holdings-driven COMPTE_TITRES with nothing held is worth 0 here
+        // (cash is not modeled: CASH lines are skipped by isReportable).
+        BigDecimal liveEur = persisted == 0 ? BigDecimal.ZERO : accountService.liveBalanceEur(account);
         account.setCurrentBalance(liveEur);
         account = accountRepository.save(account);
         accountService.upsertSnapshot(account, liveEur, LocalDate.now());

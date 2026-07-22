@@ -1,4 +1,6 @@
--- V56: Interactive Brokers (IBKR) Flex Web Service connection.
+-- V57: Interactive Brokers (IBKR) Flex Web Service connection.
+-- (V57 and not V56: main gained V56__persistent_session_previous_token while this
+-- branch was in review — same-version collisions are a hard Flyway boot failure.)
 --
 -- Stores the per-member Flex Web Service credentials used to pull Open Positions
 -- once a day (EOD data). Both the token and the query id are AES-256-GCM encrypted

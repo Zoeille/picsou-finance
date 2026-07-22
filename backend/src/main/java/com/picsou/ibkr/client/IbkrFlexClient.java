@@ -9,9 +9,12 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import org.xml.sax.SAXException;
+
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -178,7 +181,24 @@ public class IbkrFlexClient implements IbkrFlexPort {
         Map<String, String> baseCurrencyByAccount = parseAccountInformation(doc);
 
         // LinkedHashMap: stable account ordering for deterministic downstream upserts.
+        // Accounts are seeded from the <FlexStatement accountId="..."> elements, which are
+        // present even when the account holds no open position (fully liquidated
+        // portfolio). Deriving accounts from <OpenPosition> rows alone made an emptied
+        // account vanish from the result, so its stale holdings were never purged and the
+        // dashboard kept valuing positions the user no longer owns.
         Map<String, List<IbkrPosition>> byAccount = new LinkedHashMap<>();
+        NodeList statements = doc.getElementsByTagName("FlexStatement");
+        for (int i = 0; i < statements.getLength(); i++) {
+            Node node = statements.item(i);
+            if (node.getNodeType() != Node.ELEMENT_NODE) {
+                continue;
+            }
+            String stmtAccount = blankToNull(attr((Element) node, "accountId"));
+            if (stmtAccount != null) {
+                byAccount.computeIfAbsent(stmtAccount, k -> new ArrayList<>());
+            }
+        }
+
         for (int i = 0; i < positions.getLength(); i++) {
             Node node = positions.item(i);
             if (node.getNodeType() != Node.ELEMENT_NODE) {
@@ -286,7 +306,10 @@ public class IbkrFlexClient implements IbkrFlexPort {
             Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
             doc.getDocumentElement().normalize();
             return doc;
-        } catch (Exception e) {
+        } catch (ParserConfigurationException | SAXException | java.io.IOException e) {
+            // Narrow on purpose: only genuine parse/IO failures become the user-facing
+            // "unexpected response" — a programming error (NPE, class cast) must surface
+            // as itself, not masquerade as an IBKR API change.
             // A non-XML body usually means an HTML error page or a network interception.
             // Deliberately truncated: a real statement carries the user's positions, and
             // full payloads do not belong in server logs — the length tells the rest.

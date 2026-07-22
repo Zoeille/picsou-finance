@@ -24,12 +24,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -358,13 +360,16 @@ class IbkrSyncServiceTest {
         lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("ibkr_U1", memberId)).thenReturn(false);
         when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> { Account a = inv.getArgument(0); a.setId(1L); return a; });
-        when(accountService.liveBalanceEur(any(Account.class))).thenReturn(bd("0"));
+        // liveBalanceEur is deliberately NOT stubbed: with zero persisted holdings the
+        // sync now sets the balance to 0 directly (the live path's empty-holdings
+        // fallback would return the stale stored balance).
         when(accountService.toResponse(any(Account.class))).thenReturn(
             AccountResponse.from(Account.builder().id(1L).name("IBKR U1").type(AccountType.COMPTE_TITRES).build(), BigDecimal.ZERO));
 
         service.sync(memberId);
 
         verify(holdingRepository, never()).save(any(AccountHolding.class));
+        verify(accountService, never()).liveBalanceEur(any(Account.class));
     }
 
     /**
@@ -397,6 +402,48 @@ class IbkrSyncServiceTest {
         // The guard failure is a sync failure like any other: the user must see ERROR
         // in the UI, on the scheduled path too (where the exception is swallowed).
         verify(statusWriter, times(1)).markError(any());
+    }
+
+    /**
+     * A fully liquidated IBKR account — statement present, zero positions — must purge
+     * the stale holdings AND zero the balance. Two traps pinned here: (1) the account
+     * must still flow through the sync at all (the parser now emits it with an empty
+     * position list), and (2) the balance must NOT go through liveBalanceEur, whose
+     * empty-holdings fallback resurrects the stored (stale) currentBalance.
+     */
+    @Test
+    void sync_emptiedAccount_purgesHoldingsAndZeroesBalance() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+        IbkrConnection connection = IbkrConnection.builder()
+            .member(member).token("enc-token").queryId("enc-query").status("CONNECTED").build();
+        when(connectionRepository.findByMemberId(memberId)).thenReturn(Optional.of(connection));
+        when(encryption.decrypt("enc-token")).thenReturn("plain-token");
+        when(encryption.decrypt("enc-query")).thenReturn("plain-query");
+
+        IbkrAccountData emptied = new IbkrAccountData("U1", List.of(), "EUR");
+        when(ibkrFlexPort.fetchOpenPositions("plain-token", "plain-query"))
+            .thenReturn(List.of(emptied));
+
+        Account existing = Account.builder()
+            .id(31L).member(member).name("IBKR U1").type(AccountType.COMPTE_TITRES)
+            .currency("EUR").currentBalance(bd("1234.56")).externalAccountId("ibkr_U1")
+            .build();
+        when(accountRepository.findByExternalAccountIdAndMemberId("ibkr_U1", memberId))
+            .thenReturn(Optional.of(existing));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.toResponse(any(Account.class)))
+            .thenReturn(AccountResponse.from(existing, BigDecimal.ZERO));
+
+        List<AccountResponse> result = service.sync(memberId);
+
+        assertThat(result).hasSize(1);
+        verify(holdingRepository).deleteByAccountId(31L);
+        verify(holdingRepository, never()).save(any(AccountHolding.class));
+        // Balance forced to zero, NOT recomputed via the live path.
+        verify(accountService, never()).liveBalanceEur(any(Account.class));
+        assertThat(existing.getCurrentBalance()).isEqualByComparingTo("0");
+        verify(accountService).upsertSnapshot(eq(existing), eq(BigDecimal.ZERO), any(LocalDate.class));
     }
 
     /** B: an explicit "EUR" base currency syncs exactly like today (no behavior change). */
