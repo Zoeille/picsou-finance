@@ -163,7 +163,7 @@ export interface DashboardData {
     color: string
     balanceEur: number
     percentage: number
-    accountType: string
+    accountType: AccountType
     hasHoldings: boolean
   }[]
   liabilities: {
@@ -172,7 +172,7 @@ export interface DashboardData {
     color: string
     balanceEur: number
     percentage: number
-    accountType: string
+    accountType: AccountType
     hasHoldings: boolean
   }[]
   goalSummaries: GoalProgress[]
