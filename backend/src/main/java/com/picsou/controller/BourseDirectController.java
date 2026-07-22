@@ -1,5 +1,6 @@
 package com.picsou.controller;
 
+import com.picsou.config.ClientIp;
 import com.picsou.config.RateLimitConfig;
 import com.picsou.service.BourseDirectSyncService;
 import com.picsou.service.UserContext;
@@ -59,7 +60,7 @@ public class BourseDirectController {
 
     private boolean consumeAuthToken(HttpServletRequest request) {
         return authBuckets.computeIfAbsent(
-            request.getRemoteAddr(),
+            ClientIp.resolve(request),
             key -> RateLimitConfig.createBourseDirectAuthBucket()
         )
             .tryConsume(1);

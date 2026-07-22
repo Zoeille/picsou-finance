@@ -3,6 +3,7 @@ package com.picsou.controller;
 import com.picsou.model.BourseDirectSyncStatus;
 import com.picsou.service.BourseDirectSyncService;
 import com.picsou.service.UserContext;
+import io.github.bucket4j.Bucket;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,10 +28,12 @@ class BourseDirectControllerTest {
     @Mock HttpServletRequest request;
 
     private BourseDirectController controller;
+    private ConcurrentHashMap<String, Bucket> authBuckets;
 
     @BeforeEach
     void setUp() {
-        controller = new BourseDirectController(service, userContext, new ConcurrentHashMap<>());
+        authBuckets = new ConcurrentHashMap<>();
+        controller = new BourseDirectController(service, userContext, authBuckets);
         when(userContext.currentMemberId()).thenReturn(MEMBER_ID);
     }
 
@@ -47,6 +51,20 @@ class BourseDirectControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isSameAs(expected);
         verify(service).initiateAuth("login", "password", MEMBER_ID);
+    }
+
+    @Test
+    void authenticationRateLimitUsesTheTrustedProxyClientIp() {
+        var proxiedRequest = new MockHttpServletRequest();
+        proxiedRequest.setRemoteAddr("172.18.0.2");
+        proxiedRequest.addHeader("X-Forwarded-For", "1.2.3.4");
+        proxiedRequest.addHeader("X-Real-IP", "203.0.113.9");
+        when(service.initiateAuth("login", "password", MEMBER_ID))
+            .thenReturn(new BourseDirectSyncService.AuthInitResponse("process", true, "OTP"));
+
+        controller.initiate(new BourseDirectController.InitiateRequest("login", "password"), proxiedRequest);
+
+        assertThat(authBuckets).containsOnlyKeys("203.0.113.9");
     }
 
     @Test
