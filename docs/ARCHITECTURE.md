@@ -217,7 +217,7 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 | Service | Usage | Config |
 |---------|-------|--------|
 | PostgreSQL 16 | Persistence | `SPRING_DATASOURCE_URL` |
-| Flyway | Schema migrations | `db/migration/` (latest V59) |
+| Flyway | Schema migrations | `db/migration/` (latest V61) |
 | Enable Banking | PSD2 bank sync (optional) | `ENABLEBANKING_*` |
 | Powens / Budget Insight | Scraping bank sync (**experimental, disabled in 1.0.0**) | `POWENS_*` |
 | Trade Republic | Broker sync via Python microservice | `TR_AUTH_URL` |

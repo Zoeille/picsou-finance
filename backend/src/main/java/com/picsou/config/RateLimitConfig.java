@@ -75,9 +75,12 @@ public class RateLimitConfig {
         return boundedBucketStore();
     }
 
+    /**
+     * Per-IP Bourse Direct auth rate limiter: 5 attempts per 15 minutes.
+     */
     @Bean("bourseDirectAuthBuckets")
     public Map<String, Bucket> bourseDirectAuthBuckets() {
-        return new ConcurrentHashMap<>();
+        return boundedBucketStore();
     }
 
     /**

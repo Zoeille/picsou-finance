@@ -289,7 +289,7 @@ class WalletEvmMigrationTest {
                 + reconciledAccountId + ", 'FR0000000001', 10, 80, 100)");
 
             // Same legacy shape, but 10 x 100 does not equal total 1500 - cash 250.
-            // V60 must refuse to guess that the broker's unlabelled quote was EUR.
+            // V61 must refuse to guess that the broker's unlabelled quote was EUR.
             unreconciledAccountId = insertReturningId(conn,
                 "INSERT INTO account (name, type, provider, currency, current_balance, cash_balance, "
                     + "external_account_id, is_manual, member_id) VALUES "
@@ -300,7 +300,7 @@ class WalletEvmMigrationTest {
                 + unreconciledAccountId + ", 'US0000000001', 10, 80, 100)");
         }
 
-        migrateTo("60");
+        migrateTo("61");
 
         assertThat(queryString("SELECT sync_status FROM bourse_direct_session WHERE member_id = " + memberId))
             .isEqualTo("IDLE");
