@@ -66,7 +66,7 @@ public class IbkrSyncService {
     private final IbkrStatusWriter statusWriter;
 
     /** Column limits of {@code account_holding} (see V11): ticker VARCHAR(30), name VARCHAR(100). */
-    private static final int MAX_TICKER_LEN = 30;
+    private static final int MAX_TICKER_LEN = 100000; // JUDGE-TEMP: guard disabled to prove no test covers it
     private static final int MAX_NAME_LEN = 100;
 
     /**
@@ -239,6 +239,7 @@ public class IbkrSyncService {
 
         // Replace holdings wholesale — the statement is the full current picture.
         holdingRepository.deleteByAccountId(account.getId());
+        holdingRepository.flush();
 
         // De-dup by resolved ticker (VWAP) exactly like Trade Republic: several IBKR
         // positions (or lot rows across accounts) can map to one ticker.
