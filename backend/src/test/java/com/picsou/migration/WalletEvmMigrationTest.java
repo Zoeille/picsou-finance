@@ -300,7 +300,7 @@ class WalletEvmMigrationTest {
                 + unreconciledAccountId + ", 'US0000000001', 10, 80, 100)");
         }
 
-        migrateTo("61");
+        migrateTo("62");
 
         assertThat(queryString("SELECT sync_status FROM bourse_direct_session WHERE member_id = " + memberId))
             .isEqualTo("IDLE");
@@ -324,6 +324,20 @@ class WalletEvmMigrationTest {
                 + "provider_value_eur = 1900, provider_pnl_eur = 120 WHERE account_id = " + ethAccountId);
             assertThatThrownBy(() -> exec(conn,
                 "UPDATE account_holding SET quote_currency = 'usd' WHERE account_id = " + ethAccountId))
+                .isInstanceOf(SQLException.class);
+
+            exec(conn, "UPDATE bourse_direct_session SET sync_status = 'FAILED', "
+                + "last_sync_error = 'INTERNAL_ERROR' WHERE member_id = " + memberId);
+            assertThatThrownBy(() -> exec(conn,
+                "UPDATE bourse_direct_session SET last_sync_error = 'UNKNOWN_ERROR' WHERE member_id = " + memberId))
+                .isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> exec(conn,
+                "UPDATE bourse_direct_session SET sync_status = 'SUCCESS' WHERE member_id = " + memberId))
+                .isInstanceOf(SQLException.class);
+            exec(conn, "UPDATE bourse_direct_session SET sync_status = 'IDLE', "
+                + "last_sync_error = NULL WHERE member_id = " + memberId);
+            assertThatThrownBy(() -> exec(conn,
+                "UPDATE bourse_direct_session SET sync_status = 'FAILED' WHERE member_id = " + memberId))
                 .isInstanceOf(SQLException.class);
             exec(conn, "DELETE FROM family_member WHERE id = " + memberId);
         }

@@ -2,6 +2,7 @@ package com.picsou.repository;
 
 import com.picsou.model.BourseDirectSession;
 import com.picsou.model.BourseDirectSyncStatus;
+import com.picsou.port.BourseDirectErrorCode;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -30,10 +31,18 @@ public interface BourseDirectSessionRepository extends JpaRepository<BourseDirec
         @Param("interrupted") Collection<BourseDirectSyncStatus> interrupted,
         @Param("failed") BourseDirectSyncStatus failed,
         @Param("completedAt") Instant completedAt,
-        @Param("errorCode") String errorCode
+        @Param("errorCode") BourseDirectErrorCode errorCode
     );
 
-    Optional<BourseDirectSession> findByIdAndMemberId(Long id, Long memberId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select session from BourseDirectSession session
+        where session.id = :id and session.member.id = :memberId
+        """)
+    Optional<BourseDirectSession> findByIdAndMemberIdForUpdate(
+        @Param("id") Long id,
+        @Param("memberId") Long memberId
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select session from BourseDirectSession session where session.member.id = :memberId")

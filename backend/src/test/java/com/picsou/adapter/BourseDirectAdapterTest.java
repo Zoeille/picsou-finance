@@ -12,6 +12,8 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -91,6 +93,59 @@ class BourseDirectAdapterTest {
             .isInstanceOfSatisfying(SyncException.class, error ->
                 assertThat(error.getCode()).isEqualTo(BourseDirectErrorCode.UPSTREAM_UNAVAILABLE.name())
             );
+    }
+
+    @Test
+    void completeAuth_preservesValidationErrorCodeFromTheSidecar() {
+        BourseDirectAdapter adapter = adapterReturning(
+            HttpStatus.BAD_REQUEST,
+            "{\"detail\":\"INVALID_OTP\"}"
+        );
+
+        assertThatThrownBy(() -> adapter.completeAuth("process", "123456"))
+            .isInstanceOfSatisfying(SyncException.class, error ->
+                assertThat(error.getCode()).isEqualTo(BourseDirectErrorCode.INVALID_OTP.name())
+            );
+    }
+
+    @Test
+    void fetchAccounts_mapsMalformedErrorJsonToUnavailable() {
+        BourseDirectAdapter adapter = adapterReturning(HttpStatus.BAD_GATEWAY, "not-json");
+
+        assertThatThrownBy(() -> adapter.fetchAccounts("state"))
+            .isInstanceOfSatisfying(SyncException.class, error ->
+                assertThat(error.getCode()).isEqualTo(BourseDirectErrorCode.UPSTREAM_UNAVAILABLE.name())
+            );
+    }
+
+    @Test
+    void fetchAccounts_mapsUnknownSidecarCodeToUnavailable() {
+        BourseDirectAdapter adapter = adapterReturning(
+            HttpStatus.BAD_GATEWAY,
+            "{\"detail\":\"NEW_UPSTREAM_FAILURE\"}"
+        );
+
+        assertThatThrownBy(() -> adapter.fetchAccounts("state"))
+            .isInstanceOfSatisfying(SyncException.class, error ->
+                assertThat(error.getCode()).isEqualTo(BourseDirectErrorCode.UPSTREAM_UNAVAILABLE.name())
+            );
+    }
+
+    @Test
+    void fetchAccounts_mapsNetworkTimeoutToAnExplicitRetryableFailure() {
+        ExchangeFunction neverResponds = request -> Mono.never();
+        BourseDirectAdapter adapter = new BourseDirectAdapter(
+            WebClient.builder().exchangeFunction(neverResponds).build(),
+            new ObjectMapper(),
+            Duration.ofMillis(20),
+            Duration.ofMillis(20)
+        );
+
+        assertThatThrownBy(() -> adapter.fetchAccounts("state"))
+            .isInstanceOfSatisfying(SyncException.class, error -> {
+                assertThat(error.getCode()).isEqualTo(BourseDirectErrorCode.UPSTREAM_UNAVAILABLE.name());
+                assertThat(error.getMessage()).contains("too long");
+            });
     }
 
     private BourseDirectAdapter adapterReturning(HttpStatus status, String body) {

@@ -268,14 +268,22 @@ export interface BoursoAuthInitResponse {
   contact: string | null
 }
 
-export interface BourseDirectSessionStatus {
+interface BourseDirectSessionStatusBase {
   isActive: boolean
   expiresAt: string | null
-  syncStatus: 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED'
   lastSyncStartedAt: string | null
   lastSyncCompletedAt: string | null
-  lastSyncError: BourseDirectErrorCode | null
 }
+
+export type BourseDirectSessionStatus =
+  | (BourseDirectSessionStatusBase & {
+      syncStatus: 'FAILED'
+      lastSyncError: BourseDirectErrorCode
+    })
+  | (BourseDirectSessionStatusBase & {
+      syncStatus: 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCESS'
+      lastSyncError: null
+    })
 
 export type BourseDirectErrorCode =
   | 'INVALID_CREDENTIALS'

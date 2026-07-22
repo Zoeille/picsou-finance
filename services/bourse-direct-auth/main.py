@@ -18,6 +18,8 @@ from typing import Literal
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from playwright.async_api import (
     Browser,
@@ -25,6 +27,7 @@ from playwright.async_api import (
     Error as PlaywrightError,
     Page,
     Playwright,
+    TimeoutError as PlaywrightTimeoutError,
     async_playwright,
 )
 from portfolio_parser import (
@@ -152,6 +155,20 @@ class SessionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sessionState: str
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    _: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    fields = {
+        str(error["loc"][-1])
+        for error in exc.errors()
+        if error.get("loc")
+    }
+    detail = "INVALID_OTP" if "code" in fields else "INVALID_DATA"
+    return JSONResponse(status_code=400, content={"detail": detail})
 
 
 def _raw_number(container: Any, *preferred_keys: str) -> Any:
@@ -829,7 +846,7 @@ async def _close_resources(
                 timeout=RESOURCE_CLOSE_TIMEOUT_SECONDS,
             )
         except Exception:
-            log.debug("Bourse Direct browser resource cleanup failed", exc_info=True)
+            log.warning("Bourse Direct browser resource cleanup failed", exc_info=True)
 
 
 async def _dispose_pending_state(state: dict[str, Any]) -> None:
@@ -912,19 +929,26 @@ async def _wait_for_session_state(context: BrowserContext, page: Page) -> str:
             wait_until="domcontentloaded",
             timeout=SESSION_CHECK_TIMEOUT_SECONDS * 1000,
         )
-        for _ in range(20):
+        for _ in range(SESSION_CHECK_TIMEOUT_SECONDS * 4):
             portfolio_link, _ = await _portfolio_link(page)
             if portfolio_link:
                 complete_state = await context.storage_state()
                 return json.dumps(complete_state, separators=(",", ":"))
             await asyncio.sleep(0.25)
-        raise HTTPException(
-            status_code=401,
-            detail="INVALID_OTP",
-        )
+        if await _otp_visible(page) or "login" in page.url:
+            raise HTTPException(status_code=401, detail="INVALID_OTP")
+        raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE")
     if await _otp_visible(page) or "login" in page.url:
         raise HTTPException(status_code=401, detail="INVALID_OTP")
     raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE")
+
+
+def _portfolio_http_exception(status: int) -> HTTPException:
+    if status in (401, 403):
+        return HTTPException(status_code=401, detail="SESSION_EXPIRED")
+    if status == 429 or status >= 500:
+        return HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE")
+    return HTTPException(status_code=502, detail="PORTFOLIO_INCOMPLETE")
 
 
 @app.get("/health")
@@ -987,7 +1011,7 @@ async def initiate(req: InitiateRequest) -> dict:
                     "page": page, "created_at": time.time(),
                 }
             return {"processId": process_id, "mfaRequired": True, "mfaType": "OTP", "sessionState": None}
-        except Exception:
+        except PlaywrightTimeoutError:
             if "login" in page.url:
                 raise HTTPException(status_code=401, detail="INVALID_CREDENTIALS")
             state = await _wait_for_session_state(context, page)
@@ -996,10 +1020,14 @@ async def initiate(req: InitiateRequest) -> dict:
     except HTTPException:
         await _close_resources(context, browser, pw)
         raise
+    except PlaywrightError as exc:
+        await _close_resources(context, browser, pw)
+        log.warning("Bourse Direct authentication initiation failed", exc_info=True)
+        raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE") from exc
     except Exception as exc:
         await _close_resources(context, browser, pw)
-        log.warning("Bourse Direct authentication initiation failed: %s", type(exc).__name__)
-        raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE") from exc
+        log.exception("Unexpected Bourse Direct authentication initiation failure")
+        raise HTTPException(status_code=500, detail="INTERNAL_ERROR") from exc
 
 
 @app.post("/complete", response_model=SessionResponse)
@@ -1036,10 +1064,10 @@ async def complete(req: CompleteRequest) -> dict:
     except HTTPException:
         raise
     except PlaywrightError as exc:
-        log.warning("Bourse Direct authentication completion failed: %s", type(exc).__name__)
+        log.warning("Bourse Direct authentication completion failed", exc_info=True)
         raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE") from exc
     except Exception as exc:
-        log.error("Unexpected Bourse Direct authentication completion failure: %s", type(exc).__name__)
+        log.exception("Unexpected Bourse Direct authentication completion failure")
         raise HTTPException(status_code=500, detail="INTERNAL_ERROR") from exc
     finally:
         await _dispose_pending_state(state)
@@ -1079,9 +1107,17 @@ async def accounts(req: AccountsRequest) -> list[AccountPayload]:
             )
             if response.status in (401, 403) or "/fr/login" in response.url:
                 raise HTTPException(status_code=401, detail="SESSION_EXPIRED")
+            if not response.ok:
+                error = _portfolio_http_exception(response.status)
+                log.warning(
+                    "Bourse Direct portfolio request failed (status=%d; code=%s)",
+                    response.status,
+                    error.detail,
+                )
+                raise error
             parsed = parse_portfolio(
                 await response.text(), index, account["id"], account["name"]
-            ) if response.ok else None
+            )
             if parsed:
                 return parsed
             raise HTTPException(
@@ -1101,10 +1137,10 @@ async def accounts(req: AccountsRequest) -> list[AccountPayload]:
     except HTTPException:
         raise
     except PlaywrightError as exc:
-        log.warning("Bourse Direct portfolio browser failed: %s", type(exc).__name__)
+        log.warning("Bourse Direct portfolio browser failed", exc_info=True)
         raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE") from exc
     except Exception as exc:
-        log.error("Unexpected Bourse Direct portfolio failure: %s", type(exc).__name__)
+        log.exception("Unexpected Bourse Direct portfolio failure")
         raise HTTPException(status_code=500, detail="INTERNAL_ERROR") from exc
     finally:
         await _close_resources(context, browser, pw)

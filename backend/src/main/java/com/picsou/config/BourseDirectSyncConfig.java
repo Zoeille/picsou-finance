@@ -16,7 +16,8 @@ public class BourseDirectSyncConfig {
         executor.setMaxPoolSize(1);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("bourse-direct-sync-");
-        executor.setWaitForTasksToCompleteOnShutdown(false);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
         executor.initialize();
         return executor;
     }
