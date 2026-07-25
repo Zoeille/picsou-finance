@@ -453,6 +453,29 @@
         "unknownError": "Une erreur inattendue s'est produite."
       }
     },
+    "ibkr": {
+      "title": "Interactive Brokers",
+      "setupHint": "Dans le Client Portal IBKR, créez une requête Flex « Open Positions » et générez un jeton Flex Web Service, puis collez les deux ci-dessous.",
+      "token": "Jeton Flex Web Service",
+      "tokenPlaceholder": "ex. 123456789012345678901234",
+      "queryId": "ID de la requête Flex",
+      "queryIdPlaceholder": "ex. 987654",
+      "connect": "Connecter",
+      "sync": "Synchroniser",
+      "syncing": "Synchronisation…",
+      "disconnect": "Déconnecter",
+      "disconnectConfirm": "Supprimer la connexion Interactive Brokers enregistrée ?",
+      "connected": "Connecté",
+      "statusError": "Échec de la dernière synchro",
+      "lastSync": "Dernière sync",
+      "neverSynced": "Jamais synchronisé",
+      "syncedToast": "Interactive Brokers synchronisé : {{count}} compte(s)",
+      "errors": {
+        "connectFailed": "Impossible d'enregistrer la connexion. Vérifiez le jeton et l'ID de requête.",
+        "syncFailed": "Échec de la synchronisation Interactive Brokers. Vérifiez votre jeton ou réessayez.",
+        "disconnectFailed": "Impossible de supprimer la connexion. Réessayez."
+      }
+    },
     "exchanges": {
       "title": "Exchanges",
       "add": "Ajouter un exchange",

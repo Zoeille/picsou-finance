@@ -446,6 +446,29 @@
         "unknownError": "Ein unerwarteter Fehler ist aufgetreten."
       }
     },
+    "ibkr": {
+      "title": "Interactive Brokers",
+      "setupHint": "Erstellen Sie im IBKR Client Portal eine „Open Positions“-Flex-Abfrage und generieren Sie ein Flex-Web-Service-Token, und fügen Sie beide unten ein.",
+      "token": "Flex-Web-Service-Token",
+      "tokenPlaceholder": "z. B. 123456789012345678901234",
+      "queryId": "Flex-Abfrage-ID",
+      "queryIdPlaceholder": "z. B. 987654",
+      "connect": "Verbinden",
+      "sync": "Synchronisieren",
+      "syncing": "Wird synchronisiert…",
+      "disconnect": "Trennen",
+      "disconnectConfirm": "Gespeicherte Interactive-Brokers-Verbindung entfernen?",
+      "connected": "Verbunden",
+      "statusError": "Letzte Synchronisierung fehlgeschlagen",
+      "lastSync": "Letzte Sync",
+      "neverSynced": "Nie synchronisiert",
+      "syncedToast": "Interactive Brokers synchronisiert: {{count}} Konto/Konten",
+      "errors": {
+        "connectFailed": "Verbindung konnte nicht gespeichert werden. Prüfen Sie Token und Abfrage-ID.",
+        "syncFailed": "Interactive-Brokers-Synchronisierung fehlgeschlagen. Prüfen Sie Ihr Token oder versuchen Sie es erneut.",
+        "disconnectFailed": "Verbindung konnte nicht entfernt werden. Bitte versuchen Sie es erneut."
+      }
+    },
     "exchanges": {
       "title": "Exchanges",
       "add": "Exchange hinzufügen",
