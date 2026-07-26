@@ -8,6 +8,7 @@ import {
   finaryApi,
   boursoApi,
   bourseDirectApi,
+  fortuneoApi,
 } from './api'
 import type {
   ExchangeType,
@@ -27,6 +28,7 @@ export const syncKeys = {
   tr: () => [...syncKeys.all, 'tr'] as const,
   bourso: () => [...syncKeys.all, 'bourso'] as const,
   bourseDirect: () => [...syncKeys.all, 'bourse-direct'] as const,
+  fortuneo: () => [...syncKeys.all, 'fortuneo'] as const,
   exchanges: () => [...syncKeys.all, 'exchanges'] as const,
   wallets: () => [...syncKeys.all, 'wallets'] as const,
   finary: () => [...syncKeys.all, 'finary'] as const,
@@ -288,6 +290,79 @@ export function useClearBourseDirectSession() {
     mutationFn: bourseDirectApi.clearSession,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: syncKeys.bourseDirect() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Fortuneo
+// ---------------------------------------------------------------------------
+
+export function useFortuneoStatus() {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: syncKeys.fortuneo(),
+    queryFn: fortuneoApi.getStatus,
+    staleTime: 0,
+    refetchInterval: currentQuery => {
+      const state = currentQuery.state.data?.syncStatus
+      return state === 'QUEUED' || state === 'RUNNING' ? 1_500 : 30_000
+    },
+  })
+  const completedAt = query.data?.lastSyncCompletedAt
+  const succeeded = query.data?.syncStatus === 'SUCCESS'
+
+  useEffect(() => {
+    if (!succeeded || !completedAt) return
+    queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+  }, [completedAt, queryClient, succeeded])
+
+  return query
+}
+
+export function useInitiateFortuneoAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ login, password }: { login: string; password: string }) =>
+      fortuneoApi.initiateAuth(login, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.fortuneo() })
+    },
+  })
+}
+
+export function useCompleteFortuneoAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ processId, code }: { processId: string; code: string }) =>
+      fortuneoApi.completeAuth(processId, code),
+    onSuccess: status => {
+      queryClient.setQueryData(syncKeys.fortuneo(), status)
+      queryClient.invalidateQueries({ queryKey: syncKeys.fortuneo() })
+    },
+  })
+}
+
+export function useSyncFortuneo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: fortuneoApi.sync,
+    onSuccess: status => {
+      queryClient.setQueryData(syncKeys.fortuneo(), status)
+      queryClient.invalidateQueries({ queryKey: syncKeys.fortuneo() })
+    },
+  })
+}
+
+export function useClearFortuneoSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: fortuneoApi.clearSession,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.fortuneo() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },

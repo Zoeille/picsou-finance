@@ -397,6 +397,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "PEA- und Wertpapierkonten synchronisieren",
+      "fortuneo": "Fortuneo-Konten synchronisieren",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen"
     }
@@ -601,6 +602,36 @@
         "formatChanged": "Bourse Direct hat sein Portfolioformat geändert. Deine vorhandenen Daten wurden nicht verändert.",
         "invalidData": "Bourse Direct hat widersprüchliche Portfoliodaten geliefert. Deine vorhandenen Daten wurden nicht verändert.",
         "serverError": "Bourse Direct konnte nicht erreicht werden. Bitte erneut versuchen."
+      }
+    },
+    "fortuneo": {
+      "title": "Fortuneo",
+      "login": "Login",
+      "password": "Passwort",
+      "otpCode": "6-stelliger Sicherheitscode",
+      "otpPrompt": "Gib den von Fortuneo gesendeten Code ein. Dieses Gerät wird nicht als vertrauenswürdig markiert.",
+      "connect": "Verbinden",
+      "connecting": "Verbindung wird hergestellt…",
+      "validate": "Code bestätigen",
+      "validating": "Code wird geprüft…",
+      "sync": "Synchronisieren",
+      "queued": "Synchronisierung in Warteschlange…",
+      "syncing": "Synchronisierung läuft…",
+      "syncSuccess": "Portfolio synchronisiert.",
+      "clearSession": "Trennen",
+      "noSession": "Keine aktive Sitzung",
+      "sessionActive": "Aktive Sitzung",
+      "scope": "Synchronisiert Positionen, Einstandspreis, Kurs, Bewertung und Bargeld für PEA-, Wertpapier- und Bargeldkonten sowie aktuelle Transaktionen.",
+      "errors": {
+        "tooManyAttempts": "Zu viele Versuche. Bitte warten.",
+        "invalidCredentials": "Ungültige Fortuneo-Zugangsdaten.",
+        "invalidCode": "Ungültiger oder abgelaufener Sicherheitscode. Anmeldung erneut starten.",
+        "authAttemptExpired": "Der Anmeldeversuch ist abgelaufen. Anmeldung erneut starten.",
+        "sessionExpired": "Die Fortuneo-Sitzung ist abgelaufen. Bitte erneut verbinden.",
+        "portfolioIncomplete": "Fortuneo hat ein unvollständiges Portfolio geliefert. Deine vorhandenen Daten wurden nicht verändert.",
+        "formatChanged": "Fortuneo hat sein Portfolioformat geändert. Deine vorhandenen Daten wurden nicht verändert.",
+        "invalidData": "Fortuneo hat widersprüchliche Portfoliodaten geliefert. Deine vorhandenen Daten wurden nicht verändert.",
+        "serverError": "Fortuneo konnte nicht erreicht werden. Bitte erneut versuchen."
       }
     }
   },
@@ -834,6 +865,7 @@
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
       "boursedirect": "Bourse Direct",
+      "fortuneo": "Fortuneo",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Krypto"
@@ -1006,6 +1038,10 @@
           "title": "Bourse Direct",
           "description": "PEA- und Wertpapierpositionen direkt mit Zwei-Faktor-Authentifizierung synchronisieren."
         },
+        "fortuneo": {
+          "title": "Fortuneo",
+          "description": "Synchronisieren Sie Ihr PEA, Wertpapier- und Girokonto mit Zwei-Faktor-Authentifizierung."
+        },
         "traderepublic": {
           "title": "Trade Republic",
           "description": "Synchronisiere dein Trade-Republic-Portfolio mit deinen Login-Daten. Die Zugangsdaten gibst du beim Erstellen des Kontos ein."
@@ -1118,6 +1154,13 @@
       "tip": "Picsou speichert nur eine verschlüsselte Sitzung. Passwort und 2FA-Code werden nie gespeichert. Importierte Konten bleiben ihrem PEA- oder Wertpapierkonto zugeordnet.",
       "cta": "Bourse Direct aktivieren",
       "skip": "Bourse Direct nicht aktivieren"
+    },
+    "fortuneo": {
+      "title": "Fortuneo ist bereit.",
+      "body": "Melde dich nach der Einrichtung mit deinen Fortuneo-Zugangsdaten und dem 6-stelligen Sicherheitscode an.",
+      "tip": "Picsou speichert nur eine verschlüsselte Sitzung. Passwort und 2FA-Code werden nie gespeichert. Importierte Konten bleiben ihrem PEA-, Wertpapier- oder Bargeldkonto zugeordnet.",
+      "cta": "Fortuneo aktivieren",
+      "skip": "Fortuneo nicht aktivieren"
     },
     "tr": {
       "title": "Trade Republic ist startklar.",

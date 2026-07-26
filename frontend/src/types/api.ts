@@ -310,6 +310,40 @@ export interface BourseDirectAuthInitResponse {
   mfaType: string | null
 }
 
+interface FortuneoSessionStatusBase {
+  isActive: boolean
+  expiresAt: string | null
+  lastSyncStartedAt: string | null
+  lastSyncCompletedAt: string | null
+}
+
+export type FortuneoSessionStatus =
+  | (FortuneoSessionStatusBase & {
+      syncStatus: 'FAILED'
+      lastSyncError: FortuneoErrorCode
+    })
+  | (FortuneoSessionStatusBase & {
+      syncStatus: 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCESS'
+      lastSyncError: null
+    })
+
+export type FortuneoErrorCode =
+  | 'INVALID_CREDENTIALS'
+  | 'INVALID_OTP'
+  | 'AUTH_ATTEMPT_EXPIRED'
+  | 'SESSION_EXPIRED'
+  | 'PORTFOLIO_INCOMPLETE'
+  | 'UPSTREAM_FORMAT_CHANGED'
+  | 'UPSTREAM_UNAVAILABLE'
+  | 'INVALID_DATA'
+  | 'INTERNAL_ERROR'
+
+export interface FortuneoAuthInitResponse {
+  processId: string | null
+  mfaRequired: boolean
+  mfaType: string | null
+}
+
 export interface FinaryAccountPreview {
   finaryId: string
   finaryName: string

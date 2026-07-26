@@ -404,6 +404,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sync your PEA and securities accounts",
+      "fortuneo": "Sync your Fortuneo accounts",
       "finary": "Import from Finary",
       "manual": "Create an account manually"
     }
@@ -608,6 +609,36 @@
         "formatChanged": "Bourse Direct changed its portfolio format. Your existing data was kept unchanged.",
         "invalidData": "Bourse Direct returned inconsistent portfolio data. Your existing data was kept unchanged.",
         "serverError": "Could not reach Bourse Direct. Please try again."
+      }
+    },
+    "fortuneo": {
+      "title": "Fortuneo",
+      "login": "Login",
+      "password": "Password",
+      "otpCode": "6-digit security code",
+      "otpPrompt": "Enter the code sent by Fortuneo. This device will not be marked as trusted.",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "validate": "Validate code",
+      "validating": "Validating…",
+      "sync": "Sync",
+      "queued": "Synchronization queued…",
+      "syncing": "Syncing…",
+      "syncSuccess": "Portfolio synchronized.",
+      "clearSession": "Disconnect",
+      "noSession": "No active session",
+      "sessionActive": "Active session",
+      "scope": "Syncs positions, average cost, price, valuation and cash for PEA, securities, and cash accounts, plus recent transactions.",
+      "errors": {
+        "tooManyAttempts": "Too many attempts. Please wait.",
+        "invalidCredentials": "Invalid Fortuneo credentials.",
+        "invalidCode": "Invalid or expired security code. Start the login again.",
+        "authAttemptExpired": "The authentication attempt expired. Start the login again.",
+        "sessionExpired": "The Fortuneo session expired. Please reconnect.",
+        "portfolioIncomplete": "Fortuneo returned an incomplete portfolio. Your existing data was kept unchanged.",
+        "formatChanged": "Fortuneo changed its portfolio format. Your existing data was kept unchanged.",
+        "invalidData": "Fortuneo returned inconsistent portfolio data. Your existing data was kept unchanged.",
+        "serverError": "Could not reach Fortuneo. Please try again."
       }
     }
   },
@@ -841,6 +872,7 @@
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
       "boursedirect": "Bourse Direct",
+      "fortuneo": "Fortuneo",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Crypto"
@@ -1017,6 +1049,10 @@
           "title": "Bourse Direct",
           "description": "Directly sync your PEA and securities-account positions with two-factor authentication."
         },
+        "fortuneo": {
+          "title": "Fortuneo",
+          "description": "Sync your PEA, securities account, and cash accounts with two-factor authentication."
+        },
         "finary": {
           "title": "Finary",
           "description": "Import holdings and auto-sync with your Finary account. TOTP is handled at add-time."
@@ -1125,6 +1161,13 @@
       "tip": "Picsou only stores an encrypted session. Your password and 2FA code are never stored. Imported accounts remain attached to their PEA or securities account.",
       "cta": "Enable Bourse Direct",
       "skip": "Don't enable Bourse Direct"
+    },
+    "fortuneo": {
+      "title": "Fortuneo is ready.",
+      "body": "After setup, sign in with your Fortuneo credentials and the 6-digit security code.",
+      "tip": "Picsou only stores an encrypted session. Your password and 2FA code are never stored. Imported accounts remain attached to their PEA, securities, or cash account.",
+      "cta": "Enable Fortuneo",
+      "skip": "Don't enable Fortuneo"
     },
     "tr": {
       "title": "Trade Republic is ready to go.",

@@ -404,6 +404,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Synchroniser vos PEA et CTO",
+      "fortuneo": "Synchroniser vos comptes Fortuneo",
       "finary": "Importer depuis Finary",
       "manual": "Créer un compte manuellement"
     }
@@ -608,6 +609,36 @@
         "formatChanged": "Le format du portefeuille Bourse Direct a changé. Vos données existantes ont été conservées.",
         "invalidData": "Bourse Direct a renvoyé des données incohérentes. Vos données existantes ont été conservées.",
         "serverError": "Impossible de joindre Bourse Direct. Veuillez réessayer."
+      }
+    },
+    "fortuneo": {
+      "title": "Fortuneo",
+      "login": "Identifiant",
+      "password": "Mot de passe",
+      "otpCode": "Code de sécurité à 6 chiffres",
+      "otpPrompt": "Saisissez le code envoyé par Fortuneo. Cet appareil ne sera pas déclaré comme appareil de confiance.",
+      "connect": "Se connecter",
+      "connecting": "Connexion en cours…",
+      "validate": "Valider le code",
+      "validating": "Validation en cours…",
+      "sync": "Synchroniser",
+      "queued": "Synchronisation en attente…",
+      "syncing": "Synchronisation en cours…",
+      "syncSuccess": "Portefeuille synchronisé.",
+      "clearSession": "Déconnecter",
+      "noSession": "Aucune session active",
+      "sessionActive": "Session active",
+      "scope": "Synchronise les positions, le PRU, le cours, la valorisation et les liquidités de vos PEA, comptes-titres et comptes espèces, ainsi que les transactions récentes.",
+      "errors": {
+        "tooManyAttempts": "Trop de tentatives. Veuillez patienter.",
+        "invalidCredentials": "Identifiants Fortuneo invalides.",
+        "invalidCode": "Code de sécurité invalide ou expiré. Recommencez la connexion.",
+        "authAttemptExpired": "La tentative d’authentification a expiré. Recommencez la connexion.",
+        "sessionExpired": "La session Fortuneo a expiré. Veuillez vous reconnecter.",
+        "portfolioIncomplete": "Fortuneo a renvoyé un portefeuille incomplet. Vos données existantes ont été conservées.",
+        "formatChanged": "Le format du portefeuille Fortuneo a changé. Vos données existantes ont été conservées.",
+        "invalidData": "Fortuneo a renvoyé des données incohérentes. Vos données existantes ont été conservées.",
+        "serverError": "Impossible de joindre Fortuneo. Veuillez réessayer."
       }
     }
   },
@@ -841,6 +872,7 @@
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
       "boursedirect": "Bourse Direct",
+      "fortuneo": "Fortuneo",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Crypto"
@@ -1013,6 +1045,10 @@
           "title": "Bourse Direct",
           "description": "Synchronisez directement vos positions PEA et compte-titres avec une authentification 2FA."
         },
+        "fortuneo": {
+          "title": "Fortuneo",
+          "description": "Synchronisez votre PEA, compte-titres et comptes espèces avec une authentification 2FA."
+        },
         "traderepublic": {
           "title": "Trade Republic",
           "description": "Synchronisez votre portefeuille Trade Republic avec vos identifiants. Vous les ajouterez au moment de créer le compte."
@@ -1125,6 +1161,13 @@
       "tip": "Picsou conserve uniquement une session chiffrée. Le mot de passe et le code 2FA ne sont jamais enregistrés. Les comptes restent rattachés à leur PEA ou CTO.",
       "cta": "Activer Bourse Direct",
       "skip": "Ne pas activer Bourse Direct"
+    },
+    "fortuneo": {
+      "title": "Fortuneo est prêt.",
+      "body": "Vous vous connecterez après l'installation avec vos identifiants Fortuneo, puis le code de sécurité à 6 chiffres.",
+      "tip": "Picsou conserve uniquement une session chiffrée. Le mot de passe et le code 2FA ne sont jamais enregistrés. Les comptes restent rattachés à leur PEA, compte-titres ou compte espèces.",
+      "cta": "Activer Fortuneo",
+      "skip": "Ne pas activer Fortuneo"
     },
     "tr": {
       "title": "Trade Republic est prêt.",

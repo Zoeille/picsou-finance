@@ -32,6 +32,7 @@ import {
   Lock,
   ShieldCheck,
   User,
+  PiggyBank,
 } from 'lucide-react'
 import {
   useBankSyncStatus,
@@ -49,14 +50,19 @@ import {
   useSyncBourso,
   useInitiateBoursoAuth,
   useCompleteBoursoAuth,
+  useFortuneoStatus,
+  useSyncFortuneo,
+  useInitiateFortuneoAuth,
+  useCompleteFortuneoAuth,
 } from '@/features/sync/hooks'
 import { useAccounts } from '@/features/accounts/hooks'
 import { formatTimeAgo } from '@/lib/utils'
 import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
+import { formatFortuneoError, fortuneoErrorMessage } from '@/lib/errors'
 
 type SyncConnection = {
   id: string
-  providerType: 'bank' | 'exchange' | 'wallet' | 'tr' | 'finary' | 'bourso'
+  providerType: 'bank' | 'exchange' | 'wallet' | 'tr' | 'finary' | 'bourso' | 'fortuneo'
   name: string
   status: string
   lastSyncedAt: string | null
@@ -71,6 +77,7 @@ const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{
   tr: Building2,
   finary: LineChart,
   bourso: Building2,
+  fortuneo: PiggyBank,
 }
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -109,12 +116,14 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const { data: trStatus } = useTrSessionStatus()
   const { data: boursoStatus } = useBoursoSessionStatus()
   const { data: finaryStatus } = useFinaryConnectionStatus()
+  const { data: fortuneoStatus } = useFortuneoStatus()
   const { data: accounts } = useAccounts()
 
-  // Detect if user has a TR / BoursoBank account
+  // Detect if user has a TR / BoursoBank / Fortuneo account
   const hasTrAccount     = accounts?.some(a => a.provider === 'Trade Republic') ?? false
   // BoursoBank disabled for 1.0.0 — sidecar integration not finished.
   const hasBoursoAccount = false
+  const hasFortuneoAccount = accounts?.some(a => a.provider === 'Fortuneo') ?? false
 
   // Mutations
   const retryBankMutation    = useRetryBankSync()
@@ -126,6 +135,9 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const syncBoursoMutation   = useSyncBourso()
   const initiateBoursoMutation = useInitiateBoursoAuth()
   const completeBoursoMutation = useCompleteBoursoAuth()
+  const syncFortuneoMutation   = useSyncFortuneo()
+  const initiateFortuneoMutation = useInitiateFortuneoAuth()
+  const completeFortuneoMutation = useCompleteFortuneoAuth()
 
   // Track syncing state per connection
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set())
@@ -144,6 +156,20 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const [boursoMfaCode, setBoursoMfaCode] = useState('')
   const [boursoProcessId, setBoursoProcessId] = useState<string | null>(null)
   const [boursoMfaInfo, setBoursoMfaInfo] = useState<{ type: string; contact: string } | null>(null)
+
+  // Fortuneo inline auth state
+  const [fortuneoAuthStep, setFortuneoAuthStep] = useState<'idle' | 'credentials' | 'otp'>('idle')
+  const [fortuneoLogin, setFortuneoLogin] = useState('')
+  const [fortuneoPassword, setFortuneoPassword] = useState('')
+  const [fortuneoCode, setFortuneoCode] = useState('')
+  const [fortuneoProcessId, setFortuneoProcessId] = useState<string | null>(null)
+  const [fortuneoError, setFortuneoError] = useState<string | null>(null)
+  // POST /sync returns 202 as soon as the job is queued, so the local optimistic
+  // flag clears within milliseconds while the job itself runs for over a minute.
+  // The backend's own status is the only thing that knows work is still happening
+  // -- useFortuneoStatus polls it every 1.5s while QUEUED/RUNNING.
+  const fortuneoBusy =
+    fortuneoStatus?.syncStatus === 'QUEUED' || fortuneoStatus?.syncStatus === 'RUNNING'
 
   const isLoading = banksLoading || exchangesLoading || walletsLoading
 
@@ -211,6 +237,24 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         lastSyncedAt: boursoAccount?.lastSyncedAt ?? null,
       })
     }
+    if (hasFortuneoAccount) {
+      const fortuneoAccount = accounts?.find(a => a.provider === 'Fortuneo')
+      list.push({
+        id: 'fortuneo',
+        providerType: 'fortuneo',
+        name: 'Fortuneo',
+        // The session can still be active while the last sync attempt
+        // failed (e.g. a transient upstream error, or a scrape that
+        // correctly failed closed) -- surface that distinctly instead of
+        // collapsing it into "active" with no indication anything is wrong.
+        status: !fortuneoStatus?.isActive
+          ? 'SESSION_EXPIRED'
+          : fortuneoStatus?.syncStatus === 'FAILED'
+            ? 'FAILED'
+            : 'active',
+        lastSyncedAt: fortuneoAccount?.lastSyncedAt ?? null,
+      })
+    }
     if (finaryStatus?.connected) {
       list.push({
         id: 'finary',
@@ -221,7 +265,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       })
     }
     return list
-  }, [banks, exchanges, wallets, hasTrAccount, accounts, trStatus?.isActive, hasBoursoAccount, boursoStatus?.isActive, finaryStatus])
+  }, [banks, exchanges, wallets, hasTrAccount, accounts, trStatus?.isActive, hasBoursoAccount, boursoStatus?.isActive, hasFortuneoAccount, fortuneoStatus?.isActive, fortuneoStatus?.syncStatus, finaryStatus])
 
   const handleSync = useCallback((connection: SyncConnection) => {
     // TR without active session: open inline auth instead of syncing
@@ -232,6 +276,11 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     // Bourso without active session: open inline auth
     if (connection.providerType === 'bourso' && !boursoStatus?.isActive) {
       setBoursoAuthStep('credentials')
+      return
+    }
+    // Fortuneo without active session: open inline auth
+    if (connection.providerType === 'fortuneo' && !fortuneoStatus?.isActive) {
+      setFortuneoAuthStep('credentials')
       return
     }
 
@@ -283,6 +332,15 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
           }),
         })
         break
+      case 'fortuneo':
+        syncFortuneoMutation.mutate(undefined, {
+          onSettled: () => setSyncingIds(prev => {
+            const next = new Set(prev)
+            next.delete(connection.id)
+            return next
+          }),
+        })
+        break
       case 'finary':
         navigate('/sync?tab=finary')
         onOpenChange(false)
@@ -296,35 +354,39 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   }, [
     trStatus?.isActive,
     boursoStatus?.isActive,
+    fortuneoStatus?.isActive,
     retryBankMutation,
     syncExchangeMutation,
     syncWalletMutation,
     syncTrMutation,
     syncBoursoMutation,
+    syncFortuneoMutation,
     navigate,
     onOpenChange,
   ])
 
   const handleSyncAll = useCallback(() => {
-    // Skip Finary (manual two-phase flow), TR/Bourso without active session
+    // Skip Finary (manual two-phase flow), TR/Bourso/Fortuneo without active session
     connections
       .filter(c =>
         c.providerType !== 'finary' &&
         !(c.providerType === 'tr' && !trStatus?.isActive) &&
-        !(c.providerType === 'bourso' && !boursoStatus?.isActive)
+        !(c.providerType === 'bourso' && !boursoStatus?.isActive) &&
+        !(c.providerType === 'fortuneo' && !fortuneoStatus?.isActive)
       )
       .forEach(connection => {
         if (!syncingIds.has(connection.id)) {
           handleSync(connection)
         }
       })
-  }, [connections, syncingIds, handleSync, trStatus?.isActive, boursoStatus?.isActive])
+  }, [connections, syncingIds, handleSync, trStatus?.isActive, boursoStatus?.isActive, fortuneoStatus?.isActive])
 
   const isSyncAll = syncingIds.size > 0 && connections
     .filter(c =>
       c.providerType !== 'finary' &&
       !(c.providerType === 'tr' && !trStatus?.isActive) &&
-      !(c.providerType === 'bourso' && !boursoStatus?.isActive)
+      !(c.providerType === 'bourso' && !boursoStatus?.isActive) &&
+      !(c.providerType === 'fortuneo' && !fortuneoStatus?.isActive)
     )
     .every(c => syncingIds.has(c.id))
 
@@ -420,6 +482,72 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     setBoursoMfaInfo(null)
   }
 
+  // --- Fortuneo inline auth ---
+  function handleFortuneoInitiate(e: React.FormEvent) {
+    e.preventDefault()
+    setFortuneoError(null)
+    initiateFortuneoMutation.mutate(
+      { login: fortuneoLogin, password: fortuneoPassword },
+      {
+        onSuccess: (data) => {
+          setFortuneoPassword('')
+          if (!data.mfaRequired) {
+            setFortuneoAuthStep('idle')
+            setFortuneoLogin('')
+            queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+            queryClient.invalidateQueries({ queryKey: ['sync', 'fortuneo'] })
+          } else if (!data.processId) {
+            // Never advance to the OTP step without an id to complete
+            // with: the submit handler would have nothing to send and
+            // would look inert.
+            setFortuneoError(t('sync.fortuneo.errors.serverError'))
+          } else {
+            setFortuneoProcessId(data.processId)
+            setFortuneoAuthStep('otp')
+          }
+        },
+        onError: (value) => setFortuneoError(formatFortuneoError(value, t)),
+      },
+    )
+  }
+
+  function handleFortuneoComplete(e: React.FormEvent) {
+    e.preventDefault()
+    if (!fortuneoProcessId) {
+      setFortuneoError(t('sync.fortuneo.errors.authAttemptExpired'))
+      return
+    }
+    setFortuneoError(null)
+    completeFortuneoMutation.mutate(
+      { processId: fortuneoProcessId, code: fortuneoCode },
+      {
+        onSuccess: () => {
+          resetFortuneoAuth()
+          queryClient.invalidateQueries({ queryKey: ['accounts'] })
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+          queryClient.invalidateQueries({ queryKey: ['sync', 'fortuneo'] })
+        },
+        // Keep the OTP step visible and the processId alive so the user
+        // can retry the code without re-entering credentials -- but clear
+        // the typed code, mirroring FortuneoPanel.
+        onError: (value) => {
+          setFortuneoError(formatFortuneoError(value, t))
+          setFortuneoCode('')
+        },
+      },
+    )
+  }
+
+  function resetFortuneoAuth() {
+    setFortuneoAuthStep('idle')
+    setFortuneoLogin('')
+    setFortuneoPassword('')
+    setFortuneoCode('')
+    setFortuneoProcessId(null)
+    setFortuneoError(null)
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -455,10 +583,13 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
           <div className="space-y-2">
             {connections.map(connection => {
               const Icon = ProviderIcon[connection.providerType]
-              const isSyncing = syncingIds.has(connection.id)
+              const isSyncing =
+                syncingIds.has(connection.id) ||
+                (connection.providerType === 'fortuneo' && fortuneoBusy)
               const isFinary = connection.providerType === 'finary'
               const isTr = connection.providerType === 'tr'
               const isBourso = connection.providerType === 'bourso'
+              const isFortuneo = connection.providerType === 'fortuneo'
 
               return (
                 <Card key={connection.id} size="sm">
@@ -469,10 +600,19 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{connection.name}</span>
-                            <Badge variant={statusVariant(connection.status)} className="text-xs">
-                              {(isTr || isBourso) && connection.status === 'SESSION_EXPIRED'
-                                ? t(isBourso ? 'sync.bourso.noSession' : 'sync.tr.noSession')
-                                : connection.status}
+                            <Badge
+                              variant={isFortuneo && fortuneoBusy ? 'secondary' : statusVariant(connection.status)}
+                              className="text-xs"
+                            >
+                              {isFortuneo && fortuneoBusy
+                                ? t(fortuneoStatus?.syncStatus === 'QUEUED'
+                                    ? 'sync.fortuneo.queued'
+                                    : 'sync.fortuneo.syncing')
+                                : isFortuneo && connection.status === 'FAILED'
+                                ? (fortuneoErrorMessage(t, fortuneoStatus?.lastSyncError) ?? t('sync.fortuneo.errors.serverError'))
+                                : (isTr || isBourso || isFortuneo) && connection.status === 'SESSION_EXPIRED'
+                                  ? t(isBourso ? 'sync.bourso.noSession' : isFortuneo ? 'sync.fortuneo.noSession' : 'sync.tr.noSession')
+                                  : connection.status}
                             </Badge>
                             {isTr && (
                               <Tooltip>
@@ -658,6 +798,91 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                                 {t('sync.tr.connect')}
                               </Button>
                               <Button type="button" size="sm" variant="outline" onClick={resetTrAuth}>
+                                {t('common.cancel')}
+                              </Button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Fortuneo inline auth form */}
+                    {isFortuneo && fortuneoAuthStep !== 'idle' && !fortuneoStatus?.isActive && (
+                      <div className="mt-3 border-t pt-3">
+                        {fortuneoError && (
+                          <p role="alert" className="mb-3 text-xs text-destructive">
+                            {fortuneoError}
+                          </p>
+                        )}
+                        {fortuneoAuthStep === 'credentials' && (
+                          <form onSubmit={handleFortuneoInitiate} className="space-y-3">
+                            <div className="space-y-1">
+                              <Label htmlFor="fortuneo-modal-login">
+                                <User className="size-3 inline-block mr-1" />
+                                {t('sync.fortuneo.login')}
+                              </Label>
+                              <Input
+                                id="fortuneo-modal-login"
+                                type="text"
+                                autoComplete="username"
+                                value={fortuneoLogin}
+                                onChange={e => setFortuneoLogin(e.target.value)}
+                                required
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="fortuneo-modal-pwd">
+                                <Lock className="size-3 inline-block mr-1" />
+                                {t('sync.fortuneo.password')}
+                              </Label>
+                              <Input
+                                id="fortuneo-modal-pwd"
+                                type="password"
+                                autoComplete="current-password"
+                                value={fortuneoPassword}
+                                onChange={e => setFortuneoPassword(e.target.value)}
+                                required
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button type="submit" size="sm" disabled={initiateFortuneoMutation.isPending}>
+                                {initiateFortuneoMutation.isPending && <Loader2 className="size-3 animate-spin" />}
+                                {t('sync.fortuneo.connect')}
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" onClick={resetFortuneoAuth}>
+                                {t('common.cancel')}
+                              </Button>
+                            </div>
+                          </form>
+                        )}
+                        {fortuneoAuthStep === 'otp' && (
+                          <form onSubmit={handleFortuneoComplete} className="space-y-3">
+                            <p className="text-xs text-muted-foreground">
+                              {t('sync.fortuneo.otpPrompt')}
+                            </p>
+                            <div className="space-y-1">
+                              <Label htmlFor="fortuneo-modal-otp">
+                                <ShieldCheck className="size-3 inline-block mr-1" />
+                                {t('sync.fortuneo.otpCode')}
+                              </Label>
+                              <Input
+                                id="fortuneo-modal-otp"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                pattern="[0-9]{6}"
+                                maxLength={6}
+                                value={fortuneoCode}
+                                onChange={e => setFortuneoCode(e.target.value.replace(/\D/g, ''))}
+                                autoFocus
+                                required
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button type="submit" size="sm" disabled={completeFortuneoMutation.isPending || fortuneoCode.length !== 6}>
+                                {completeFortuneoMutation.isPending && <Loader2 className="size-3 animate-spin" />}
+                                {t('sync.fortuneo.validate')}
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" onClick={resetFortuneoAuth}>
                                 {t('common.cancel')}
                               </Button>
                             </div>

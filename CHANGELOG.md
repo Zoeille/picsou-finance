@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Fortuneo sync.** A Playwright sidecar handles login and the SMS/app
+  security code, then imports PEA, PEA-PME, CTO (Compte-titres), and Compte
+  Courant accounts — balances, cash, positions, and recent transactions — via
+  Fortuneo's own GraphQL and REST APIs, following the same async-job-queue,
+  atomic-snapshot pattern as Bourse Direct, extended with BoursoBank's
+  cash-account and 90-day transaction replacement. Per-position holdings
+  (ISIN, quantity, buying price, current price, valuation, P&L) for PEA/CTO
+  are read from the account's `/situation/` page on Fortuneo's legacy
+  frontend, reached through the site's own SSO handshake. Each snapshot is
+  reconciled against the page's own valuation summary — holdings must sum to
+  its securities total — and the account's cash is read from that same
+  summary rather than inferred. Verified end-to-end against a live account:
+  login, 2FA, accounts, balances, positions and transactions. An account
+  that cannot be reconciled fails closed (`PORTFOLIO_INCOMPLETE` /
+  `INVALID_DATA`) rather than under-reporting, and a securities account that
+  genuinely holds nothing is distinguished from one whose page failed to
+  load. See [feature notes](docs/features/fortuneo.md).
 - **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
   handles login and the six-digit security code, then imports PEA/CTO positions,
   average cost, current price, valuation and account cash. Credentials and OTPs
@@ -89,6 +106,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Investment accounts holding unpriceable securities no longer display a
+  partial value.** An account whose holdings cannot all be priced by the public
+  price provider — unlisted securities in a PEA, for instance — now falls back
+  to the broker's own reported total instead of showing cash plus only the
+  holdings that happened to resolve, which understated the account and skewed
+  its gain/loss.
 - **Restoring several tabs at once no longer logs you out everywhere.** When
   multiple tabs were restored together they each presented the same "Remember
   Me" token; the first request rotated it and the rest looked like a replayed

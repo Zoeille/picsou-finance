@@ -284,6 +284,13 @@ public class AccountService {
      * For accounts with holdings, computes live total from current prices.
      * For cash accounts, returns the stored balance converted to EUR.
      */
+    /**
+     * Providers whose own EUR total is trusted over a partial recomputation when any
+     * holding cannot be priced. Both scrape a broker-reported valuation that already
+     * includes instruments no public price feed covers.
+     */
+    private static final Set<String> AUTHORITATIVE_TOTAL_PROVIDERS = Set.of("Bourse Direct", "Fortuneo");
+
     public BigDecimal liveBalanceEur(Account account) {
         if (account.getType() == AccountType.LOAN) {
             return debtRepository.findByAccountId(account.getId())
@@ -316,10 +323,18 @@ public class AccountService {
             }
             liveValue = liveValue.add(qty.multiply(livePrice));
         }
-        // Bourse Direct reports an authoritative total in EUR. If Yahoo/OpenFIGI cannot
+        // These providers report an authoritative total in EUR. If Yahoo/OpenFIGI cannot
         // price even one instrument, prefer that last successful broker valuation over a
         // misleading partial total (cash + only the symbols Yahoo happened to resolve).
-        if ("Bourse Direct".equals(account.getProvider()) && !allHoldingsPriced) {
+        // For Fortuneo this is not merely an outage guard: a PEA can hold unlisted
+        // securities ("titres non cotés") that OpenFIGI will never resolve, so the
+        // partial total is permanently wrong rather than temporarily -- confirmed live,
+        // where a few such holdings understated a real PEA by their entire value.
+        // Null-guarded: manual accounts carry no provider, and Set.of() rejects null
+        // outright (unlike the String.equals() check this replaced).
+        if (account.getProvider() != null
+            && AUTHORITATIVE_TOTAL_PROVIDERS.contains(account.getProvider())
+            && !allHoldingsPriced) {
             return account.getCurrentBalance();
         }
         return liveValue;

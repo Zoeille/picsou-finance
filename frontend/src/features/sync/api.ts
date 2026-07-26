@@ -15,6 +15,8 @@ import type {
   BoursoAuthInitResponse,
   BourseDirectSessionStatus,
   BourseDirectAuthInitResponse,
+  FortuneoSessionStatus,
+  FortuneoAuthInitResponse,
 } from '@/types/api'
 
 // --- Bank Sync (Enable Banking) ---
@@ -176,6 +178,32 @@ export const bourseDirectApi = {
       .then(r => r.data),
 
   clearSession: () => api.delete('/bourse-direct/session'),
+}
+
+// --- Fortuneo ---
+
+export const fortuneoApi = {
+  initiateAuth: (login: string, password: string) =>
+    api
+      .post<FortuneoAuthInitResponse>('/fortuneo/auth/initiate', { login, password })
+      .then(r => r.data),
+
+  completeAuth: (processId: string, code: string) =>
+    api
+      .post<FortuneoSessionStatus>('/fortuneo/auth/complete', { processId, code })
+      .then(r => r.data),
+
+  sync: () =>
+    api.post<FortuneoSessionStatus>('/fortuneo/sync').then(r => r.data),
+
+  getStatus: () =>
+    api
+      .get<FortuneoSessionStatus>('/fortuneo/status', {
+        skipGlobalErrorRedirect: true,
+      })
+      .then(r => r.data),
+
+  clearSession: () => api.delete('/fortuneo/session'),
 }
 
 // --- Finary ---

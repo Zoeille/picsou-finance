@@ -5,6 +5,7 @@ import com.picsou.model.AppSetting;
 import com.picsou.repository.AppSettingRepository;
 import com.picsou.repository.BourseDirectSessionRepository;
 import com.picsou.repository.FinarySessionRepository;
+import com.picsou.repository.FortuneoSessionRepository;
 import com.picsou.repository.TradeRepublicSessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,17 +35,20 @@ public class IntegrationsService {
     private final TradeRepublicSessionRepository tradeRepublicSessions;
     private final FinarySessionRepository finarySessions;
     private final BourseDirectSessionRepository bourseDirectSessions;
+    private final FortuneoSessionRepository fortuneoSessions;
 
     public IntegrationsService(AppSettingRepository settingRepository,
                                EnableBankingConfigProvider enableBankingConfig,
                                TradeRepublicSessionRepository tradeRepublicSessions,
                                FinarySessionRepository finarySessions,
-                               BourseDirectSessionRepository bourseDirectSessions) {
+                               BourseDirectSessionRepository bourseDirectSessions,
+                               FortuneoSessionRepository fortuneoSessions) {
         this.settingRepository = settingRepository;
         this.enableBankingConfig = enableBankingConfig;
         this.tradeRepublicSessions = tradeRepublicSessions;
         this.finarySessions = finarySessions;
         this.bourseDirectSessions = bourseDirectSessions;
+        this.fortuneoSessions = fortuneoSessions;
     }
 
     @Transactional
@@ -107,6 +111,7 @@ public class IntegrationsService {
             case "traderepublic" -> tradeRepublicSessions.count() > 0;
             case "finary" -> finarySessions.count() > 0;
             case "boursedirect" -> bourseDirectSessions.existsByActiveTrue();
+            case "fortuneo" -> fortuneoSessions.existsByActiveTrue();
             default -> false;
         };
     }

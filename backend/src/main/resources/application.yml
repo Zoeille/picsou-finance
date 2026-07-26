@@ -143,6 +143,8 @@ app:
     url: ${BOURSO_AUTH_URL:http://bourso-auth:8001}
   bourse-direct-auth:
     url: ${BOURSE_DIRECT_AUTH_URL:http://bourse-direct-auth:8001}
+  fortuneo-auth:
+    url: ${FORTUNEO_AUTH_URL:http://fortuneo-auth:8001}
   enablebanking:
     application-id: ${ENABLEBANKING_APPLICATION_ID:}
     key-id: ${ENABLEBANKING_KEY_ID:}

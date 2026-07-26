@@ -397,6 +397,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
+      "fortuneo": "Sincronizar tus cuentas Fortuneo",
       "finary": "Importar desde Finary",
       "manual": "Crear una cuenta manualmente"
     }
@@ -601,6 +602,36 @@
         "formatChanged": "Bourse Direct cambió el formato de la cartera. Tus datos existentes no se modificaron.",
         "invalidData": "Bourse Direct devolvió datos de cartera incoherentes. Tus datos existentes no se modificaron.",
         "serverError": "No se pudo contactar con Bourse Direct. Inténtalo de nuevo."
+      }
+    },
+    "fortuneo": {
+      "title": "Fortuneo",
+      "login": "Usuario",
+      "password": "Contraseña",
+      "otpCode": "Código de seguridad de 6 dígitos",
+      "otpPrompt": "Introduce el código enviado por Fortuneo. Este dispositivo no se marcará como de confianza.",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "validate": "Validar código",
+      "validating": "Validando…",
+      "sync": "Sincronizar",
+      "queued": "Sincronización en cola…",
+      "syncing": "Sincronizando…",
+      "syncSuccess": "Cartera sincronizada.",
+      "clearSession": "Desconectar",
+      "noSession": "No hay sesión activa",
+      "sessionActive": "Sesión activa",
+      "scope": "Sincroniza posiciones, coste medio, cotización, valoración y efectivo de cuentas PEA, de valores y de efectivo, además de las transacciones recientes.",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espera un momento.",
+        "invalidCredentials": "Credenciales de Fortuneo no válidas.",
+        "invalidCode": "Código de seguridad no válido o caducado. Reinicia el acceso.",
+        "authAttemptExpired": "El intento de autenticación ha caducado. Reinicia el acceso.",
+        "sessionExpired": "La sesión de Fortuneo ha caducado. Vuelve a conectarte.",
+        "portfolioIncomplete": "Fortuneo devolvió una cartera incompleta. Tus datos existentes no se modificaron.",
+        "formatChanged": "Fortuneo cambió el formato de la cartera. Tus datos existentes no se modificaron.",
+        "invalidData": "Fortuneo devolvió datos de cartera incoherentes. Tus datos existentes no se modificaron.",
+        "serverError": "No se pudo contactar con Fortuneo. Inténtalo de nuevo."
       }
     }
   },
@@ -834,6 +865,7 @@
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
       "boursedirect": "Bourse Direct",
+      "fortuneo": "Fortuneo",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Cripto"
@@ -1006,6 +1038,10 @@
           "title": "Bourse Direct",
           "description": "Sincroniza directamente posiciones PEA y de valores con autenticación de dos factores."
         },
+        "fortuneo": {
+          "title": "Fortuneo",
+          "description": "Sincroniza tu PEA, cuenta de valores y cuentas de efectivo con autenticación de dos factores."
+        },
         "traderepublic": {
           "title": "Trade Republic",
           "description": "Sincroniza tu cartera de Trade Republic con tus credenciales. Las añadirás al crear la cuenta."
@@ -1118,6 +1154,13 @@
       "tip": "Picsou solo guarda una sesión cifrada. La contraseña y el código 2FA nunca se almacenan. Las cuentas importadas permanecen vinculadas a su PEA o cuenta de valores.",
       "cta": "Activar Bourse Direct",
       "skip": "No activar Bourse Direct"
+    },
+    "fortuneo": {
+      "title": "Fortuneo está listo.",
+      "body": "Tras la configuración, inicia sesión con tus credenciales de Fortuneo y el código de seguridad de 6 dígitos.",
+      "tip": "Picsou solo guarda una sesión cifrada. La contraseña y el código 2FA nunca se almacenan. Las cuentas importadas permanecen vinculadas a su PEA, cuenta de valores o cuenta de efectivo.",
+      "cta": "Activar Fortuneo",
+      "skip": "No activar Fortuneo"
     },
     "tr": {
       "title": "Trade Republic está listo.",

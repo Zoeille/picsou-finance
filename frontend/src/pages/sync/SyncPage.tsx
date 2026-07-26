@@ -9,6 +9,7 @@ import { TradeRepublicTab } from './TradeRepublicTab'
 import { IbkrTab } from './IbkrTab'
 import { FinaryTab } from './FinaryTab'
 import { BourseDirectTab } from './BourseDirectTab'
+import { FortuneoTab } from './FortuneoTab'
 // BoursoTab hidden for 1.0.0 — sidecar integration not finished.
 
 export function SyncPage() {
@@ -26,6 +27,7 @@ export function SyncPage() {
           <TabsTrigger value="wallets">{t('sync.wallets.title')}</TabsTrigger>
           <TabsTrigger value="tr">{t('sync.tr.title')}</TabsTrigger>
           <TabsTrigger value="bourse-direct">{t('sync.bourseDirect.title')}</TabsTrigger>
+          <TabsTrigger value="fortuneo">{t('sync.fortuneo.title')}</TabsTrigger>
           <TabsTrigger value="ibkr">{t('sync.ibkr.title')}</TabsTrigger>
           <TabsTrigger value="finary">{t('sync.finary.title')}</TabsTrigger>
         </TabsList>
@@ -43,6 +45,9 @@ export function SyncPage() {
         </TabsContent>
         <TabsContent value="bourse-direct" className="mt-6">
           <BourseDirectTab />
+        </TabsContent>
+        <TabsContent value="fortuneo" className="mt-6">
+          <FortuneoTab />
         </TabsContent>
         <TabsContent value="ibkr" className="mt-6">
           <IbkrTab />
