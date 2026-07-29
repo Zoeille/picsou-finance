@@ -89,6 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The GitHub link in Settings → About now points to the right repository.** It
+  linked to `github.com/zoeille/picsou`, which does not exist; the repository is
+  `github.com/zoeille/picsou-finance`.
 - **Restoring several tabs at once no longer logs you out everywhere.** When
   multiple tabs were restored together they each presented the same "Remember
   Me" token; the first request rotated it and the rest looked like a replayed
