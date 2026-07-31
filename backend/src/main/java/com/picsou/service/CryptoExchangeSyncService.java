@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.picsou.config.CryptoEncryption;
 import com.picsou.dto.AccountResponse;
 import com.picsou.dto.ExchangePositionResponse;
+import com.picsou.dto.HoldingResponse;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.exception.SyncException;
 import com.picsou.model.*;
@@ -225,19 +226,44 @@ public class CryptoExchangeSyncService {
     @Transactional(readOnly = true)
     public List<ExchangePositionResponse> getPositions(Long accountId, Long memberId) {
         accountService.getOrThrow(accountId, memberId); // member-scoped ownership check
+
+        // Cost basis is tracked per asset on AccountHolding, not per product — Meria reports no
+        // per-contract acquisition price. Each line therefore reuses the asset's unit cost and
+        // multiplies by its own quantity, so the lines still sum to the holding's cost and P&L.
+        Map<String, BigDecimal> unitCost = accountService.getHoldings(accountId, memberId).stream()
+            .filter(holding -> holding.averageBuyIn() != null)
+            .collect(Collectors.toMap(HoldingResponse::ticker, HoldingResponse::averageBuyIn,
+                (a, b) -> a));
+
         return positionRepository.findByAccountIdOrderByProductAscTickerAsc(accountId).stream()
             .map(position -> {
                 // Crypto-only pricing, for the same reason the sync uses it: a ticker CoinGecko
                 // doesn't map must read as "no price", never as the same-named share price.
                 BigDecimal price = priceService.getCryptoPriceEur(position.getTicker());
+                BigDecimal quantity = position.getQuantity();
+                BigDecimal averageBuyIn = unitCost.get(position.getTicker());
+
+                BigDecimal value = price == null ? null : price.multiply(quantity);
+                BigDecimal costBasis = averageBuyIn == null ? null : averageBuyIn.multiply(quantity);
+                BigDecimal pnl = value != null && costBasis != null ? value.subtract(costBasis) : null;
+                // abs(): the denominator is a magnitude, so the percentage keeps the sign of the
+                // P&L itself — same rule as AccountService.toHoldingResponse.
+                BigDecimal pnlPercent = pnl != null && costBasis.signum() != 0
+                    ? pnl.divide(costBasis.abs(), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                    : null;
+
                 return new ExchangePositionResponse(
                     position.getProduct().name(),
                     position.getTicker(),
-                    position.getQuantity(),
+                    quantity,
                     position.getPrincipal(),
                     position.getInterest(),
+                    averageBuyIn,
                     price,
-                    price == null ? null : price.multiply(position.getQuantity())
+                    value,
+                    costBasis,
+                    pnl,
+                    pnlPercent
                 );
             })
             .toList();

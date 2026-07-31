@@ -269,8 +269,13 @@ export interface ExchangePositionResponse {
   principal: number | null
   /** Yield *already included* in `quantity` — a decomposition, never an addition. */
   interest: number | null
+  /** Unit cost basis, shared by every line of the same asset (cost is tracked per asset). */
+  averageBuyIn: number | null
   currentPriceEur: number | null
   currentValueEur: number | null
+  costBasisEur: number | null
+  pnlEur: number | null
+  pnlPercent: number | null
 }
 
 export interface ExchangeStatus {

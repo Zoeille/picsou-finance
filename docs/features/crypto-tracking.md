@@ -55,6 +55,11 @@ A position's `interest` is a **decomposition** of its quantity, never an additio
 interest = quantity`. `principal` is null when the exchange does not report yield (all of Binance,
 which is spot-only here), and the UI then drops both columns.
 
+Cost basis stays **per asset**: Meria reports no per-contract acquisition price, so each line
+reuses its asset's `AccountHolding.averageBuyIn` and multiplies by its own quantity. A coin held
+both spot and staked therefore shows the same unit cost on both lines, and the per-line P&L still
+sums to the holding's — which is what keeps the sections reconcilable with the account balance.
+
 ### Bitcoin wallet adapter
 
 `BitcoinWalletAdapter` implements `WalletPort`. It supports three input formats for the address field:

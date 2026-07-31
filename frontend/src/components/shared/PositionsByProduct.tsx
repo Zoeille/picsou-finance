@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { ExchangePositionResponse } from '@/types/api'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -13,6 +14,12 @@ import {
 
 interface PositionsByProductProps {
   positions: ExchangePositionResponse[]
+}
+
+/** Same green/red convention as the flat holdings table. */
+function pnlColor(value: number | null): string {
+  if (value == null) return ''
+  return value >= 0 ? 'text-emerald-500' : 'text-red-500'
 }
 
 /** Fixed order rather than the API's: spot first, then what is put to work. */
@@ -63,8 +70,11 @@ export function PositionsByProduct({ positions }: PositionsByProductProps) {
                       <TableHead className="text-right">
                         {showYield ? t('positions.total') : t('holdings.quantity')}
                       </TableHead>
+                      <TableHead className="text-right">{t('holdings.avgBuyIn')}</TableHead>
                       <TableHead className="text-right">{t('holdings.assetPrice')}</TableHead>
                       <TableHead className="text-right">{t('portfolio.value')}</TableHead>
+                      <TableHead className="text-right">{t('holdings.pnl')}</TableHead>
+                      <TableHead className="text-right">{t('holdings.pnlPercent')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -83,6 +93,11 @@ export function PositionsByProduct({ positions }: PositionsByProductProps) {
                         )}
                         <TableCell className="text-right tabular-nums">{row.quantity}</TableCell>
                         <TableCell className="text-right">
+                          {row.averageBuyIn != null
+                            ? <CurrencyDisplay value={row.averageBuyIn} className="text-sm" />
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
                           {row.currentPriceEur != null
                             ? <CurrencyDisplay value={row.currentPriceEur} className="text-sm" />
                             : '—'}
@@ -90,6 +105,16 @@ export function PositionsByProduct({ positions }: PositionsByProductProps) {
                         <TableCell className="text-right font-medium">
                           {row.currentValueEur != null
                             ? <CurrencyDisplay value={row.currentValueEur} className="text-sm" />
+                            : '—'}
+                        </TableCell>
+                        <TableCell className={cn('text-right', pnlColor(row.pnlEur))}>
+                          {row.pnlEur != null
+                            ? <CurrencyDisplay value={row.pnlEur} showSign className="text-sm" />
+                            : '—'}
+                        </TableCell>
+                        <TableCell className={cn('text-right', pnlColor(row.pnlPercent))}>
+                          {row.pnlPercent != null
+                            ? `${row.pnlPercent >= 0 ? '+' : ''}${row.pnlPercent.toFixed(1)}%`
                             : '—'}
                         </TableCell>
                       </TableRow>

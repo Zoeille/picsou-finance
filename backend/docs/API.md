@@ -846,15 +846,21 @@ The per-product breakdown behind an account's holdings. **Empty** for every acco
 ```json
 [
   { "product": "SPOT", "ticker": "BTC", "quantity": 0.01204, "principal": null, "interest": null,
-    "currentPriceEur": 92100.0, "currentValueEur": 1108.88 },
+    "averageBuyIn": 68000.0, "currentPriceEur": 92100.0, "currentValueEur": 1108.88,
+    "costBasisEur": 818.72, "pnlEur": 290.16, "pnlPercent": 35.4 },
   { "product": "STAKING", "ticker": "ATOM", "quantity": 33.154, "principal": 19.73, "interest": 13.424,
-    "currentPriceEur": 5.65, "currentValueEur": 187.32 }
+    "averageBuyIn": 6.4, "currentPriceEur": 5.65, "currentValueEur": 187.32,
+    "costBasisEur": 212.19, "pnlEur": -24.87, "pnlPercent": -11.7 }
 ]
 ```
 
 `interest` is the yield **already included** in `quantity` (`principal + interest = quantity`), not
 an amount to add. `principal`/`interest` are null for exchanges that don't report yield, and
 `currentPriceEur`/`currentValueEur` are null for an asset with no CoinGecko mapping.
+
+Cost basis is tracked **per asset**, not per product: `averageBuyIn` comes from the asset's
+`AccountHolding` and every line of the same asset shares it, with `costBasisEur = averageBuyIn ×
+quantity`. The per-line figures therefore still add up to the holding's own cost and P&L.
 
 ---
 

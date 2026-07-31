@@ -14,10 +14,10 @@ vi.mock('react-i18next', () => ({
 const { PositionsByProduct } = await import('./PositionsByProduct')
 
 const POSITIONS: ExchangePositionResponse[] = [
-  { product: 'SPOT', ticker: 'BTC', quantity: 0.5, principal: null, interest: null, currentPriceEur: 100, currentValueEur: 50 },
-  { product: 'STAKING', ticker: 'ATOM', quantity: 33.154, principal: 19.73, interest: 13.424, currentPriceEur: 5, currentValueEur: 165.77 },
+  { product: 'SPOT', ticker: 'BTC', quantity: 0.5, principal: null, interest: null, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 50, costBasisEur: 40, pnlEur: 10, pnlPercent: 25 },
+  { product: 'STAKING', ticker: 'ATOM', quantity: 33.154, principal: 19.73, interest: 13.424, averageBuyIn: 6, currentPriceEur: 5, currentValueEur: 165.77, costBasisEur: 198.92, pnlEur: -33.15, pnlPercent: -16.7 },
   // Same asset, two products — the split this component exists to show.
-  { product: 'STAKING', ticker: 'BTC', quantity: 0.25, principal: 0.2, interest: 0.05, currentPriceEur: 100, currentValueEur: 25 },
+  { product: 'STAKING', ticker: 'BTC', quantity: 0.25, principal: 0.2, interest: 0.05, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 25, costBasisEur: 20, pnlEur: 5, pnlPercent: 25 },
 ]
 
 function sectionFor(product: string) {
@@ -50,6 +50,14 @@ describe('PositionsByProduct', () => {
     expect(staking.getByText('19.73')).toBeInTheDocument()
     expect(staking.getByText('13.424')).toBeInTheDocument()
     expect(staking.getByText('33.154')).toBeInTheDocument()
+  })
+
+  it('keeps the per-line profit and loss the flat table showed', () => {
+    render(<PositionsByProduct positions={POSITIONS} />)
+
+    const staking = sectionFor('STAKING')
+    expect(staking.getByText('-16.7%')).toBeInTheDocument()
+    expect(sectionFor('SPOT').getByText('+25.0%')).toBeInTheDocument()
   })
 
   it('renders nothing when there is no breakdown', () => {
