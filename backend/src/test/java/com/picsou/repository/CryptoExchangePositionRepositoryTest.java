@@ -5,6 +5,7 @@ import com.picsou.model.CryptoExchangePosition;
 import com.picsou.port.CryptoExchangePort.Product;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.test.context.TestPropertySource;
@@ -27,9 +28,18 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * nothing because its repository is a Mockito mock: no ORM, no constraint, no ordering.
  */
 @DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @TestPropertySource(properties = {
     "spring.flyway.enabled=false",
-    "spring.jpa.hibernate.ddl-auto=none"
+    "spring.jpa.hibernate.ddl-auto=none",
+    // Its own named database, not the auto-configured one every @DataJpaTest shares. Both this
+    // class and TransactionRepositoryTest hand-roll an `account` table, and the other script has
+    // no DROP — so whichever ran second failed on "table ACCOUNT already exists". That surfaced
+    // only in CI, where surefire happened to order them the other way round than locally.
+    "spring.datasource.url=jdbc:h2:mem:crypto-exchange-position;DB_CLOSE_DELAY=-1",
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "spring.datasource.username=sa",
+    "spring.datasource.password="
 })
 @Sql("classpath:sql/crypto-exchange-position-test-schema.sql")
 class CryptoExchangePositionRepositoryTest {
