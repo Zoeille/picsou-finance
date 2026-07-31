@@ -284,9 +284,13 @@ public class CryptoExchangeSyncService {
      * with no cost basis to preserve, so the simple form has no downside — and it cannot leave a
      * product line behind after the user unstakes everything. Runs in the caller's transaction, so
      * a failure later in the sync rolls the whole rewrite back with it.
+     *
+     * <p>The delete must be the bulk query, not a derived {@code deleteBy…}: see
+     * {@link CryptoExchangePositionRepository#deleteAllForAccount} for why re-inserting the same
+     * key in one transaction otherwise trips the unique constraint.
      */
     private void replacePositions(Account account, List<ExchangePosition> positions) {
-        positionRepository.deleteByAccountId(account.getId());
+        positionRepository.deleteAllForAccount(account.getId());
         Instant now = Instant.now();
         positionRepository.saveAll(positions.stream()
             .map(position -> CryptoExchangePosition.builder()

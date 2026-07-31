@@ -209,7 +209,7 @@ class CryptoExchangeSyncServiceTest {
         verify(accountService).upsertHolding(any(), eq(MEMBER_ID), eq("ETH"), eq("ETH"),
             eq(new BigDecimal("1.5")), eq(new BigDecimal("100")));
         // ...and the breakdown replaced wholesale, so an unstaked product cannot linger.
-        verify(positionRepository).deleteByAccountId(any());
+        verify(positionRepository).deleteAllForAccount(any());
         ArgumentCaptor<List<CryptoExchangePosition>> stored = ArgumentCaptor.forClass(List.class);
         verify(positionRepository).saveAll(stored.capture());
         assertThat(stored.getValue())
