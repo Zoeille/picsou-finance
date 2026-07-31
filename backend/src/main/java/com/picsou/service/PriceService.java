@@ -72,8 +72,55 @@ public class PriceService {
         return null;
     }
 
+    /**
+     * Like {@link #getPriceEur}, for a ticker known to be crypto: an asset CoinGecko doesn't map
+     * returns {@code null} instead of being valued at the share price of the equity trading under
+     * the same symbol. The {@code supports} check comes before the cache read on purpose — the
+     * cache is keyed by ticker alone, so a stock quote stored under {@code STX} must not be handed
+     * back as a token price. See {@link #refreshCryptoPrices}.
+     */
+    public BigDecimal getCryptoPriceEur(String ticker) {
+        if (ticker == null || ticker.isBlank() || "EUR".equalsIgnoreCase(ticker)) {
+            return BigDecimal.ONE;
+        }
+
+        String upper = ticker.toUpperCase(Locale.ROOT);
+        if (!coinGecko.supports(upper)) {
+            return null;
+        }
+
+        CachedPrice cached = priceCache.get(upper);
+        if (cached != null && !cached.isExpired()) {
+            return cached.price();
+        }
+
+        BigDecimal price = coinGecko.getPricesEur(Set.of(upper)).get(upper);
+        if (price != null) {
+            priceCache.put(upper, new CachedPrice(price, Instant.now()));
+        }
+        return price;
+    }
+
+    /**
+     * Bulk fetch and refresh cache for tickers known to be crypto.
+     *
+     * <p>Same as {@link #refreshPrices} except that a ticker CoinGecko doesn't know is left
+     * <em>unpriced</em> instead of being handed to Yahoo Finance. That fallback is right for a
+     * mixed portfolio but wrong for an exchange or wallet: dozens of coins share a symbol with a
+     * listed equity (SUI, ATOM, TIA…), so an unmapped coin would be valued at the share price of
+     * an unrelated company and written into the balance and its daily snapshot, with nothing in
+     * the logs to reveal it. Callers already treat a missing price as "not valued this cycle".
+     */
+    public Map<String, BigDecimal> refreshCryptoPrices(Set<String> tickers) {
+        return refreshPrices(tickers, true);
+    }
+
     /** Bulk fetch and refresh cache for all provided tickers. */
     public Map<String, BigDecimal> refreshPrices(Set<String> tickers) {
+        return refreshPrices(tickers, false);
+    }
+
+    private Map<String, BigDecimal> refreshPrices(Set<String> tickers, boolean cryptoOnly) {
         if (tickers.isEmpty()) return Map.of();
 
         Map<String, BigDecimal> result = new HashMap<>();
@@ -87,6 +134,9 @@ public class PriceService {
                 result.put(upper, BigDecimal.ONE);
             } else if (coinGecko.supports(upper)) {
                 cryptoTickers.add(upper);
+            } else if (cryptoOnly) {
+                log.warn("No CoinGecko mapping for crypto ticker {} -- leaving it unpriced rather "
+                    + "than valuing it as the stock trading under that symbol", upper);
             } else {
                 stockTickers.add(upper);
             }

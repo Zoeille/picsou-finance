@@ -7,6 +7,12 @@ export const mockExchangeStatuses: ExchangeStatus[] = [
     status: 'CONNECTED',
     lastSyncedAt: '2025-03-15T08:00:00Z',
   },
+  {
+    id: 2,
+    exchangeType: 'MERIA',
+    status: 'CONNECTED',
+    lastSyncedAt: '2025-03-15T08:00:00Z',
+  },
 ]
 
 export const mockWalletStatuses: WalletStatus[] = [

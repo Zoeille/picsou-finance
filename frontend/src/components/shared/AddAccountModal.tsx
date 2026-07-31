@@ -54,7 +54,7 @@ import {
   BriefcaseBusiness,
 } from 'lucide-react'
 import type { ExchangeType, ChainType, AccountRequest, FinaryPreviewResponse, FinaryAccountMapping, FinaryMappingAction, FinaryImportResultResponse, AccountType } from '@/types/api'
-import { SUPPORTED_CHAINS } from '@/types/api'
+import { SUPPORTED_CHAINS, SUPPORTED_EXCHANGES, exchangeRequiresApiSecret } from '@/types/api'
 
 // ---------------------------------------------------------------------------
 // Props & types
@@ -190,7 +190,10 @@ export function AddAccountModal({ open, onOpenChange }: AddAccountModalProps) {
   return (
     <>
       <Dialog open={open} onOpenChange={handleDialogChange}>
-        <DialogContent className="max-w-xl">
+        {/* sm:max-w-xl, not just max-w-xl: DialogContent's own `sm:max-w-sm` is a different
+            Tailwind variant, so tailwind-merge keeps it and an unprefixed max-w-xl silently has
+            no effect above 640px — which is what squeezed this wizard into 24rem. */}
+        <DialogContent className="max-w-xl sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
               {step === 'selector' ? t('addAccount.title') : t(`sync.${step === 'tr' ? 'tr' : step}.title`)}
@@ -396,12 +399,21 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
   const [error, setError] = useState<string | null>(null)
 
   const addMutation = useAddCryptoExchange()
+  const requiresSecret = exchangeRequiresApiSecret(exchangeType)
+
+  function selectExchange(type: ExchangeType) {
+    setExchangeType(type)
+    // Drop anything typed under the previous exchange: sending a secret to a single-key exchange
+    // is a 400, and it would be entirely self-inflicted.
+    setApiSecret('')
+    setShowSecret(false)
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     addMutation.mutate(
-      { type: exchangeType, apiKey, apiSecret },
+      { type: exchangeType, apiKey, apiSecret: requiresSecret ? apiSecret : undefined },
       {
         onSuccess: () => setDone(true),
         onError: (err: unknown) => {
@@ -432,16 +444,18 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label>{t('sync.exchanges.type')}</Label>
-          <div className="flex gap-2">
-            {(['BINANCE', 'KRAKEN'] as ExchangeType[]).map((type) => (
+          {/* wrap: these buttons are wide (px-8) and there is no room for three in a row on a
+              narrow viewport — without it the row stretches the whole form past the dialog. */}
+          <div className="flex flex-wrap gap-2">
+            {SUPPORTED_EXCHANGES.map((exchange) => (
               <Button
-                key={type}
+                key={exchange.type}
                 type="button"
-                variant={exchangeType === type ? 'default' : 'outline'}
+                variant={exchangeType === exchange.type ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setExchangeType(type)}
+                onClick={() => selectExchange(exchange.type)}
               >
-                {type}
+                {exchange.type}
               </Button>
             ))}
           </div>
@@ -456,29 +470,34 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
             placeholder={t('sync.exchanges.apiKey')}
             required
           />
+          {!requiresSecret && (
+            <p className="text-xs text-muted-foreground">{t('sync.exchanges.apiKeyOnly')}</p>
+          )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="exchange-api-secret">{t('sync.exchanges.apiSecret')}</Label>
-          <div className="relative">
-            <Input
-              id="exchange-api-secret"
-              type={showSecret ? 'text' : 'password'}
-              value={apiSecret}
-              onChange={(e) => setApiSecret(e.target.value)}
-              placeholder={t('sync.exchanges.apiSecret')}
-              required
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowSecret((p) => !p)}
-              className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              {showSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
+        {requiresSecret && (
+          <div className="space-y-2">
+            <Label htmlFor="exchange-api-secret">{t('sync.exchanges.apiSecret')}</Label>
+            <div className="relative">
+              <Input
+                id="exchange-api-secret"
+                type={showSecret ? 'text' : 'password'}
+                value={apiSecret}
+                onChange={(e) => setApiSecret(e.target.value)}
+                placeholder={t('sync.exchanges.apiSecret')}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret((p) => !p)}
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <Button type="submit" disabled={addMutation.isPending} className="w-full">
           {addMutation.isPending && <Loader2 className="size-4 animate-spin" />}

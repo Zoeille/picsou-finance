@@ -143,6 +143,10 @@ app:
     url: ${BOURSO_AUTH_URL:http://bourso-auth:8001}
   bourse-direct-auth:
     url: ${BOURSE_DIRECT_AUTH_URL:http://bourse-direct-auth:8001}
+  # Meria's public API. Not an env var: nobody needs to point this elsewhere, and MeriaAdapter
+  # carries the same value as its @Value default so a stripped config still boots.
+  meria:
+    base-url: https://api.meria.com/v1
   enablebanking:
     application-id: ${ENABLEBANKING_APPLICATION_ID:}
     key-id: ${ENABLEBANKING_KEY_ID:}

@@ -341,6 +341,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Principal",
+    "interest": "Interest",
+    "total": "Total"
+  },
   "goals": {
     "title": "Goals",
     "addGoal": "New goal",
@@ -400,7 +410,7 @@
     "syncingDesc": "We're pulling in your latest transactions. This usually takes a few seconds.",
     "desc": {
       "banks": "Connect your banks via OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sync your PEA and securities accounts",
@@ -482,6 +492,7 @@
       "type": "Exchange type",
       "apiKey": "API Key",
       "apiSecret": "API Secret",
+      "apiKeyOnly": "Meria connects with a single read-only API key — no secret needed.",
       "connect": "Connect",
       "connectError": "Failed to connect exchange. Check your API key and secret.",
       "sync": "Synchronize",
@@ -1142,7 +1153,7 @@
     },
     "crypto": {
       "title": "Encrypt your exchange API keys",
-      "body": "Your Binance / Kraken / Coinbase API keys are encrypted at rest. Picsou can generate the encryption key for you — it stays on your disk and is never transmitted.",
+      "body": "Your exchange API keys (Binance, Meria...) are encrypted at rest. Picsou can generate the encryption key for you — it stays on your disk and is never transmitted.",
       "generateCta": "Generate a key for me",
       "generating": "Generating...",
       "existed": "Your encryption key is already configured — nothing to do.",

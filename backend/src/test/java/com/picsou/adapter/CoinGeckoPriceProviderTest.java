@@ -84,6 +84,31 @@ class CoinGeckoPriceProviderTest {
         return logs.list.stream().filter(e -> e.getLevel() == level).toList();
     }
 
+    // ── Ticker coverage ───────────────────────────────────────────────────────
+
+    @Test
+    void supports_coversTheCoinsReachableThroughMeria() {
+        // An unmapped ticker is left unpriced by refreshCryptoPrices, so dropping an entry here
+        // shrinks a balance without failing anything.
+        var provider = providerWithJson("{}");
+
+        assertThat(List.of("EGLD", "XTZ", "ALGO", "KSM", "TIA", "INJ", "ROSE", "KAVA",
+                "ZEC", "ETC", "XLM", "TRX", "BCH", "MINA", "OSMO", "AKT", "DYDX", "CELO",
+                "BAND", "XMR", "VET", "HBAR", "GRT"))
+            .allSatisfy(ticker -> assertThat(provider.supports(ticker)).as(ticker).isTrue());
+    }
+
+    @Test
+    void supports_rejectsSymbolsSharedWithListedEquities() {
+        // This map routes PriceService: claiming a symbol here sends the *stock* of the same name
+        // to CoinGecko too. Seagate (STX), TD SYNNEX (SNX), Solaris Energy (SEI) and Alpha Pro
+        // Tech (APT) must keep going to Yahoo, even though Meria offers coins with those symbols.
+        var provider = providerWithJson("{}");
+
+        assertThat(List.of("STX", "SNX", "SEI", "APT"))
+            .allSatisfy(ticker -> assertThat(provider.supports(ticker)).as(ticker).isFalse());
+    }
+
     // ── Happy path ────────────────────────────────────────────────────────────
 
     @Test

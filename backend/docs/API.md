@@ -39,7 +39,7 @@
 
 ### ExchangeType
 
-`BINANCE` · `KRAKEN`
+`BINANCE` · `KRAKEN` · `MERIA`
 
 ### FinaryMappingAction
 
@@ -812,11 +812,17 @@ rate limiting returns `429`.
 **Request body:**
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | `ExchangeType` | `BINANCE` · `KRAKEN` |
-| `apiKey` | `string` | Exchange API key |
-| `apiSecret` | `string` | Exchange API secret |
+| `type` | `ExchangeType` | `BINANCE` · `KRAKEN` · `MERIA` |
+| `apiKey` | `string` | Exchange API key (required, max 200 chars) |
+| `apiSecret` | `string?` | Exchange API secret (max 300 chars). **Required** for `BINANCE` and `KRAKEN`; must be **omitted** for `MERIA`, which authenticates with a single read-only API key |
 
 **Response `200` — `AccountResponse`.**
+
+**Errors:**
+| Status | When |
+|--------|------|
+| `400` | Blank API key; missing secret for an exchange that needs one; secret supplied for a single-key exchange |
+| `422` | Bean-validation failure (`errors` map), the credentials were refused by the exchange, or the immediate sync failed |
 
 ---
 
@@ -826,6 +832,29 @@ rate limiting returns `429`.
 - **Body:** none
 
 **Response `200` — `AccountResponse`** (updated with latest holdings).
+
+---
+
+#### `GET /api/accounts/{id}/positions`
+
+- **Auth:** Required
+
+The per-product breakdown behind an account's holdings. **Empty** for every account that has none
+(anything but a crypto exchange), in which case the client shows the flat holdings table instead.
+
+**Response `200` — `ExchangePositionResponse[]`:**
+```json
+[
+  { "product": "SPOT", "ticker": "BTC", "quantity": 0.01204, "principal": null, "interest": null,
+    "currentPriceEur": 92100.0, "currentValueEur": 1108.88 },
+  { "product": "STAKING", "ticker": "ATOM", "quantity": 33.154, "principal": 19.73, "interest": 13.424,
+    "currentPriceEur": 5.65, "currentValueEur": 187.32 }
+]
+```
+
+`interest` is the yield **already included** in `quantity` (`principal + interest = quantity`), not
+an amount to add. `principal`/`interest` are null for exchanges that don't report yield, and
+`currentPriceEur`/`currentValueEur` are null for an asset with no CoinGecko mapping.
 
 ---
 
@@ -839,6 +868,12 @@ rate limiting returns `429`.
   {
     "id": 1,
     "exchangeType": "BINANCE",
+    "status": "CONNECTED",
+    "lastSyncedAt": "2025-03-15T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "exchangeType": "MERIA",
     "status": "CONNECTED",
     "lastSyncedAt": "2025-03-15T10:00:00Z"
   }

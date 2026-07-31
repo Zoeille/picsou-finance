@@ -341,6 +341,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Capital",
+    "interest": "Intérêts",
+    "total": "Total"
+  },
   "goals": {
     "title": "Objectifs",
     "addGoal": "Nouvel objectif",
@@ -400,7 +410,7 @@
     "syncingDesc": "Récupération de vos dernières transactions. Cela prend généralement quelques secondes.",
     "desc": {
       "banks": "Connecter vos banques via OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Synchroniser vos PEA et CTO",
@@ -482,6 +492,7 @@
       "type": "Type d'exchange",
       "apiKey": "Clé API",
       "apiSecret": "Secret API",
+      "apiKeyOnly": "Meria se connecte avec une seule clé API en lecture seule — aucun secret requis.",
       "connect": "Connecter",
       "connectError": "Échec de la connexion. Vérifiez votre clé API et votre secret.",
       "sync": "Synchroniser",
@@ -1142,7 +1153,7 @@
     },
     "crypto": {
       "title": "Chiffrez vos clés API d'exchange",
-      "body": "Vos clés API Binance / Kraken / Coinbase sont chiffrées au repos. Picsou peut générer la clé de chiffrement pour vous — elle reste sur votre disque et n'est jamais transmise.",
+      "body": "Vos clés API d'exchange (Binance, Meria...) sont chiffrées au repos. Picsou peut générer la clé de chiffrement pour vous — elle reste sur votre disque et n'est jamais transmise.",
       "generateCta": "Générer une clé pour moi",
       "generating": "Génération...",
       "existed": "Votre clé de chiffrement est déjà configurée — rien à faire.",

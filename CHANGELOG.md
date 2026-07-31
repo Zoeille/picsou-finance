@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Meria crypto exchange sync.** Connect a Meria account with the single
+  read-only API key from `dashboard.meria.com/account/api` — no API secret, and
+  the add-exchange form now hides that field for exchanges that don't use one
+  (`CryptoExchangePort.requiresApiSecret()`, enforced server-side in all four
+  locales). Picsou sums spot wallets, staking and lending contracts per coin,
+  counting a contract as its held amount — Meria's `reward` is cumulative
+  interest already reflected there — then
+  values the total in EUR through the existing price path; coins were added
+  to the CoinGecko ticker map so Meria balances aren't silently unvalued. A
+  failed sub-call fails the whole sync rather than writing a shrunken balance
+  into the net-worth history. The account page groups its positions by product —
+  Spot / Staking / Lending — and shows principal, accrued interest and total for
+  each yield-bearing line. See [feature notes](docs/features/crypto-tracking.md).
 - **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
   handles login and the six-digit security code, then imports PEA/CTO positions,
   average cost, current price, valuation and account cash. Credentials and OTPs

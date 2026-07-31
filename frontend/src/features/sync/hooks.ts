@@ -310,7 +310,7 @@ export function useCryptoExchangeStatuses() {
 export function useAddCryptoExchange() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ type, apiKey, apiSecret }: { type: ExchangeType; apiKey: string; apiSecret: string }) =>
+    mutationFn: ({ type, apiKey, apiSecret }: { type: ExchangeType; apiKey: string; apiSecret?: string }) =>
       cryptoExchangeApi.add(type, apiKey, apiSecret),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: syncKeys.exchanges() })

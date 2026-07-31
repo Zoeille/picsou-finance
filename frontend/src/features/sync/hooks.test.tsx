@@ -12,10 +12,14 @@ const bourseDirectApi = vi.hoisted(() => ({
   clearSession: vi.fn(),
 }))
 
+const cryptoExchangeApi = vi.hoisted(() => ({
+  add: vi.fn(),
+}))
+
 vi.mock("./api", () => ({
   bankSyncApi: {},
   trApi: {},
-  cryptoExchangeApi: {},
+  cryptoExchangeApi,
   cryptoWalletApi: {},
   finaryApi: {},
   boursoApi: {},
@@ -29,6 +33,7 @@ const {
   useCompleteBourseDirectAuth,
   useSyncBourseDirect,
   useClearBourseDirectSession,
+  useAddCryptoExchange,
 } = await import("./hooks")
 
 const idleStatus: BourseDirectSessionStatus = {
@@ -140,5 +145,25 @@ describe("Bourse Direct hooks", () => {
     })
     expect(invalidations).toHaveBeenCalledWith({ queryKey: ["accounts"] })
     expect(invalidations).toHaveBeenCalledWith({ queryKey: ["dashboard"] })
+  })
+})
+
+describe("Crypto exchange hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("forwards an absent API secret unchanged for single-key exchanges", async () => {
+    // Meria takes an API key alone; the field must reach the API layer as undefined so axios
+    // drops it from the body rather than posting an empty string the backend would reject.
+    cryptoExchangeApi.add.mockResolvedValue({})
+    const { wrapper } = createHarness()
+    const { result } = renderHook(() => useAddCryptoExchange(), { wrapper })
+
+    await act(() =>
+      result.current.mutateAsync({ type: "MERIA", apiKey: "meria-key", apiSecret: undefined }),
+    )
+
+    expect(cryptoExchangeApi.add).toHaveBeenCalledWith("MERIA", "meria-key", undefined)
   })
 })

@@ -1,16 +1,16 @@
 # Feature: Crypto Tracking
 
-> Last updated: 2026-07-17
+> Last updated: 2026-07-31
 
 ## Context
 
-Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (Binance) and on-chain wallets (Bitcoin, EVM, Solana). The `EVM` chain is a **multichain fan-out**: a single `0x` address is tracked across every enabled EVM network (Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche C-Chain) — see the [EVM multichain wallets ADR](../decisions/2026-07-17-evm-multichain-wallets.md). Exchange credentials are encrypted at rest with AES-256-GCM. On-chain wallets query public blockchain RPCs (no API key). All crypto balances are converted to EUR via the `PriceService`.
+Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (Binance, Meria) and on-chain wallets (Bitcoin, EVM, Solana). The `EVM` chain is a **multichain fan-out**: a single `0x` address is tracked across every enabled EVM network (Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche C-Chain) — see the [EVM multichain wallets ADR](../decisions/2026-07-17-evm-multichain-wallets.md). Exchange credentials are encrypted at rest with AES-256-GCM. On-chain wallets query public blockchain RPCs (no API key). All crypto balances are converted to EUR via the `PriceService`.
 
 ## How it works
 
 ### Three subsystems
 
-1. **CryptoExchangeSyncService** -- Manages exchange connections. Stores encrypted API key + encrypted secret in `CryptoExchangeSession`. Both fields are encrypted with AES-256-GCM. Fetches holdings, converts to EUR via `PriceService.refreshPrices()`, and upserts a single account per exchange with per-coin holdings in `AccountHolding`.
+1. **CryptoExchangeSyncService** -- Manages exchange connections. Stores an encrypted API key, plus an encrypted secret **when the exchange has one**, in `CryptoExchangeSession`. Which credentials an exchange needs is declared by its adapter (`CryptoExchangePort.requiresApiSecret()`) and enforced here before any network call: a missing secret where one is required, and a stray secret where none is, are both a `400`. Fetches positions, converts to EUR via `PriceService.refreshCryptoPrices()`, and upserts a single account per exchange with per-coin holdings in `AccountHolding` plus a per-product breakdown in `CryptoExchangePosition`.
 
 2. **WalletSyncService** -- Manages on-chain wallet addresses. Stores chain type + address in `WalletAddress`. Fetches balances via `WalletPort` (a list — native asset plus any tokens), prices each ticker, sums to EUR, and upserts one account with a per-ticker `AccountHolding`. Does NOT store a ticker on the account itself to prevent double price conversion (the account balance is already in EUR).
 
@@ -18,11 +18,42 @@ Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (B
 
 ### AES-256-GCM encryption
 
-`CryptoEncryption` handles encryption/decryption of API keys and secrets stored in the database. Both `apiKey` and `apiSecret` are encrypted. It uses `AES/GCM/NoPadding` with a 12-byte IV and 128-bit tag. The IV is prepended to the ciphertext before Base64 encoding. The encryption key is provided via the `CRYPTO_ENCRYPTION_KEY` environment variable (Base64-encoded 256-bit key). The app **refuses to start** if the key is not set. See [encryption-at-rest.md](./encryption-at-rest.md) for full details.
+`CryptoEncryption` handles encryption/decryption of API keys and secrets stored in the database. Both `apiKey` and `apiSecret` are encrypted; `apiSecret` is `NULL` for single-key exchanges (`encrypt(null)` and `decrypt(null)` both return `null`, and V64 dropped the column's `NOT NULL`). It uses `AES/GCM/NoPadding` with a 12-byte IV and 128-bit tag. The IV is prepended to the ciphertext before Base64 encoding. The encryption key is provided via the `CRYPTO_ENCRYPTION_KEY` environment variable (Base64-encoded 256-bit key). The app **refuses to start** if the key is not set. See [encryption-at-rest.md](./encryption-at-rest.md) for full details.
 
 ### Binance adapter
 
-`BinanceAdapter` implements `CryptoExchangePort`. It calls the Binance REST API (`GET /api/v3/account`) with HMAC-SHA256 signed requests. Returns a list of `CryptoHolding` records for all assets with non-zero balances (free + locked). The `testConnection()` method validates credentials before saving.
+`BinanceAdapter` implements `CryptoExchangePort`. It calls the Binance REST API (`GET /api/v3/account`) with HMAC-SHA256 signed requests. Returns one `SPOT` `ExchangePosition` per asset with a non-zero balance (free + locked) — it reads `/api/v3/account`, which does not cover Binance Earn. The `testConnection()` method validates credentials before saving.
+
+### Meria adapter
+
+`MeriaAdapter` implements `CryptoExchangePort` against [docs.meria.com](https://docs.meria.com). It differs from Binance in two structural ways:
+
+- **A single read-only API key**, sent as an `API-KEY` header — no secret, no request signing. Users generate it at `dashboard.meria.com/account/api`. The adapter reports `requiresApiSecret() == false`.
+- **Three endpoints, one balance.** A Meria position is spread across `GET /wallets` (spot), `GET /stakings` and `GET /lendings`, all shaped as `currencyCode` + amount. The adapter sums them per currency, counting a staking/lending contract as its **`amount` alone** — see the double-counting gotcha below before adding `reward` back. `GET /status` backs `testConnection()`.
+
+Every call must return a `success: true` envelope, or an empty body on a 2xx; anything else fails the whole sync — see the all-or-nothing gotchas below. Note the staking payload is **large** (full reward history per contract), which is why the client raises its in-memory buffer to 16 MB. `app.meria.base-url` is a plain config value with an identical `@Value` default, so a stripped config still boots.
+
+### Per-product positions
+
+`CryptoExchangePort.fetchPositions` returns one `ExchangePosition` per (product, asset) — `SPOT`,
+`STAKING` or `LENDING` — instead of a flat balance list, because an exchange can hold the same
+asset under several products at once. `CryptoExchangeSyncService` then does two different things
+with them:
+
+- **sums them per asset** into the `AccountHolding` rows and the account balance (net worth does
+  not care which product an asset sits under), and
+- **stores the breakdown as-is** in `crypto_exchange_position`, which backs
+  `GET /api/accounts/{id}/positions` and the account page's Spot / Staking / Lending sections.
+
+The breakdown is display-only and fully derived: each sync rewrites it wholesale, it carries no
+cost basis, and nothing computes net worth from it. That is why it is a separate table rather than
+a `product` column on `account_holding` — that table is the valuation model shared by every
+connector, unique on `(account_id, ticker)`, and splitting it per product would ripple into all of
+them plus the dashboard aggregations, for a display feature.
+
+A position's `interest` is a **decomposition** of its quantity, never an addition: `principal +
+interest = quantity`. `principal` is null when the exchange does not report yield (all of Binance,
+which is spot-only here), and the UI then drops both columns.
 
 ### Bitcoin wallet adapter
 
@@ -68,6 +99,9 @@ The on-chain adapters (EVM, Solana) validate the JSON-RPC envelope through `Json
 - `backend/src/main/java/com/picsou/service/WalletSyncService.java` -- On-chain wallet management, balance sync
 - `backend/src/main/java/com/picsou/config/CryptoEncryption.java` -- AES-256-GCM encrypt/decrypt for API secrets
 - `backend/src/main/java/com/picsou/adapter/BinanceAdapter.java` -- Binance REST API with HMAC-SHA256
+- `backend/src/main/java/com/picsou/adapter/MeriaAdapter.java` -- Meria REST API, single `API-KEY` header, wallets + stakings + lendings
+- `backend/src/main/java/com/picsou/model/CryptoExchangePosition.java` -- per-product breakdown behind an exchange account's holdings
+- `frontend/src/components/shared/PositionsByProduct.tsx` -- Spot / Staking / Lending sections on the account page
 - `backend/src/main/java/com/picsou/adapter/BitcoinWalletAdapter.java` -- Blockstream Esplora, BIP32 key derivation
 - `backend/src/main/java/com/picsou/adapter/EvmWalletAdapter.java` -- EVM multichain fan-out (native + curated ERC-20 across all enabled networks), keyless PublicNode RPCs
 - `backend/src/main/java/com/picsou/adapter/SolanaWalletAdapter.java` -- Solana mainnet RPC
@@ -81,22 +115,25 @@ The on-chain adapters (EVM, Solana) validate the JSON-RPC envelope through `Json
 
 ```
 Add Exchange:
-User submits API key + secret
+User submits API key (+ secret, if the exchange uses one)
         |
         v
 CryptoExchangeSyncService.addExchange()
         |
         v
-BinanceAdapter.testConnection() -- validate credentials
+validate against adapter.requiresApiSecret() -- 400 before any network call
         |
         v
-CryptoEncryption.encrypt(key + secret) -- AES-256-GCM
+CryptoExchangePort.testConnection() -- validate credentials
         |
         v
-Save CryptoExchangeSession (encryptedKey + encryptedSecret)
+CryptoEncryption.encrypt(key [+ secret]) -- AES-256-GCM
         |
         v
-BinanceAdapter.fetchHoldings() -- get balances
+Save CryptoExchangeSession (encryptedKey + encryptedSecret or NULL)
+        |
+        v
+CryptoExchangePort.fetchHoldings() -- get balances
         |
         v
 PriceService.refreshPrices() -- convert to EUR
@@ -139,6 +176,18 @@ Upsert Account (type=CRYPTO, no ticker)
 - **Bitcoin xpub vs zpub**: Both are supported. `BitcoinKeyUtils.normalizeToXpub()` converts zpub to xpub before derivation. The derivation always produces P2WPKH (native segwit) addresses.
 - **Output descriptor parsing**: Descriptors are parsed by extracting the xpub between brackets. The checksum after `#` is ignored. Complex descriptors (multisig, P2SH-wrapped) are not supported.
 - **Exchange holdings use PriceService**: Holdings are converted to EUR at sync time using `PriceService.refreshPrices()`. If the price cache is stale (older than 15 min), prices are refreshed on demand.
+- **Which credentials an exchange needs lives in three places, with no codegen**: `CryptoExchangePort.requiresApiSecret()` (the truth), `CryptoExchangeSyncService.addExchange` (the enforcement), and `SUPPORTED_EXCHANGES` in `frontend/src/types/api.ts` (the form). The default is `true`, so an existing adapter needs no edit. Getting the frontend flag wrong is a loud `400`, not a silent bug — but the form must also **clear the secret field when the user switches exchange**, or a value typed under Binance would be posted to a single-key exchange and rejected for a reason the user never chose.
+- **A failed Meria sub-call fails the whole sync — deliberately**: `MeriaAdapter` reads three endpoints that sum into **one** account balance, so a silently dropped `/stakings` or `/lendings` would not surface as a missing sub-account; it would write a smaller total into `account.currentBalance` **and** stamp it into today's `BalanceSnapshot`, denting the net-worth history while everything looks healthy. Any non-2xx, transport error, timeout, unparseable body or `success != true` therefore throws `SyncException` → session `ERROR` → `422`, and nothing is written. Same rule as `JsonRpcResponse.requireResult` on-chain and the fully-unpriced-wallet refusal above.
+- **`/stakings` needs a 16 MB response buffer, not WebClient's 256 KB default**: each staking contract carries its full `variations` and `credits` history — one entry per reward credit — so a few years of daily rewards runs to megabytes, and the API offers no way to ask for less. `MeriaAdapter.STRATEGIES` raises the limit; without it the body is never assembled and every sync fails. **This is the bug that broke the first release, and it lied twice about its cause**: through a typed codec the truncation surfaced as a `WebClientResponseException` carrying the *original* `200` with an unreadable body, logged as `Meria answered HTTP 200 for /stakings -- failing the sync: <empty body>` — which reads as "the endpoint returned nothing" and produced two confident, wrong diagnoses (an unsubscribed product, then a content-type mismatch). Only after the adapter was reading raw bytes did the real `DataBufferLimitException` appear. `MeriaAdapterWiringTest.theProductionClientReadsAStakingPayloadBiggerThanTheFrameworkDefault` serves an oversized payload over a real socket, because the `ExchangeFunction`-based unit tests decode with the *stub's* strategies and cannot see the production client's configuration at all.
+- **Read the body as raw bytes, not a typed codec**: `fetch` uses `exchangeToMono` + `byte[]` and parses with an explicit `ObjectMapper`. The byte decoder accepts every media type, so no combination of content type — absent, wrong, malformed — can turn a healthy response into a decode error, and the status, declared content type and truncated body all reach the log. Whatever Meria does next is diagnosable from one line instead of a guess. An empty body on a 2xx then reads as "no entries", which is safe: failures arrive as a non-2xx status or a `success:false` envelope, never as a 200 with nothing in it.
+- **Meria can answer `success:false` on HTTP 200**: gate on the envelope, never on the status code. `MeriaAdapter.fetch` checks `Boolean.TRUE.equals(envelope.success())` with a *boxed* Boolean so a missing or null field fails safe.
+- **Route existence is observable without a key**: Meria answers `403 UNAUTHORIZED` for a real route and `404 ENDPOINT_NOT_FOUND` for one that doesn't exist, so a 404 on `/stakings` or `/lendings` means the endpoint moved — not that the product is empty. (The API doc's `RESSOURCE_NOT_FOUND` is for parameterised routes such as `/wallets/:currencyCode`.) Useful when diagnosing: probing costs nothing and needs no credentials.
+- **Meria rate-limits at 30 requests per window** (`x-ratelimit-limit`) and sits behind Cloudflare. One sync costs 3 calls, adding an exchange costs 4. The three calls are deliberately **sequential**: a reactive fan-out would bound latency at ~10s instead of ~30s but burst three concurrent requests against that quota for no user-visible gain at n=3. Cloudflare also means a challenge page can replace the JSON, which is why the adapter logs a truncated response body — without it that failure is undiagnosable. The log never contains the API key.
+- **A staking contract's `reward` must NOT be added to its `amount`**: `reward` is the contract's *cumulative* interest to date, and `amount` already reflects it when compounding is on. Adding them shipped, and overstated a real account by exactly its total interest: Meria showed 33.154 ATOM held and 13.424 ATOM of total interest, Picsou reported 46.577. Without compounding the interest is credited into the spot wallet instead (`credits` entries carry `released: 1`), so it arrives through `/wallets` — adding `reward` double-counts in that mode too. `lockedReward` is left out for the same reason plus one more: whether it sits inside `amount` could not be established (every observed contract reports 0), and understating a holding is recoverable in a way that overstating net worth is not. The API exposes no "unclaimed balance" field distinct from these, so **any future change here needs a real account to check against, not the field names**.
+- **Exchange holdings are priced crypto-only**: `CryptoExchangeSyncService` calls `PriceService.refreshCryptoPrices`, not `refreshPrices`. The difference matters because `refreshPrices` sends anything `CoinGeckoPriceProvider.supports()` rejects to **Yahoo Finance** — right for a mixed portfolio, catastrophic for an exchange, where an unmapped coin would be valued at the share price of the listed company trading under the same symbol and written into the balance and its daily snapshot with nothing in the log to reveal it. Unmapped coins are now left unpriced and logged instead. Note `WalletSyncService` still uses plain `refreshPrices` and therefore keeps that fallback — same hazard, not addressed here.
+- **`TICKER_TO_ID` is a router, so adding a symbol has a cost on the *stock* side**: `PriceService` and `AccountService` branch on `supports()` with no idea which account a ticker came from, so mapping a symbol that is also a listed equity makes that **stock** get priced as a token. `STX` (Seagate), `SNX` (TD SYNNEX), `SEI` (Solaris Energy Infrastructure) and `APT` (Alpha Pro Tech) are deliberately **not** mapped for that reason, even though Meria offers coins with those symbols — a missing value beats a wrong one. `CoinGeckoPriceProviderTest.supports_rejectsSymbolsSharedWithListedEquities` pins it. (`ATOM`/Atomera predates this rule.)
+- **New Meria coin = one edit in `TICKER_TO_ID`**: same trap as the EVM token gotcha below — an unmapped `currencyCode` is fetched from Meria and then dropped from the EUR total, with only a WARN to show for it. Resolve each id on CoinGecko's `/coins/list` and pick the **canonical** entry: `TIA`, `ZEC`, `BCH`, `TRX`, `XTZ`, `ROSE` and `DYDX` all have `binance-peg-*` / `*-wormhole` / `bridged-*` homonyms, and a wrong id is a wrong valuation that nothing surfaces.
+- **A failed exchange sync writes its `ERROR` status through `CryptoExchangeStatusWriter`**: `CryptoExchangeSyncService` is `@Transactional` and rethrows, so a plain `save` of the status inside the catch is rolled back on the manual path — the session would keep reading `CONNECTED` after a revoked key, while the scheduled path (which catches before crossing the proxy) reported `ERROR`. The writer's `REQUIRES_NEW` method commits independently. Same arrangement, and same reason, as `IbkrStatusWriter`.
 - **Wallet RPC errors must not read as 0**: When parsing a blockchain JSON-RPC response, always go through `JsonRpcResponse.requireResult(...)` — never `response.path("result")` directly. `path(...)` returns a `MissingNode` for an error payload, which silently becomes a 0 balance (this caused the July 2026 Ethereum outage). `requireResult` uses `get(...)` to reject a missing/error result while still allowing a legitimate `0x0` / `value:0`.
 - **Don't re-throw `WalletRpcException` raw from `sync()`**: it has no `@ExceptionHandler`, so a raw re-throw becomes a `500`, not the friendly `422`. Keep it wrapped in `SyncException`. The split catch is only about **log level** — unexpected errors log at ERROR with a stacktrace; the user-facing status/message is unchanged.
 - **Per-token Solana failures are logged, not fatal**: a malformed `uiAmountString` or a non-array token `value` is logged and skipped so the SOL balance and other tokens survive. Only an envelope-level RPC `error`/missing-`result` (via `requireResult`) fails the whole sync. Loud (logged) ≠ fatal (thrown) — pick per blast radius.
@@ -166,9 +215,12 @@ Upsert Account (type=CRYPTO, no ticker)
 
 ## Tests
 
-- `CryptoEncryptionTest` -- unit tests for encrypt/decrypt roundtrip
-- `BitcoinKeyUtilsTest` -- unit tests for BIP32 derivation, address generation
-- `CryptoExchangeSyncServiceTest` -- unit tests for exchange management
+> `CryptoEncryptionTest` and `BitcoinKeyUtilsTest` were listed here for a long time without existing. AES-GCM round-tripping and BIP32 derivation are still untested — treat that as a known gap, not as coverage.
+
+- `CryptoExchangeSyncServiceTest` -- credential contract: blank key rejected, missing secret rejected for an exchange that needs one and stray secret rejected for one that doesn't (both **before** `testConnection`, so no wasted round-trip), blank secret normalised to `NULL` for a single-key exchange, Binance still requires both, a failed adapter marks the session `ERROR` without touching `accountService` (no snapshot, no holdings), and an exchange with no adapter fails as a readable 422
+- `MeriaAdapterTest` -- aggregation across wallets/stakings/lendings per currency, staking counted as `amount` with accrued interest **not** added on top, a contract with no reward fields at all, symbols upper-cased under a forced Turkish locale, zero/blank entries dropped; and the all-or-nothing contract: every endpoint × {401, 403, 404, 429, 500} throws, as do `success:false` on HTTP 200, an empty body, a reactor-wrapped timeout and a non-JSON (Cloudflare) body — while `data: []` on all three yields an empty list without throwing. Also pins that only an `API-KEY` header is sent (no `Authorization`, no `X-MBX-APIKEY`, no `signature` query), that the secret argument is ignored, and that no message or log line contains the API key
+- `MeriaAdapterWiringTest` -- Spring picks the production constructor with and without `app.meria.base-url` set, and the production client reads a staking payload larger than the framework's default buffer (served over a real socket — the `ExchangeFunction` fixtures decode with the stub's strategies and cannot see that configuration)
+- `PositionsByProduct.test.tsx` -- positions grouped per product, the same asset kept in both its spot and staking sections, principal/interest columns only where the exchange reports yield
 - `WalletSyncServiceTest` -- unit tests for wallet sync
 - `JsonRpcResponseTest` -- envelope validation: valid/zero/empty-array results returned; null/error/missing/explicit-null throw
 - `WalletSyncServiceTest` -- RPC error wrapped as `SyncException` (wallet not marked synced), empty balances throw, `resyncAll` summary reports failed chains, holdings pruned to the currently-held tickers, held assets kept when prices are unavailable, malformed address rejected before anything is persisted

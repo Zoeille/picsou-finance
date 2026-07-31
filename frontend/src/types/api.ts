@@ -222,7 +222,31 @@ export interface SecurityInsight {
   composition: EtfComposition | null
 }
 
-export type ExchangeType = 'BINANCE' | 'KRAKEN'
+/**
+ * Crypto exchanges, in the order the pickers show them.
+ *
+ * Mirrors the backend `com.picsou.model.ExchangeType` enum *and* its `CryptoExchangePort` beans —
+ * there is no codegen between them, so adding an exchange means editing both sides in the same
+ * change. `requiresApiSecret` mirrors `CryptoExchangePort.requiresApiSecret()`: Meria authenticates
+ * with a single read-only API key, and `CryptoExchangeSyncService` returns 400 both for a missing
+ * secret where one is needed and for a stray secret where none is — so getting this wrong is a
+ * loud error, not a silent bug.
+ *
+ * KRAKEN is listed but has no backend adapter yet: picking it returns 422 "This exchange isn't
+ * supported yet."
+ */
+export const SUPPORTED_EXCHANGES = [
+  { type: 'BINANCE', requiresApiSecret: true },
+  { type: 'KRAKEN', requiresApiSecret: true },
+  { type: 'MERIA', requiresApiSecret: false },
+] as const
+
+export type ExchangeType = (typeof SUPPORTED_EXCHANGES)[number]['type']
+
+/** Whether the exchange needs an API secret on top of its API key. */
+export function exchangeRequiresApiSecret(type: ExchangeType): boolean {
+  return SUPPORTED_EXCHANGES.find(exchange => exchange.type === type)?.requiresApiSecret ?? true
+}
 /**
  * On-chain wallet chains, in the order the pickers show them.
  *
@@ -235,6 +259,19 @@ export const SUPPORTED_CHAINS = ['BITCOIN', 'EVM', 'SOLANA'] as const
 
 export type ChainType = (typeof SUPPORTED_CHAINS)[number]
 export type FinaryMappingAction = 'SKIP' | 'MAP_EXISTING' | 'CREATE_NEW'
+
+/** One line of a crypto exchange account's per-product breakdown. */
+export interface ExchangePositionResponse {
+  product: 'SPOT' | 'STAKING' | 'LENDING'
+  ticker: string
+  quantity: number
+  /** Capital part of `quantity`; null when the exchange doesn't split it. */
+  principal: number | null
+  /** Yield *already included* in `quantity` — a decomposition, never an addition. */
+  interest: number | null
+  currentPriceEur: number | null
+  currentValueEur: number | null
+}
 
 export interface ExchangeStatus {
   id: number

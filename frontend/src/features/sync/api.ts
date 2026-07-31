@@ -92,7 +92,9 @@ export const trApi = {
 // --- Crypto Exchanges ---
 
 export const cryptoExchangeApi = {
-  add: (type: ExchangeType, apiKey: string, apiSecret: string) =>
+  // apiSecret is optional: single-key exchanges (Meria) must not send one, and axios drops an
+  // undefined field from the JSON body entirely.
+  add: (type: ExchangeType, apiKey: string, apiSecret?: string) =>
     api
       .post<Account>('/crypto/exchange', { type, apiKey, apiSecret })
       .then(r => r.data),

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
+import { syncKeys } from '@/features/sync/hooks'
 import { formatDate } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -34,7 +35,10 @@ function truncateAddress(address: string): string {
 
 function useWallets() {
   return useQuery<WalletStatus[]>({
-    queryKey: ['crypto', 'wallets'],
+    // syncKeys.wallets(), not a local key: AddAccountModal adds wallets through
+    // useAddCryptoWallet, which invalidates that shared key — a private one here would leave
+    // this list stale until its 60s poll.
+    queryKey: syncKeys.wallets(),
     queryFn: () => api.get('/crypto/wallet').then(r => r.data),
     refetchInterval: 60_000,
   })
@@ -46,7 +50,7 @@ function useAddWallet() {
     mutationFn: (body: { chain: ChainType; address: string; label?: string }) =>
       api.post('/crypto/wallet', body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crypto', 'wallets'] })
+      queryClient.invalidateQueries({ queryKey: syncKeys.wallets() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
@@ -58,7 +62,7 @@ function useSyncWallet() {
   return useMutation({
     mutationFn: (id: number) => api.post(`/crypto/wallet/${id}/sync`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crypto', 'wallets'] })
+      queryClient.invalidateQueries({ queryKey: syncKeys.wallets() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
@@ -70,7 +74,7 @@ function useRemoveWallet() {
   return useMutation({
     mutationFn: (id: number) => api.delete(`/crypto/wallet/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crypto', 'wallets'] })
+      queryClient.invalidateQueries({ queryKey: syncKeys.wallets() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },

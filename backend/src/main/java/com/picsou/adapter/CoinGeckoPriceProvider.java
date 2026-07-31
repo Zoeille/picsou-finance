@@ -30,7 +30,18 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final Duration HISTORY_TIMEOUT = Duration.ofSeconds(15);
 
-    // Map from ticker (uppercase) → CoinGecko coin ID
+    // Map from ticker (uppercase) → CoinGecko coin ID.
+    //
+    // This map is also a *router*: PriceService sends anything supports() accepts to CoinGecko and
+    // everything else to Yahoo Finance, with no notion of which account a ticker came from. So an
+    // entry here is not free — adding a symbol that is also a listed equity (STX/Seagate,
+    // SNX/TD SYNNEX) makes that stock get priced as a token. Only add symbols whose equity
+    // namesake is implausible in a portfolio, and prefer leaving a coin unpriced over that.
+    // (Crypto-side callers use refreshCryptoPrices, which never falls back to Yahoo.)
+    //
+    // Resolve each id against /api/v3/coins/list and pick the canonical entry, never a
+    // binance-peg-*, *-wormhole or bridged-* homonym — a wrong id is a wrong valuation, and
+    // nothing surfaces it.
     private static final Map<String, String> TICKER_TO_ID = Map.ofEntries(
         Map.entry("BTC", "bitcoin"),
         Map.entry("ETH", "ethereum"),
@@ -56,7 +67,38 @@ public class CoinGeckoPriceProvider implements PriceProviderPort {
         Map.entry("OP", "optimism"),
         Map.entry("SHIB", "shiba-inu"),
         Map.entry("PEPE", "pepe"),
-        Map.entry("SUI", "sui")
+        Map.entry("SUI", "sui"),
+        // Coins reachable through Meria's wallets, staking and lending products. Each id was
+        // resolved on /coins/list and confirmed to return an EUR price on /simple/price.
+        // Deliberately NOT mapped, despite Meria offering them: STX (Nasdaq: Seagate),
+        // SNX (NYSE: TD SYNNEX), SEI (NYSE: Solaris Energy Infrastructure) and APT
+        // (NYSE American: Alpha Pro Tech) are all live equity symbols, and an entry here would
+        // reroute those stock holdings to CoinGecko. They stay unpriced on the crypto side
+        // instead — a missing value, not a wrong one. ONE is left out for the neighbouring
+        // reason: six CoinGecko coins share that symbol, so no id can be picked with confidence.
+        Map.entry("EGLD", "elrond-erd-2"),
+        Map.entry("XTZ", "tezos"),
+        Map.entry("ALGO", "algorand"),
+        Map.entry("KSM", "kusama"),
+        Map.entry("TIA", "celestia"),
+        Map.entry("INJ", "injective-protocol"),
+        Map.entry("ROSE", "oasis-network"),
+        Map.entry("KAVA", "kava"),
+        Map.entry("ZEC", "zcash"),
+        Map.entry("ETC", "ethereum-classic"),
+        Map.entry("XLM", "stellar"),
+        Map.entry("TRX", "tron"),
+        Map.entry("BCH", "bitcoin-cash"),
+        Map.entry("MINA", "mina-protocol"),
+        Map.entry("OSMO", "osmosis"),
+        Map.entry("AKT", "akash-network"),
+        Map.entry("DYDX", "dydx-chain"),
+        Map.entry("CELO", "celo"),
+        Map.entry("BAND", "band-protocol"),
+        Map.entry("XMR", "monero"),
+        Map.entry("VET", "vechain"),
+        Map.entry("HBAR", "hedera-hashgraph"),
+        Map.entry("GRT", "the-graph")
     );
 
     private final WebClient webClient;
