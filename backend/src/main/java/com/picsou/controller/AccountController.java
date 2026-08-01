@@ -14,10 +14,15 @@ import com.picsou.dto.SnapshotRequest;
 import com.picsou.dto.TransactionRequest;
 import com.picsou.dto.TransactionResponse;
 import com.picsou.model.BalanceSnapshot;
+import com.picsou.dto.OwnershipRequest;
+import com.picsou.dto.OwnershipResponse;
+import com.picsou.dto.PropertyValuationResponse;
+import com.picsou.service.AccountOwnershipService;
 import com.picsou.service.AccountService;
 import com.picsou.service.CryptoExchangeSyncService;
 import com.picsou.service.LoanAmortizationService;
 import com.picsou.service.ManualTransactionService;
+import com.picsou.service.PropertyValuationService;
 import com.picsou.service.RealizedPnlService;
 import com.picsou.service.UserContext;
 import jakarta.validation.Valid;
@@ -38,16 +43,22 @@ public class AccountController {
     private final ManualTransactionService manualTransactionService;
     private final RealizedPnlService realizedPnlService;
     private final CryptoExchangeSyncService cryptoExchangeSyncService;
+    private final PropertyValuationService propertyValuationService;
+    private final AccountOwnershipService ownershipService;
 
     public AccountController(AccountService accountService, UserContext userContext,
                             ManualTransactionService manualTransactionService,
                             RealizedPnlService realizedPnlService,
-                            CryptoExchangeSyncService cryptoExchangeSyncService) {
+                            CryptoExchangeSyncService cryptoExchangeSyncService,
+                            PropertyValuationService propertyValuationService,
+                            AccountOwnershipService ownershipService) {
         this.accountService = accountService;
         this.userContext = userContext;
         this.manualTransactionService = manualTransactionService;
         this.realizedPnlService = realizedPnlService;
         this.cryptoExchangeSyncService = cryptoExchangeSyncService;
+        this.propertyValuationService = propertyValuationService;
+        this.ownershipService = ownershipService;
     }
 
     @GetMapping
@@ -164,6 +175,31 @@ public class AccountController {
         @Valid @RequestBody RealEstateMetadataRequest req
     ) {
         return accountService.updateRealEstateMetadata(id, userContext.currentMemberId(), req);
+    }
+
+    /**
+     * Re-values a property from open data.
+     *
+     * <p>Always 200: a non-OK {@code status} in the body ("no data for this commune",
+     * "Alsace-Moselle is not covered") is information the user needs, not a request failure.
+     */
+    @PostMapping("/{id}/valuation/refresh")
+    public PropertyValuationResponse refreshValuation(@PathVariable Long id) {
+        return propertyValuationService.estimate(id, userContext.currentMemberId());
+    }
+
+    @GetMapping("/{id}/ownership")
+    public OwnershipResponse getOwnership(@PathVariable Long id) {
+        return ownershipService.get(id, userContext.currentMemberId());
+    }
+
+    /** Replaces the whole split; an empty list restores "owner holds 100%". */
+    @PutMapping("/{id}/ownership")
+    public OwnershipResponse updateOwnership(
+        @PathVariable Long id,
+        @Valid @RequestBody OwnershipRequest req
+    ) {
+        return ownershipService.replace(id, userContext.currentMemberId(), req);
     }
 
     @PutMapping("/{id}/debt")

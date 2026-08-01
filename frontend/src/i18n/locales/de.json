@@ -244,7 +244,9 @@
     "amortizationChart": "Tilgungsverlauf",
     "today": "Heute",
     "loanProgress": "Kreditfortschritt",
-    "monthlyBreakdown": "Monatliche Aufschlüsselung"
+    "monthlyBreakdown": "Monatliche Aufschlüsselung",
+    "noLinkedAsset": "Kein verknüpftes Objekt",
+    "linkedAssetHint": "Erst die Verknüpfung mit einem Objekt macht das Netto-Immobilienvermögen berechenbar."
   },
   "portfolio": {
     "title": "Detailliertes Portfolio",
@@ -1275,5 +1277,162 @@
     "title": "Wähle deinen Sidebar-Stil",
     "description": "Zwei Layouts zur Auswahl — du kannst jederzeit wechseln.",
     "hint": "Jederzeit änderbar unter Einstellungen > Erscheinungsbild."
+  },
+  "property": {
+    "kind": {
+      "HOUSE": "Haus",
+      "APARTMENT": "Wohnung",
+      "BUILDING": "Mehrfamilienhaus",
+      "LAND": "Grundstück",
+      "PARKING": "Stellplatz",
+      "COMMERCIAL": "Gewerbeobjekt"
+    },
+    "category": {
+      "PRIMARY_RESIDENCE": "Hauptwohnsitz",
+      "SECONDARY_RESIDENCE": "Zweitwohnsitz",
+      "RENTAL": "Vermietung",
+      "LAND": "Grundstück",
+      "OTHER": "Sonstiges"
+    },
+    "address": {
+      "noMatch": "Keine Adresse gefunden"
+    },
+    "form": {
+      "classification": "Objektdaten",
+      "propertyType": "Objektart",
+      "category": "Kategorie",
+      "description": "Beschreibung",
+      "choose": "Auswählen…",
+      "unknown": "Nicht angegeben",
+      "address": "Adresse",
+      "street": "Straße und Hausnummer",
+      "addressPlaceholder": "12 rue de la République",
+      "postalCode": "Postleitzahl",
+      "city": "Stadt",
+      "geocoded": "Adresse lokalisiert (INSEE-Code {{insee}})",
+      "characteristics": "Merkmale",
+      "surfaceArea": "Wohnfläche (m²)",
+      "landArea": "Grundstücksfläche (m²)",
+      "rooms": "Zimmer",
+      "bedrooms": "Schlafzimmer",
+      "constructionYear": "Baujahr",
+      "energyClass": "Energieklasse (DPE)",
+      "details": "Details",
+      "floorNumber": "Etage",
+      "floorsTotal": "Etagen im Gebäude",
+      "hasElevator": "Aufzug",
+      "garageCount": "Garagen",
+      "parkingCount": "Stellplätze",
+      "hasGarden": "Garten",
+      "hasTerrace": "Terrasse",
+      "hasBalcony": "Balkon",
+      "acquisition": "Erwerb",
+      "purchasePrice": "Kaufpreis (ohne Nebenkosten)",
+      "purchaseDate": "Kaufdatum",
+      "agencyFees": "Maklergebühren",
+      "notaryFees": "Notarkosten",
+      "worksCost": "Renovierungskosten",
+      "rentalIncome": "Monatsmiete",
+      "valuationMode": "Bewertung",
+      "autoValuation": "Automatische Schätzung",
+      "autoValuationHint": "Aktualisiert den Wert monatlich anhand der offenen DVF-Daten. Ausschalten, um den eigenen Wert festzuhalten.",
+      "editTitle": "Objekt bearbeiten",
+      "createTitle": "Objekt beschreiben",
+      "intro": "Objektart, Wohnfläche und Adresse angeben, um die automatische Bewertung zu aktivieren.",
+      "saveError": "Objekt konnte nicht gespeichert werden"
+    },
+    "details": {
+      "title": "Merkmale",
+      "costBasis": "Gesamtkosten",
+      "currentValue": "Aktueller Wert",
+      "gain": "Wertzuwachs",
+      "coOwnedNote": "Sie halten {{percent}} % dieses Objekts. Summen zählen nur Ihren Anteil."
+    },
+    "valuation": {
+      "title": "Bewertung",
+      "refresh": "Neu schätzen",
+      "estimate": "Schätzung",
+      "range": "Spanne:",
+      "pricePerSqm": "Preis pro m²",
+      "sampleSize": "Transaktionen",
+      "sourceYear": "Datenjahr",
+      "scale": "Ebene",
+      "method": "So entsteht dieser Wert",
+      "methodDisclaimer": "Diese Anpassungen sind Faustregeln: Die DVF-Daten enthalten weder Etage noch Aufzug, Garten oder Zustand.",
+      "reindexed": "INSEE-Indexierung",
+      "manualMode": "Manuelle Bewertung",
+      "manualNotApplied": "Manueller Modus ist aktiv: Diese Schätzung hat den Wert nicht verändert.",
+      "error": "Die Schätzung ist fehlgeschlagen",
+      "confidence": {
+        "HIGH": "Hohe Zuverlässigkeit",
+        "MEDIUM": "Mittlere Zuverlässigkeit",
+        "LOW": "Geringe Zuverlässigkeit"
+      },
+      "scaleValue": {
+        "communes": "Gemeinde",
+        "departements": "Departement"
+      },
+      "status": {
+        "OK": "Schätzung verfügbar",
+        "UNSUPPORTED_AREA": "In diesem Gebiet ist keine automatische Bewertung möglich.",
+        "UNSUPPORTED_AREA_hint": "Elsass, Moselle und Mayotte führen das Livre foncier, daher gibt es dort keine DVF-Daten. Nutzen Sie Patrim auf impots.gouv.fr und tragen Sie den Wert manuell ein.",
+        "NOT_ESTIMABLE": "Für diese Objektart gibt es keinen verlässlichen Quadratmeterpreis. Bitte manuell eintragen.",
+        "INCOMPLETE_DATA": "Bitte die Wohnfläche angeben, um die Schätzung zu ermöglichen.",
+        "GEOCODING_FAILED": "Die Adresse konnte nicht lokalisiert werden. Bitte prüfen und erneut versuchen.",
+        "NO_COMPARABLE_DATA": "Keine vergleichbaren Transaktionen in dieser Gemeinde.",
+        "PROVIDER_UNAVAILABLE": "Der Datendienst ist vorübergehend nicht erreichbar. Der bisherige Wert bleibt erhalten."
+      }
+    },
+    "financing": {
+      "title": "Finanzierung",
+      "gross": "Bruttowert",
+      "debt": "Restschuld",
+      "net": "Nettowert",
+      "equityShare": "{{pct}} % des Objekts gehören Ihnen tatsächlich"
+    },
+    "summary": {
+      "title": "Immobilienvermögen",
+      "gross": "Brutto",
+      "debt": "Schulden",
+      "net": "Netto",
+      "gain": "Wertzuwachs",
+      "loanToValue": "Beleihungsquote: {{pct}} % des Objektwerts",
+      "rentalIncome": "Monatliche Mieteinnahmen:"
+    },
+    "ownership": {
+      "title": "Eigentumsanteile",
+      "hint": "Anteil je Mitglied festlegen. Jeder zählt nur seinen eigenen Anteil zum Vermögen.",
+      "total": "Zugewiesen",
+      "overAllocated": "Die Summe übersteigt 100 %.",
+      "unassigned": "{{percent}} % sind niemandem zugewiesen: Dieser Anteil liegt außerhalb von Picsou und zählt zu keinem Vermögen.",
+      "saveError": "Aufteilung konnte nicht gespeichert werden"
+    },
+    "chart": {
+      "title": "Wertentwicklung der Schätzung",
+      "estimate": "Schätzung",
+      "range": "Spanne",
+      "costBasis": "Gesamtkosten"
+    },
+    "adjustments": {
+      "NO_ELEVATOR": "Hohe Etage ohne Aufzug",
+      "GROUND_FLOOR": "Erdgeschoss",
+      "TOP_FLOOR_ELEVATOR": "Dachgeschoss mit Aufzug",
+      "GARDEN": "Garten",
+      "TERRACE": "Terrasse",
+      "BALCONY": "Balkon",
+      "GARAGE": "Garage",
+      "PARKING": "Stellplatz",
+      "LAND_SURPLUS": "Grundstück über der Referenzfläche",
+      "ENERGY_A": "DPE A",
+      "ENERGY_B": "DPE B",
+      "ENERGY_C": "DPE C",
+      "ENERGY_E": "DPE E",
+      "ENERGY_F": "DPE F (schlecht gedämmt)",
+      "ENERGY_G": "DPE G (schlecht gedämmt)",
+      "ERA_PRE_1949": "Baujahr vor 1949",
+      "ERA_1949_1974": "Baujahr 1949-1974",
+      "ERA_2001_2012": "Baujahr 2001-2012",
+      "ERA_POST_2012": "Baujahr nach 2012"
+    }
   }
 }

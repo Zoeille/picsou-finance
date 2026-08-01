@@ -19,6 +19,7 @@ import com.picsou.model.BalanceSnapshot;
 import com.picsou.model.Debt;
 import com.picsou.model.FamilyMember;
 import com.picsou.model.RealEstateMetadata;
+import com.picsou.model.ValuationMode;
 import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.BalanceSnapshotRepository;
@@ -63,6 +64,7 @@ public class AccountService {
     private final DebtRepository debtRepository;
     private final PriceService priceService;
     private final LoanAmortizationService loanAmortizationService;
+    private final AccountAccessResolver accessResolver;
 
     public AccountService(
         AccountRepository accountRepository,
@@ -72,7 +74,8 @@ public class AccountService {
         RealEstateMetadataRepository realEstateMetadataRepository,
         DebtRepository debtRepository,
         PriceService priceService,
-        LoanAmortizationService loanAmortizationService
+        LoanAmortizationService loanAmortizationService,
+        AccountAccessResolver accessResolver
     ) {
         this.accountRepository = accountRepository;
         this.snapshotRepository = snapshotRepository;
@@ -82,16 +85,28 @@ public class AccountService {
         this.debtRepository = debtRepository;
         this.priceService = priceService;
         this.loanAmortizationService = loanAmortizationService;
+        this.accessResolver = accessResolver;
     }
 
+    /**
+     * Every account the member can see, co-owned ones included.
+     *
+     * <p>Balances here are the account's <em>full</em> value, with {@code sharePercent}
+     * alongside — a half-owned house is still a €400k house, and the edit form must load the
+     * real figure. Weighting belongs to the places that total things up (dashboard, history,
+     * real-estate summary), not to the listing.
+     */
     public List<AccountResponse> findAll(Long memberId) {
-        return accountRepository.findAllByMemberIdOrderByCreatedAtAsc(memberId).stream()
-            .map(this::toResponse)
+        List<Account> accounts = accessResolver.readableAccounts(memberId);
+        Map<Long, BigDecimal> shares = accessResolver.sharesFor(accounts, memberId);
+        return accounts.stream()
+            .map(a -> toResponse(a, shares.get(a.getId()), memberId))
             .toList();
     }
 
     public AccountResponse findById(Long id, Long memberId) {
-        return toResponse(getOrThrow(id, memberId));
+        Account account = accessResolver.requireReadable(id, memberId);
+        return toResponse(account, accessResolver.shareFor(account, memberId), memberId);
     }
 
     @Transactional
@@ -489,8 +504,28 @@ public class AccountService {
     }
 
     AccountResponse toResponse(Account account) {
+        return toResponse(account, null, null);
+    }
+
+    /**
+     * @param sharePercent the viewer's stake; anything but a full 100% is reported so the UI
+     *                     can badge the account as co-owned
+     * @param viewerId     who is asking, used to say whether they administer the account
+     */
+    AccountResponse toResponse(Account account, BigDecimal sharePercent, Long viewerId) {
         BigDecimal balanceEur = liveBalanceEur(account);
         AccountResponse response = AccountResponse.from(account, balanceEur);
+
+        BigDecimal reportedShare =
+            sharePercent != null && sharePercent.compareTo(new BigDecimal("100")) != 0
+                ? sharePercent
+                : null;
+        Boolean isOwner = viewerId != null && account.getMember() != null
+            ? viewerId.equals(account.getMember().getId())
+            : null;
+        if (reportedShare != null || isOwner != null) {
+            response = response.withViewer(reportedShare, isOwner);
+        }
 
         if (account.getType() == AccountType.REAL_ESTATE) {
             Optional<RealEstateMetadataResponse> meta = realEstateMetadataRepository.findByAccountId(account.getId())
@@ -540,16 +575,70 @@ public class AccountService {
         Account account = getOrThrow(accountId, memberId);
 
         RealEstateMetadata metadata = realEstateMetadataRepository.findByAccountId(accountId)
-            .orElseGet(() -> RealEstateMetadata.builder().account(account).build());
+            // member is NOT NULL (V22); building without it violated the constraint on the
+            // very first save. Never surfaced because no client called this endpoint until now.
+            .orElseGet(() -> RealEstateMetadata.builder()
+                .account(account)
+                .member(account.getMember())
+                .build());
 
+        // Acquisition
         metadata.setPurchasePrice(req.purchasePrice());
         metadata.setPurchaseDate(req.purchaseDate());
-        metadata.setSurfaceArea(req.surfaceArea());
-        metadata.setAddress(req.address());
+        metadata.setAgencyFees(req.agencyFees());
+        metadata.setNotaryFees(req.notaryFees());
+        metadata.setWorksCost(req.worksCost());
+
+        // Classification
         metadata.setPropertyType(req.propertyType());
+        metadata.setCategory(req.category());
+        metadata.setDescription(req.description());
+
+        // Address — geocoding is derived from these, so it is invalidated below if they move.
+        boolean addressChanged = addressChanged(metadata, req);
+        metadata.setAddress(req.address());
+        metadata.setPostalCode(req.postalCode());
+        metadata.setCity(req.city());
+        metadata.setCountry(req.country() != null ? req.country().toUpperCase(Locale.ROOT) : "FR");
+        if (addressChanged) {
+            // Clearing the INSEE code is what makes the next valuation re-geocode. Keeping a
+            // stale code would silently value the new address against the old commune.
+            metadata.setInseeCode(null);
+            metadata.setLatitude(null);
+            metadata.setLongitude(null);
+            metadata.setBanId(null);
+            metadata.setGeocodeScore(null);
+            metadata.setGeocodedAt(null);
+        }
+
+        // Characteristics
+        metadata.setSurfaceArea(req.surfaceArea());
+        metadata.setLandArea(req.landArea());
+        metadata.setConstructionYear(req.constructionYear());
+        metadata.setRooms(req.rooms());
+        metadata.setBedrooms(req.bedrooms());
+        metadata.setFloorNumber(req.floorNumber());
+        metadata.setFloorsTotal(req.floorsTotal());
+        metadata.setHasElevator(req.hasElevator());
+        metadata.setGarageCount(req.garageCount() != null ? req.garageCount() : 0);
+        metadata.setParkingCount(req.parkingCount() != null ? req.parkingCount() : 0);
+        metadata.setHasGarden(Boolean.TRUE.equals(req.hasGarden()));
+        metadata.setHasTerrace(Boolean.TRUE.equals(req.hasTerrace()));
+        metadata.setHasBalcony(Boolean.TRUE.equals(req.hasBalcony()));
+        metadata.setEnergyClass(req.energyClass());
+
+        // Valuation & income
+        metadata.setValuationMode(req.valuationMode() != null ? req.valuationMode() : ValuationMode.ESTIMATED);
         metadata.setRentalIncome(req.rentalIncome() != null ? req.rentalIncome() : BigDecimal.ZERO);
 
         return RealEstateMetadataResponse.from(realEstateMetadataRepository.save(metadata));
+    }
+
+    /** Whether any component the geocoder consumes differs from what is stored. */
+    private static boolean addressChanged(RealEstateMetadata metadata, RealEstateMetadataRequest req) {
+        return !java.util.Objects.equals(metadata.getAddress(), req.address())
+            || !java.util.Objects.equals(metadata.getPostalCode(), req.postalCode())
+            || !java.util.Objects.equals(metadata.getCity(), req.city());
     }
 
     @Transactional

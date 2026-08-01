@@ -1,5 +1,5 @@
 import { api } from '@/lib/api-client'
-import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, RealEstateMetadataRequest, RealEstateMetadata, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest, ExchangePositionResponse } from '@/types/api'
+import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, Ownership, OwnershipRequest, PropertyValuation, PropertyValuationHistoryEntry, RealEstateMetadataRequest, RealEstateMetadata, RealEstateSummary, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest, ExchangePositionResponse } from '@/types/api'
 
 export const accountsApi = {
   list: () => api.get<Account[]>('/accounts').then(r => r.data),
@@ -58,4 +58,20 @@ export const accountsApi = {
     api.post<TransactionImportResultResponse>(`/accounts/${id}/transactions/import`, data).then(r => r.data),
   realizedPnl: (id: number) =>
     api.get<RealizedPnlResponse>(`/accounts/${id}/realized-pnl`).then(r => r.data),
+  /**
+   * Always resolves: a non-OK `status` in the body explains why no figure could be produced
+   * (uncovered area, missing living area) and is information to render, not an error.
+   */
+  refreshValuation: (id: number) =>
+    api.post<PropertyValuation>(`/accounts/${id}/valuation/refresh`).then(r => r.data),
+  ownership: (id: number) =>
+    api.get<Ownership>(`/accounts/${id}/ownership`).then(r => r.data),
+  updateOwnership: (id: number, data: OwnershipRequest) =>
+    api.put<Ownership>(`/accounts/${id}/ownership`, data).then(r => r.data),
+}
+
+export const realEstateApi = {
+  summary: () => api.get<RealEstateSummary>('/real-estate/summary').then(r => r.data),
+  valuations: (accountId: number) =>
+    api.get<PropertyValuationHistoryEntry[]>(`/real-estate/${accountId}/valuations`).then(r => r.data),
 }

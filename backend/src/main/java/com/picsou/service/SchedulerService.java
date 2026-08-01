@@ -43,6 +43,7 @@ public class SchedulerService {
     private final WalletSyncService walletSyncService;
     private final FinaryApiSyncService finaryApiSyncService;
     private final IbkrSyncService ibkrSyncService;
+    private final PropertyValuationService propertyValuationService;
 
     public SchedulerService(
         AccountRepository accountRepository,
@@ -59,7 +60,8 @@ public class SchedulerService {
         CryptoExchangeSyncService cryptoExchangeSyncService,
         WalletSyncService walletSyncService,
         FinaryApiSyncService finaryApiSyncService,
-        IbkrSyncService ibkrSyncService
+        IbkrSyncService ibkrSyncService,
+        PropertyValuationService propertyValuationService
     ) {
         this.accountRepository = accountRepository;
         this.holdingRepository = holdingRepository;
@@ -76,6 +78,34 @@ public class SchedulerService {
         this.walletSyncService = walletSyncService;
         this.finaryApiSyncService = finaryApiSyncService;
         this.ibkrSyncService = ibkrSyncService;
+        this.propertyValuationService = propertyValuationService;
+    }
+
+    /**
+     * Monthly on the 1st at 03:30: re-value every property from open data.
+     *
+     * <p>Monthly, not daily, because the inputs simply do not move faster: DVF is published
+     * twice a year and the INSEE index is quarterly. A nightly run would produce identical
+     * figures while hammering a service that is still on a preprod host with no documented
+     * rate limits. Users who want a figure sooner have the manual refresh button.
+     */
+    @Scheduled(cron = "0 30 3 1 * *")
+    public void monthlyPropertyValuation() {
+        log.info("Refreshing property valuations for all members");
+        List<FamilyMember> members = familyMemberRepository.findAllByOrderByCreatedAtAsc();
+
+        for (FamilyMember member : members) {
+            // Guard per member, like dailyBankSync: one member's unreachable commune must
+            // not stop everyone else's properties from being revalued.
+            try {
+                int refreshed = propertyValuationService.refreshAllForMember(member.getId());
+                if (refreshed > 0) {
+                    log.info("Revalued {} propertie(s) for member {}", refreshed, member.getId());
+                }
+            } catch (Exception ex) {
+                log.error("Property valuation failed for member {} -- skipping it", member.getId(), ex);
+            }
+        }
     }
 
     /**

@@ -46,6 +46,7 @@ public class GoalService {
     private final GoalManualContributionRepository manualContributionRepository;
     private final FamilyMemberRepository familyMemberRepository;
     private final HistoryService historyService;
+    private final AccountAccessResolver accessResolver;
 
     public GoalService(
         GoalRepository goalRepository,
@@ -55,7 +56,8 @@ public class GoalService {
         GoalMonthOverrideRepository overrideRepository,
         GoalManualContributionRepository manualContributionRepository,
         FamilyMemberRepository familyMemberRepository,
-        HistoryService historyService
+        HistoryService historyService,
+        AccountAccessResolver accessResolver
     ) {
         this.goalRepository = goalRepository;
         this.accountRepository = accountRepository;
@@ -65,6 +67,7 @@ public class GoalService {
         this.manualContributionRepository = manualContributionRepository;
         this.familyMemberRepository = familyMemberRepository;
         this.historyService = historyService;
+        this.accessResolver = accessResolver;
     }
 
     public List<GoalProgressResponse> findAll(Long memberId) {
@@ -131,8 +134,13 @@ public class GoalService {
 
         // Use live balance (with PnL from current prices) for each account.
         // Signed: linked LOAN accounts count negatively against the goal.
+        // Weighted by the goal owner's share, so a goal backed by a half-owned property
+        // does not report twice the progress actually available to them.
+        Long goalMemberId = goal.getMember().getId();
         BigDecimal currentTotal = goal.getAccounts().stream()
-            .map(accountService::signedLiveBalanceEur)
+            .map(a -> AccountAccessResolver.weigh(
+                accountService.signedLiveBalanceEur(a),
+                accessResolver.shareFor(a, goalMemberId)))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal target = goal.getTargetAmount();

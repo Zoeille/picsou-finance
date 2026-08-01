@@ -51,6 +51,8 @@
 | 2026-08-01 | [Value assets from the last known price rather than not at all](./decisions/2026-08-01-last-known-price-fallback.md) | Active |
 | 2026-08-05 | [DEGIRO: session-only, no stored TOTP secret](./decisions/2026-08-05-degiro-session-only-no-stored-totp.md) | Active |
 | 2026-08-09 | [Amundi Épargne Salariale through an isolated browser sidecar](./decisions/2026-08-09-amundi-epargne-salariale-sidecar.md) | Active |
+| 2026-08-01 | [Estimate property value from French open data](./decisions/2026-08-01-open-data-property-valuation.md) | Active |
+| 2026-08-01 | [Per-member ownership shares on properties and loans](./decisions/2026-08-01-account-ownership-shares.md) | Active |
 
 ## Feature notes
 
@@ -97,6 +99,8 @@
 | Admin recovery (lost-admin console reset) | 2026-05-29 | [admin-recovery.md](./features/admin-recovery.md) |
 | Frontend error display (`extractErrorMessage`) | 2026-05-31 | [frontend-error-display.md](./features/frontend-error-display.md) |
 | Loan accounts (LOAN type, amortization view) | 2026-04-26 | [loans.md](./features/loans.md) |
+| Real estate valuation | 2026-08-01 | [real-estate-valuation.md](./features/real-estate-valuation.md) |
+| Ownership shares | 2026-08-01 | [account-ownership-shares.md](./features/account-ownership-shares.md) |
 | 2FA (TOTP) and Remember Me | 2026-06-01 | [mfa-and-remember-me.md](./features/mfa-and-remember-me.md) |
 | Login timing equalization (username-enumeration defense, GHSA-ww5m-pxgq-8qq6) | 2026-06-27 | [login-timing-attack.md](./features/login-timing-attack.md) |
 | GDPR data export (JSON + CSV) | 2026-04-26 | [data-export.md](./features/data-export.md) |

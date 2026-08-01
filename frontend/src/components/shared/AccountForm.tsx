@@ -3,6 +3,7 @@ import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
+import type { Account } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/shared/NumericInput'
@@ -44,6 +45,9 @@ const accountSchema = z.object({
   fileFees: z.number().min(0).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  // Ties a mortgage to the property it finances, which is what makes gross vs net
+  // property equity computable.
+  linkedAccountId: z.number().optional(),
 })
 
 type AccountFormData = z.infer<typeof accountSchema>
@@ -55,6 +59,14 @@ interface AccountFormProps {
   defaultValues?: Partial<AccountFormData>
   title?: string
   loading?: boolean
+  /**
+   * The caller's account list, used to offer a property to link a loan to.
+   *
+   * Passed in rather than fetched here: this form is also rendered by AddAccountModal, and a
+   * shared presentational component that issues its own query forces every consumer (and
+   * every test) to provide a QueryClient.
+   */
+  accounts?: Account[]
 }
 
 const EMPTY_DEFAULTS: AccountFormData = {
@@ -77,8 +89,9 @@ const EMPTY_DEFAULTS: AccountFormData = {
 
 const selectControlClassName = "flex h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
 
-export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title, loading }: AccountFormProps) {
+export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title, loading, accounts = [] }: AccountFormProps) {
   const { t } = useTranslation()
+  const propertyAccounts = accounts.filter(a => a.type === 'REAL_ESTATE')
   const { register, handleSubmit, setValue, reset, control } = useForm<AccountFormData>({
     resolver: zodResolver(accountSchema),
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
@@ -193,6 +206,24 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
                 <Label htmlFor="provider">{t('debt.lenderName')}</Label>
                 <Input id="provider" {...register('provider')} placeholder={t('debt.lenderName')} />
               </div>
+              {propertyAccounts.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="linkedAccountId">{t('debt.linkedAccount')}</Label>
+                  <select
+                    id="linkedAccountId"
+                    className={selectControlClassName}
+                    {...register('linkedAccountId', {
+                      setValueAs: v => (v === '' || v == null ? undefined : Number(v)),
+                    })}
+                  >
+                    <option value="">{t('debt.noLinkedAsset')}</option>
+                    {propertyAccounts.map(property => (
+                      <option key={property.id} value={property.id}>{property.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">{t('debt.linkedAssetHint')}</p>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="borrowedAmount">{t('debt.borrowedAmount')}</Label>

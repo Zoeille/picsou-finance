@@ -244,7 +244,9 @@
     "amortizationChart": "Curva de amortización",
     "today": "Hoy",
     "loanProgress": "Progreso del préstamo",
-    "monthlyBreakdown": "Desglose mensual"
+    "monthlyBreakdown": "Desglose mensual",
+    "noLinkedAsset": "Sin inmueble vinculado",
+    "linkedAssetHint": "Vincular este préstamo a un inmueble es lo que permite calcular el patrimonio inmobiliario neto."
   },
   "portfolio": {
     "title": "Cartera detallada",
@@ -1275,5 +1277,162 @@
     "title": "Elige el estilo de tu barra lateral",
     "description": "Dos diseños a elegir — puedes cambiarlo en cualquier momento.",
     "hint": "Modificable en cualquier momento en Ajustes > Apariencia."
+  },
+  "property": {
+    "kind": {
+      "HOUSE": "Casa",
+      "APARTMENT": "Piso",
+      "BUILDING": "Edificio",
+      "LAND": "Terreno",
+      "PARKING": "Plaza de garaje",
+      "COMMERCIAL": "Local comercial"
+    },
+    "category": {
+      "PRIMARY_RESIDENCE": "Vivienda habitual",
+      "SECONDARY_RESIDENCE": "Segunda residencia",
+      "RENTAL": "Inversión en alquiler",
+      "LAND": "Terreno",
+      "OTHER": "Otro"
+    },
+    "address": {
+      "noMatch": "No se encontró la dirección"
+    },
+    "form": {
+      "classification": "Identidad del inmueble",
+      "propertyType": "Tipo de inmueble",
+      "category": "Categoría",
+      "description": "Descripción",
+      "choose": "Elegir…",
+      "unknown": "Sin especificar",
+      "address": "Dirección",
+      "street": "Dirección postal",
+      "addressPlaceholder": "12 rue de la République",
+      "postalCode": "Código postal",
+      "city": "Ciudad",
+      "geocoded": "Dirección localizada (código INSEE {{insee}})",
+      "characteristics": "Características",
+      "surfaceArea": "Superficie habitable (m²)",
+      "landArea": "Superficie del terreno (m²)",
+      "rooms": "Habitaciones",
+      "bedrooms": "Dormitorios",
+      "constructionYear": "Año de construcción",
+      "energyClass": "Clase energética (DPE)",
+      "details": "Detalles",
+      "floorNumber": "Planta",
+      "floorsTotal": "Plantas del edificio",
+      "hasElevator": "Ascensor",
+      "garageCount": "Garajes",
+      "parkingCount": "Plazas de aparcamiento",
+      "hasGarden": "Jardín",
+      "hasTerrace": "Terraza",
+      "hasBalcony": "Balcón",
+      "acquisition": "Adquisición",
+      "purchasePrice": "Precio de compra (sin gastos)",
+      "purchaseDate": "Fecha de compra",
+      "agencyFees": "Gastos de agencia",
+      "notaryFees": "Gastos de notaría",
+      "worksCost": "Coste de obras",
+      "rentalIncome": "Alquiler mensual",
+      "valuationMode": "Valoración",
+      "autoValuation": "Estimación automática",
+      "autoValuationHint": "Actualiza el valor cada mes con los datos abiertos DVF. Desactívalo para fijar tu propia cifra.",
+      "editTitle": "Editar inmueble",
+      "createTitle": "Describir el inmueble",
+      "intro": "Indica el tipo, la superficie y la dirección para activar la estimación automática.",
+      "saveError": "No se pudo guardar el inmueble"
+    },
+    "details": {
+      "title": "Características",
+      "costBasis": "Coste total",
+      "currentValue": "Valor actual",
+      "gain": "Plusvalía",
+      "coOwnedNote": "Posees el {{percent}} % de este inmueble. Los totales solo cuentan tu parte."
+    },
+    "valuation": {
+      "title": "Valoración",
+      "refresh": "Reestimar",
+      "estimate": "Estimación",
+      "range": "Horquilla:",
+      "pricePerSqm": "Precio por m²",
+      "sampleSize": "Transacciones",
+      "sourceYear": "Año de los datos",
+      "scale": "Escala",
+      "method": "Cómo se calcula esta cifra",
+      "methodDisclaimer": "Estos ajustes son reglas empíricas: los datos DVF no registran planta, ascensor, jardín ni estado.",
+      "reindexed": "Reindexación INSEE",
+      "manualMode": "Valoración manual",
+      "manualNotApplied": "El modo manual está activo: esta estimación no ha cambiado el valor.",
+      "error": "La estimación ha fallado",
+      "confidence": {
+        "HIGH": "Fiabilidad alta",
+        "MEDIUM": "Fiabilidad media",
+        "LOW": "Fiabilidad baja"
+      },
+      "scaleValue": {
+        "communes": "Municipio",
+        "departements": "Departamento"
+      },
+      "status": {
+        "OK": "Estimación disponible",
+        "UNSUPPORTED_AREA": "La estimación automática no está disponible en esta zona.",
+        "UNSUPPORTED_AREA_hint": "Alsacia, Mosela y Mayotte usan el livre foncier, por lo que no existen datos DVF. Usa el servicio Patrim de impots.gouv.fr e introduce el valor manualmente.",
+        "NOT_ESTIMABLE": "Este tipo de inmueble no tiene un precio por m² fiable. Introduce el valor manualmente.",
+        "INCOMPLETE_DATA": "Añade la superficie habitable para permitir la estimación.",
+        "GEOCODING_FAILED": "No se pudo localizar la dirección. Revísala e inténtalo de nuevo.",
+        "NO_COMPARABLE_DATA": "No hay transacciones comparables en este municipio.",
+        "PROVIDER_UNAVAILABLE": "El servicio de datos no está disponible temporalmente. Se conserva el valor anterior."
+      }
+    },
+    "financing": {
+      "title": "Financiación",
+      "gross": "Valor bruto",
+      "debt": "Capital pendiente",
+      "net": "Valor neto",
+      "equityShare": "El {{pct}} % del inmueble es realmente tuyo"
+    },
+    "summary": {
+      "title": "Patrimonio inmobiliario",
+      "gross": "Bruto",
+      "debt": "Deuda",
+      "net": "Neto",
+      "gain": "Plusvalía",
+      "loanToValue": "Ratio de endeudamiento: {{pct}} % del valor de los inmuebles",
+      "rentalIncome": "Ingresos por alquiler mensuales:"
+    },
+    "ownership": {
+      "title": "Reparto de propiedad",
+      "hint": "Indica la parte de cada miembro. Cada uno solo cuenta su parte en su patrimonio.",
+      "total": "Total asignado",
+      "overAllocated": "La suma supera el 100 %.",
+      "unassigned": "El {{percent}} % no está asignado a nadie: esa parte se considera fuera de Picsou y no cuenta en el patrimonio de nadie.",
+      "saveError": "No se pudo guardar el reparto"
+    },
+    "chart": {
+      "title": "Evolución de la estimación",
+      "estimate": "Estimación",
+      "range": "Horquilla",
+      "costBasis": "Coste total"
+    },
+    "adjustments": {
+      "NO_ELEVATOR": "Planta alta sin ascensor",
+      "GROUND_FLOOR": "Planta baja",
+      "TOP_FLOOR_ELEVATOR": "Ático con ascensor",
+      "GARDEN": "Jardín",
+      "TERRACE": "Terraza",
+      "BALCONY": "Balcón",
+      "GARAGE": "Garaje",
+      "PARKING": "Plaza de aparcamiento",
+      "LAND_SURPLUS": "Terreno por encima de la superficie de referencia",
+      "ENERGY_A": "DPE A",
+      "ENERGY_B": "DPE B",
+      "ENERGY_C": "DPE C",
+      "ENERGY_E": "DPE E",
+      "ENERGY_F": "DPE F (mala eficiencia)",
+      "ENERGY_G": "DPE G (mala eficiencia)",
+      "ERA_PRE_1949": "Construido antes de 1949",
+      "ERA_1949_1974": "Construido 1949-1974",
+      "ERA_2001_2012": "Construido 2001-2012",
+      "ERA_POST_2012": "Construido después de 2012"
+    }
   }
 }

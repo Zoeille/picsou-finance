@@ -251,7 +251,9 @@
     "amortizationChart": "Amortization curve",
     "today": "Today",
     "loanProgress": "Loan progress",
-    "monthlyBreakdown": "Monthly breakdown"
+    "monthlyBreakdown": "Monthly breakdown",
+    "noLinkedAsset": "No linked asset",
+    "linkedAssetHint": "Linking this loan to a property is what makes net property wealth computable."
   },
   "portfolio": {
     "title": "Detailed Portfolio",
@@ -1282,5 +1284,162 @@
     "title": "Pick your sidebar style",
     "description": "Two layouts to choose from — you can switch anytime.",
     "hint": "Changeable anytime in Settings > Appearance."
+  },
+  "property": {
+    "kind": {
+      "HOUSE": "House",
+      "APARTMENT": "Apartment",
+      "BUILDING": "Building",
+      "LAND": "Land",
+      "PARKING": "Parking",
+      "COMMERCIAL": "Commercial"
+    },
+    "category": {
+      "PRIMARY_RESIDENCE": "Primary residence",
+      "SECONDARY_RESIDENCE": "Second home",
+      "RENTAL": "Buy-to-let",
+      "LAND": "Land",
+      "OTHER": "Other"
+    },
+    "address": {
+      "noMatch": "No matching address"
+    },
+    "form": {
+      "classification": "Property identity",
+      "propertyType": "Property type",
+      "category": "Category",
+      "description": "Description",
+      "choose": "Choose…",
+      "unknown": "Not set",
+      "address": "Address",
+      "street": "Street address",
+      "addressPlaceholder": "12 rue de la République",
+      "postalCode": "Postcode",
+      "city": "City",
+      "geocoded": "Address located (INSEE code {{insee}})",
+      "characteristics": "Characteristics",
+      "surfaceArea": "Living area (m²)",
+      "landArea": "Land area (m²)",
+      "rooms": "Rooms",
+      "bedrooms": "Bedrooms",
+      "constructionYear": "Year built",
+      "energyClass": "Energy rating (DPE)",
+      "details": "Details",
+      "floorNumber": "Floor",
+      "floorsTotal": "Floors in building",
+      "hasElevator": "Lift",
+      "garageCount": "Garages",
+      "parkingCount": "Parking spaces",
+      "hasGarden": "Garden",
+      "hasTerrace": "Terrace",
+      "hasBalcony": "Balcony",
+      "acquisition": "Acquisition",
+      "purchasePrice": "Purchase price (excl. fees)",
+      "purchaseDate": "Purchase date",
+      "agencyFees": "Agency fees",
+      "notaryFees": "Notary fees",
+      "worksCost": "Renovation costs",
+      "rentalIncome": "Monthly rent",
+      "valuationMode": "Valuation",
+      "autoValuation": "Automatic estimate",
+      "autoValuationHint": "Updates the property value monthly from French DVF open data. Turn off to freeze your own figure.",
+      "editTitle": "Edit property",
+      "createTitle": "Describe the property",
+      "intro": "Fill in the type, living area and address to enable automatic valuation.",
+      "saveError": "Could not save the property"
+    },
+    "details": {
+      "title": "Characteristics",
+      "costBasis": "Total cost",
+      "currentValue": "Current value",
+      "gain": "Gain",
+      "coOwnedNote": "You hold {{percent}}% of this property. Totals count only your share."
+    },
+    "valuation": {
+      "title": "Valuation",
+      "refresh": "Re-estimate",
+      "estimate": "Estimate",
+      "range": "Range:",
+      "pricePerSqm": "Price per m²",
+      "sampleSize": "Transactions",
+      "sourceYear": "Data year",
+      "scale": "Scale",
+      "method": "How this figure is built",
+      "methodDisclaimer": "These adjustments are rules of thumb: the DVF data records no floor, lift, garden or condition.",
+      "reindexed": "INSEE re-indexing",
+      "manualMode": "Manual valuation",
+      "manualNotApplied": "Manual mode is on: this estimate did not change the property value.",
+      "error": "The valuation failed",
+      "confidence": {
+        "HIGH": "High confidence",
+        "MEDIUM": "Medium confidence",
+        "LOW": "Low confidence"
+      },
+      "scaleValue": {
+        "communes": "Municipality",
+        "departements": "Department"
+      },
+      "status": {
+        "OK": "Estimate available",
+        "UNSUPPORTED_AREA": "Automatic valuation is not available in this area.",
+        "UNSUPPORTED_AREA_hint": "Alsace, Moselle and Mayotte use the livre foncier registry, so DVF holds no data there. Use the Patrim service on impots.gouv.fr and enter the value manually.",
+        "NOT_ESTIMABLE": "This property type has no reliable price per m². Enter the value manually.",
+        "INCOMPLETE_DATA": "Add the living area to enable the estimate.",
+        "GEOCODING_FAILED": "The address could not be located. Check it and try again.",
+        "NO_COMPARABLE_DATA": "No comparable transactions in this municipality.",
+        "PROVIDER_UNAVAILABLE": "The data service is temporarily unavailable. The previous value is kept."
+      }
+    },
+    "financing": {
+      "title": "Financing",
+      "gross": "Gross value",
+      "debt": "Outstanding debt",
+      "net": "Net value",
+      "equityShare": "{{pct}}% of the property is genuinely yours"
+    },
+    "summary": {
+      "title": "Property wealth",
+      "gross": "Gross",
+      "debt": "Debt",
+      "net": "Net",
+      "gain": "Gain",
+      "loanToValue": "Loan-to-value: {{pct}}% of the properties' value",
+      "rentalIncome": "Monthly rental income:"
+    },
+    "ownership": {
+      "title": "Ownership split",
+      "hint": "Set each member's share. Everyone counts only their own part in their net worth.",
+      "total": "Total assigned",
+      "overAllocated": "The shares add up to more than 100%.",
+      "unassigned": "{{percent}}% is assigned to nobody: that part is held outside Picsou and counts towards no one's net worth.",
+      "saveError": "Could not save the ownership split"
+    },
+    "chart": {
+      "title": "Estimate over time",
+      "estimate": "Estimate",
+      "range": "Range",
+      "costBasis": "Total cost"
+    },
+    "adjustments": {
+      "NO_ELEVATOR": "High floor without a lift",
+      "GROUND_FLOOR": "Ground floor",
+      "TOP_FLOOR_ELEVATOR": "Top floor with a lift",
+      "GARDEN": "Garden",
+      "TERRACE": "Terrace",
+      "BALCONY": "Balcony",
+      "GARAGE": "Garage",
+      "PARKING": "Parking space",
+      "LAND_SURPLUS": "Land beyond the reference plot",
+      "ENERGY_A": "EPC A",
+      "ENERGY_B": "EPC B",
+      "ENERGY_C": "EPC C",
+      "ENERGY_E": "EPC E",
+      "ENERGY_F": "EPC F (poor insulation)",
+      "ENERGY_G": "EPC G (poor insulation)",
+      "ERA_PRE_1949": "Built before 1949",
+      "ERA_1949_1974": "Built 1949-1974",
+      "ERA_2001_2012": "Built 2001-2012",
+      "ERA_POST_2012": "Built after 2012"
+    }
   }
 }

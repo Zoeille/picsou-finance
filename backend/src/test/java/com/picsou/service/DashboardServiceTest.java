@@ -9,6 +9,7 @@ import com.picsou.repository.AccountRepository;
 import com.picsou.repository.GoalRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,6 +18,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,7 +34,25 @@ class DashboardServiceTest {
     @Mock HistoryService historyService;
     @Mock AccountService accountService;
 
+    @Mock AccountAccessResolver accessResolver;
+
     @InjectMocks DashboardService dashboardService;
+
+    @BeforeEach
+    void stubOwnershipShares() {
+        // Fixtures own their accounts outright, so readableAccounts mirrors the repository
+        // and every share is 100% -- weighting becomes the identity.
+        lenient().when(accessResolver.readableAccounts(any())).thenAnswer(inv ->
+            accountRepository.findAllByMemberIdOrderByCreatedAtAsc(inv.getArgument(0)));
+        lenient().when(accessResolver.sharesFor(any(), any())).thenAnswer(inv -> {
+            java.util.Collection<Account> accounts = inv.getArgument(0);
+            java.util.Map<Long, java.math.BigDecimal> shares = new java.util.HashMap<>();
+            for (Account a : accounts) {
+                shares.put(a.getId(), new java.math.BigDecimal("100"));
+            }
+            return shares;
+        });
+    }
 
     @Test
     void getDashboard_usesSharedAccountValuation_whenHoldingHasNoLivePrice() {

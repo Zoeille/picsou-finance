@@ -117,6 +117,21 @@ info:
     version: ${APP_VERSION:dev}
 
 app:
+  # Property valuation from French open data. No credentials of any kind: every source
+  # below is Licence Ouverte 2.0 and unauthenticated, which is what lets a self-hosted
+  # instance estimate property value without a per-user API subscription.
+  valuation:
+    enabled: ${VALUATION_ENABLED:true}
+    cerema:
+      # DVF market indicators (median €/m² per commune), from DGFiP transaction data.
+      base-url: ${CEREMA_API_URL:https://apidf-preprod.cerema.fr}
+    insee:
+      # Housing price index, used to carry a DVF vintage forward to today.
+      base-url: ${INSEE_API_URL:https://api.insee.fr/series/BDM/V1}
+  geocoding:
+    # IGN Géoplateforme. Not api-adresse.data.gouv.fr: that host was decommissioned at the
+    # end of January 2026 and now only survives as a cross-host redirect.
+    base-url: ${GEOCODING_API_URL:https://data.geopf.fr/geocodage}
   admin-recovery:
     enabled: ${ADMIN_RECOVERY_ENABLED:false}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:5173}

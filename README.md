@@ -32,6 +32,7 @@ Track bank accounts, brokerage, crypto, and net worth — all in one place.
 - **Employee savings** — Amundi Épargne Salariale plans (PEE/PEG, PERCO, PER) and their FCPE lines, via a local read-only sidecar
 - **Crypto** — Binance and Meria exchange sync, on-chain BTC/ETH/SOL address tracking
 - **Live prices** — CoinGecko (crypto), Yahoo Finance (stocks/ETFs)
+- **Real estate** — Automatic monthly valuation of French property from open data (DGFiP transactions via Cerema, IGN geocoding, INSEE price index). No API key, no subscription. Ownership shares between family members, mortgages linked to the property they finance, and gross/net property equity.
 - **Security insight** — Per-holding asset-type detection and ETF composition (top holdings, country & sector breakdowns) in the holding detail modal
 - **Net worth tracking** — Historical snapshots, stacked area charts, per-account breakdown
 - **Savings goals** — Targets with deadlines, progress tracking across accounts

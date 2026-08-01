@@ -74,6 +74,7 @@ type AccountFormData = {
   fileFees?: number
   startDate?: string
   endDate?: string
+  linkedAccountId?: number
 }
 
 export function AccountsPage() {
@@ -240,6 +241,9 @@ export function AccountsPage() {
           lenderName: data.provider || undefined,
           startDate: data.startDate || undefined,
           endDate: data.endDate || undefined,
+          // null, not undefined: an omitted key would leave a previously linked property
+          // attached when the user picks "no linked asset".
+          linkedAccountId: data.linkedAccountId ?? null,
         },
       })
     }
@@ -274,6 +278,7 @@ export function AccountsPage() {
             fileFees: debt.fileFees ?? undefined,
             startDate: debt.startDate ?? '',
             endDate: debt.endDate ?? '',
+            linkedAccountId: debt.linkedAccountId ?? undefined,
           }
         : {}),
     }
@@ -413,6 +418,7 @@ export function AccountsPage() {
         onOpenChange={handleEditFormOpenChange}
         onSubmit={handleEditSubmit}
         defaultValues={defaultValues}
+        accounts={accounts}
         title={t('accounts.editAccount')}
         loading={isMutating}
       />

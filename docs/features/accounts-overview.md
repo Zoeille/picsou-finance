@@ -36,7 +36,7 @@ Six asset categories defined in `AccountsPage.tsx`:
 | SAVINGS | LEP, SAVINGS | `#22c55e` |
 | CHECKING | CHECKING | `#0ea5e9` |
 | CRYPTO | CRYPTO | `#f97316` |
-| REAL_ESTATE | *(none yet)* | `#a855f7` |
+| REAL_ESTATE | REAL_ESTATE | `#a855f7` |
 
 The filter affects the summary card, chart, and account card grid simultaneously.
 
@@ -88,7 +88,7 @@ AccountsPage
 ## Gotchas / Pitfalls
 
 - **`TYPE_TO_GROUP` must cover every `AccountType`** — if a new type is added to the enum but not to this map, those accounts silently disappear from the ALL chart.
-- **`REAL_ESTATE` maps to no `AccountType`** — placeholder category. The filter pill shows but the grid/chart will be empty.
+- **`currentBalanceEur` is the account's full value, not the viewer's share.** Co-owned accounts carry `sharePercent` alongside it (see [account-ownership-shares.md](account-ownership-shares.md)); anything summing balances on this page must apply it, because the server only weights its own aggregates.
 - **`Account.id` cast to `number`** — virtual group accounts use string keys (`'STOCKS'`, `'CRYPTO'`) cast as `number` via `as unknown as number`. This works because Recharts uses `dataKey` as a string lookup, but it's fragile.
 - **`totalInvested` relies on the last invested point** — if an account has no snapshots at all, its invested amount is 0 and PnL equals its full balance. This is correct for newly created accounts where balance = invested.
 - **Cash accounts have `investedAmount = balance`** — set by `AccountService.calculateInvestedAmount()` which returns `currentBalance` for accounts without holdings. This means their PnL = 0.

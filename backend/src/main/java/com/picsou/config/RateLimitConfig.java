@@ -100,6 +100,19 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-member address autocomplete limiter.
+     *
+     * <p>This endpoint proxies IGN's Géoplateforme, which is free but published at 50 req/s
+     * per IP for the whole instance. Because it fires as the user types, a debounce in the
+     * browser is not a control — a stuck key or a scripted client would spend the shared
+     * budget for every other member. The server-side cap is what actually protects it.
+     */
+    @Bean("geocodeBuckets")
+    public Map<String, Bucket> geocodeBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
      * Per-IP IBKR Flex sync rate limiter: 6 requests per minute.
      * IBKR itself enforces a separate per-token limit (~1 request/sec) on the Flex Web
      * Service; this application-level per-IP cap is additive and defensive — it keeps one
@@ -274,6 +287,19 @@ public class RateLimitConfig {
             .addLimit(Bandwidth.builder()
                 .capacity(10)
                 .refillIntervally(10, Duration.ofMinutes(60))
+                .build())
+            .build();
+    }
+
+    /**
+     * Address autocomplete: 60 lookups/minute, enough for continuous typing on a couple of
+     * address fields, far below what would trouble the upstream service.
+     */
+    public static Bucket createGeocodeBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(60)
+                .refillIntervally(60, Duration.ofMinutes(1))
                 .build())
             .build();
     }

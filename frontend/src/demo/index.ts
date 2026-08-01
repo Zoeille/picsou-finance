@@ -29,7 +29,7 @@ handlers.set(key('GET', '/dashboard'), () => mockDashboard)
 
 // Accounts
 handlers.set(key('GET', '/accounts'), () => mockAccounts)
-for (let i = 1; i <= 7; i++) {
+for (let i = 1; i <= mockAccounts.length; i++) {
   handlers.set(key('GET', `/accounts/${i}`), () => mockAccounts[i - 1])
 }
 
@@ -214,6 +214,127 @@ handlers.set(key('GET', '/accounts/6/history'), () => generateHistory(
 // Livret A: slow steady growth
 handlers.set(key('GET', '/accounts/7/history'), () => generateHistory(
   [4200, 4320, 4440, 4560, 4620, 4740, 4800, 4920, 4980, 5040, 5080, 5120]))
+
+// Property: slow appreciation, revalued monthly rather than daily.
+handlers.set(key('GET', '/accounts/8/history'), () => generateHistory(
+  [392000, 393500, 395000, 397000, 399500, 401000, 403000, 405500, 407000, 409000, 410500, 412000]))
+
+// ─── Real estate ─────────────────────────────────────────────────────────────
+// Every route the property UI touches needs a handler: the demo adapter answers `{}` for
+// anything unmatched, and the pages would then read fields off an empty object.
+
+const demoProperty = mockAccounts.find((a) => a.id === 8)!
+
+handlers.set(key('GET', '/real-estate/summary'), () => ({
+  grossValue: 412000,
+  outstandingDebt: 168400,
+  netValue: 243600,
+  costBasis: 368800,
+  unrealizedGain: 43200,
+  unrealizedGainPercent: 11.71,
+  loanToValue: 40.87,
+  monthlyRentalIncome: 0,
+  properties: [{
+    accountId: 8,
+    name: demoProperty.name,
+    color: demoProperty.color,
+    propertyType: 'HOUSE',
+    category: 'PRIMARY_RESIDENCE',
+    city: 'Bordeaux',
+    sharePercent: 100,
+    grossValue: 412000,
+    outstandingDebt: 168400,
+    netValue: 243600,
+    costBasis: 368800,
+    unrealizedGain: 43200,
+    surfaceArea: 95,
+    rentalIncome: 0,
+    valuationMode: 'ESTIMATED',
+    lastValuedAt: '2026-07-01',
+    lastConfidence: 'HIGH',
+    loans: [{
+      accountId: 4,
+      name: 'Prêt immobilier',
+      lenderName: 'BNP Paribas',
+      outstandingBalance: 168400,
+      sharePercent: 100,
+      monthlyPayment: 1120,
+      endDate: '2043-06-01',
+    }],
+  }],
+}))
+
+handlers.set(key('GET', '/real-estate/8/valuations'), () => {
+  const points = [395000, 398000, 401500, 404000, 407500, 409000, 412000]
+  return points.map((value, i) => ({
+    valuedAt: `2026-0${i + 1}-01`,
+    estimatedValue: value,
+    lowValue: Math.round(value * 0.88),
+    highValue: Math.round(value * 1.14),
+    pricePerSqm: Math.round(value / 95),
+    provider: 'CEREMA_DV3F',
+    confidence: 'HIGH',
+    sampleSize: 1048,
+    sourceYear: 2025,
+  })).reverse()
+})
+
+handlers.set(key('POST', '/accounts/8/valuation/refresh'), () => ({
+  status: 'OK',
+  mode: 'ESTIMATED',
+  appliedToBalance: true,
+  estimatedValue: 412000,
+  lowValue: 362560,
+  highValue: 469680,
+  pricePerSqm: 4336,
+  sampleSize: 1048,
+  confidence: 'HIGH',
+  sourceYear: 2025,
+  provider: 'CEREMA_DV3F',
+  scale: 'communes',
+  valuedAt: '2026-08-01',
+  reindexRatio: 1.021,
+  adjustments: [
+    { code: 'GARDEN', factor: 0.02, sqm: null, amount: 8080 },
+    { code: 'TERRACE', factor: 0.03, sqm: null, amount: 12120 },
+    { code: 'GARAGE', factor: null, sqm: 12, amount: 52032 },
+  ],
+}))
+
+handlers.set(key('GET', '/accounts/8/ownership'), () => ({
+  shares: [{ memberId: 1, displayName: 'Demo', avatarColor: '#6366f1', sharePercent: 100, isOwner: true }],
+  totalAssigned: 100,
+  unassigned: 0,
+}))
+handlers.set(key('PUT', '/accounts/8/ownership'), (config) => {
+  const body = JSON.parse(config.data || '{}')
+  const shares = (body.shares ?? []) as { memberId: number; sharePercent: number }[]
+  const total = shares.reduce((sum, s) => sum + s.sharePercent, 0)
+  return {
+    shares: shares.map((s) => ({
+      memberId: s.memberId,
+      displayName: 'Demo',
+      avatarColor: '#6366f1',
+      sharePercent: s.sharePercent,
+      isOwner: s.memberId === 1,
+    })),
+    totalAssigned: total,
+    unassigned: 100 - total,
+  }
+})
+
+// Address autocomplete. Returns a fixed match so the field behaves without reaching IGN.
+handlers.set(key('GET', '/geocode'), () => ([
+  {
+    label: '12 Rue de la République 33000 Bordeaux',
+    score: 0.94,
+    postcode: '33000',
+    city: 'Bordeaux',
+    inseeCode: '33063',
+    latitude: 44.8378,
+    longitude: -0.5792,
+  },
+]))
 
 // Aggregate net-worth history (dashboard chart, accounts page with split=true).
 // Mirrors backend NetWorthPoint: { date, total, invested, pnl, accounts? }.

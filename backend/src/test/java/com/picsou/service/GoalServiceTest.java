@@ -17,6 +17,7 @@ import com.picsou.repository.GoalMonthOverrideRepository;
 import com.picsou.repository.GoalRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -47,7 +48,19 @@ class GoalServiceTest {
     @Mock FamilyMemberRepository familyMemberRepository;
     @Mock HistoryService historyService;
 
+    @Mock AccountAccessResolver accessResolver;
+
+    /** Goals are member-scoped in the schema; fixtures must reflect that. */
+    private static final FamilyMember GOAL_OWNER = FamilyMember.builder().id(1L).displayName("Owner").build();
+
     @InjectMocks GoalService goalService;
+
+    @BeforeEach
+    void stubOwnershipShares() {
+        // No fixture splits an account, so every one resolves to the owning member's 100%.
+        // Tests that care about co-ownership override this.
+        lenient().when(accessResolver.shareFor(any(), any())).thenReturn(new BigDecimal("100"));
+    }
 
     @Test
     void progressCalculation_onTrack() {
@@ -61,6 +74,7 @@ class GoalServiceTest {
             .build();
 
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L)
             .name("Apport immobilier")
             .targetAmount(new BigDecimal("20000"))
@@ -72,7 +86,7 @@ class GoalServiceTest {
             new com.picsou.dto.AccountResponse(
                 1L, "LEP", AccountType.LEP, null, "EUR",
                 new BigDecimal("5000"), new BigDecimal("5000"),
-                null, null, true, "#6366f1", null, null, null, null, null
+                null, null, true, "#6366f1", null, null, null, null, null, null, null
             )
         );
         when(accountService.signedLiveBalanceEur(account)).thenReturn(new BigDecimal("5000"));
@@ -118,6 +132,7 @@ class GoalServiceTest {
             .build();
 
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L)
             .name("Apport net")
             .targetAmount(new BigDecimal("20000"))
@@ -129,14 +144,14 @@ class GoalServiceTest {
             new com.picsou.dto.AccountResponse(
                 1L, "LEP", AccountType.LEP, null, "EUR",
                 new BigDecimal("5000"), new BigDecimal("5000"),
-                null, null, true, "#6366f1", null, null, null, null, null
+                null, null, true, "#6366f1", null, null, null, null, null, null, null
             )
         );
         when(accountService.toResponse(loan)).thenReturn(
             new com.picsou.dto.AccountResponse(
                 2L, "Prêt", AccountType.LOAN, null, "EUR",
                 new BigDecimal("2000"), new BigDecimal("2000"),
-                null, null, true, "#ef4444", null, null, null, null, null
+                null, null, true, "#ef4444", null, null, null, null, null, null, null
             )
         );
         when(accountService.signedLiveBalanceEur(asset)).thenReturn(new BigDecimal("5000"));
@@ -186,6 +201,7 @@ class GoalServiceTest {
     @Test
     void update_isMemberScoped_andRejectsForeignAccounts() {
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(5L).name("Trip").targetAmount(new BigDecimal("1000"))
             .deadline(LocalDate.now().plusMonths(3))
             .accounts(new java.util.ArrayList<>()).build();
@@ -231,6 +247,7 @@ class GoalServiceTest {
     @Test
     void deleteMonthOverride_ownedGoal_deletesEntry() {
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(99L)
             .name("Trip")
             .targetAmount(new BigDecimal("1200"))
@@ -255,6 +272,7 @@ class GoalServiceTest {
     @Test
     void deleteManualContribution_ownedGoal_deletesEntry() {
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(99L)
             .name("Trip")
             .targetAmount(new BigDecimal("1200"))
@@ -289,6 +307,7 @@ class GoalServiceTest {
         java.time.Instant created = LocalDate.now().minusMonths(3).withDayOfMonth(1)
             .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L).name("Test").targetAmount(new BigDecimal("12000"))
             .deadline(LocalDate.now().plusMonths(3))
             .accounts(List.of(account))
@@ -299,7 +318,7 @@ class GoalServiceTest {
             new com.picsou.dto.AccountResponse(
                 1L, "Livret", AccountType.SAVINGS, null, "EUR",
                 BigDecimal.ZERO, BigDecimal.ZERO,
-                null, null, true, "#000", null, null, null, null, null
+                null, null, true, "#000", null, null, null, null, null, null, null
             )
         );
         when(accountService.signedLiveBalanceEur(account)).thenReturn(BigDecimal.ZERO);
@@ -346,6 +365,7 @@ class GoalServiceTest {
             .color("#ef4444").build();
 
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L).name("Rembourser").targetAmount(new BigDecimal("12000"))
             .deadline(LocalDate.now().plusMonths(12))
             .accounts(List.of(loan))
@@ -355,7 +375,7 @@ class GoalServiceTest {
             new com.picsou.dto.AccountResponse(
                 1L, "Mortgage", AccountType.LOAN, null, "EUR",
                 new BigDecimal("9000"), new BigDecimal("9000"),
-                null, null, true, "#ef4444", null, null, null, null, null
+                null, null, true, "#ef4444", null, null, null, null, null, null, null
             )
         );
         when(accountService.signedLiveBalanceEur(loan)).thenReturn(new BigDecimal("-9000"));
@@ -390,6 +410,7 @@ class GoalServiceTest {
         java.time.Instant created = LocalDate.now().minusMonths(3).withDayOfMonth(1)
             .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L).name("Test").targetAmount(new BigDecimal("12000"))
             .deadline(LocalDate.now().plusMonths(3))
             .accounts(List.of(account))
@@ -400,7 +421,7 @@ class GoalServiceTest {
             new com.picsou.dto.AccountResponse(
                 1L, "Livret", AccountType.SAVINGS, null, "EUR",
                 BigDecimal.ZERO, BigDecimal.ZERO,
-                null, null, true, "#000", null, null, null, null, null
+                null, null, true, "#000", null, null, null, null, null, null, null
             )
         );
         when(accountService.signedLiveBalanceEur(account)).thenReturn(BigDecimal.ZERO);
@@ -436,6 +457,7 @@ class GoalServiceTest {
             .color("#000").build();
 
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L).name("Tout neuf").targetAmount(new BigDecimal("10000"))
             .deadline(LocalDate.now().plusMonths(6))
             .accounts(List.of(account))
@@ -446,7 +468,7 @@ class GoalServiceTest {
             new com.picsou.dto.AccountResponse(
                 1L, "LEP", AccountType.LEP, null, "EUR",
                 BigDecimal.ZERO, BigDecimal.ZERO,
-                null, null, true, "#000", null, null, null, null, null
+                null, null, true, "#000", null, null, null, null, null, null, null
             )
         );
         when(accountService.signedLiveBalanceEur(account)).thenReturn(BigDecimal.ZERO);
@@ -466,6 +488,7 @@ class GoalServiceTest {
         java.time.Instant created = LocalDate.now().withDayOfMonth(1)
             .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
         Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
             .id(1L).name("Backfill").targetAmount(new BigDecimal("1000"))
             .deadline(LocalDate.now().plusMonths(2))
             .accounts(List.of())

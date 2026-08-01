@@ -15,6 +15,7 @@ import com.picsou.repository.BalanceSnapshotRepository;
 import com.picsou.repository.PriceSnapshotRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,7 +42,27 @@ class HistoryServiceTest {
     @Mock PriceSnapshotRepository priceSnapshotRepository;
     @Mock AccountService accountService;
 
+    @Mock AccountAccessResolver accessResolver;
+
     @InjectMocks HistoryService historyService;
+
+    @BeforeEach
+    void stubOwnershipShares() {
+        // Every fixture account is wholly owned, so each resolves to 100%. Weighting is then
+        // the identity, which keeps these tests measuring what they were written to measure.
+        lenient().when(accessResolver.sharesFor(any(), any())).thenAnswer(inv -> {
+            java.util.Collection<Account> accounts = inv.getArgument(0);
+            Long viewer = inv.getArgument(1);
+            java.util.Map<Long, java.math.BigDecimal> shares = new java.util.HashMap<>();
+            for (Account a : accounts) {
+                // Mirrors the real resolver: no split rows, so the owner holds everything and
+                // anyone else holds nothing. A zero share is what makes a foreign account 404.
+                boolean owns = a.getMember() != null && a.getMember().getId().equals(viewer);
+                shares.put(a.getId(), owns ? new java.math.BigDecimal("100") : java.math.BigDecimal.ZERO);
+            }
+            return shares;
+        });
+    }
 
     private static final long MEMBER_ID = 99L;
     private static final FamilyMember MEMBER = FamilyMember.builder().id(MEMBER_ID).build();

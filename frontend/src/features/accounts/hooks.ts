@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { accountsApi } from './api'
-import type { AccountRequest, Account, DebtRequest, HoldingResponse, RealEstateMetadataRequest, TransactionImportRequest, TransactionRequest } from '@/types/api'
+import { accountsApi, realEstateApi } from './api'
+import type { AccountRequest, Account, DebtRequest, HoldingResponse, OwnershipRequest, RealEstateMetadataRequest, TransactionImportRequest, TransactionRequest } from '@/types/api'
 import { QUERY_STALE_TIMES } from '@/lib/constants'
 
 export interface HoldingWithAccount extends HoldingResponse {
@@ -275,7 +275,9 @@ export function useUpdateRealEstateMetadata() {
     mutationFn: ({ id, data }: { id: number; data: RealEstateMetadataRequest }) =>
       accountsApi.updateRealEstateMetadata(id, data),
     onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['accounts', variables.id] })
+      queryClient.invalidateQueries({ queryKey: ['real-estate'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
@@ -290,6 +292,69 @@ export function useUpdateDebtMetadata() {
       queryClient.invalidateQueries({ queryKey: ['accounts', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['loan-summary', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+/** Whole-portfolio property roll-up: gross value, mortgage debt and net equity. */
+export function useRealEstateSummary(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['real-estate', 'summary'],
+    queryFn: () => realEstateApi.summary(),
+    staleTime: QUERY_STALE_TIMES.realEstate,
+    enabled,
+  })
+}
+
+export function usePropertyValuations(accountId: number, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['real-estate', accountId, 'valuations'],
+    queryFn: () => realEstateApi.valuations(accountId),
+    staleTime: QUERY_STALE_TIMES.realEstate,
+    enabled: enabled && Number.isFinite(accountId),
+  })
+}
+
+/**
+ * Triggers a fresh estimate.
+ *
+ * <p>Invalidates the dashboard too: in ESTIMATED mode this writes the account balance, so
+ * net worth moves with it.
+ */
+export function useRefreshValuation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => accountsApi.refreshValuation(id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['real-estate'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['real-estate', id, 'valuations'] })
+    },
+  })
+}
+
+export function useOwnership(id: number, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['accounts', id, 'ownership'],
+    queryFn: () => accountsApi.ownership(id),
+    staleTime: QUERY_STALE_TIMES.accountDetail,
+    enabled: enabled && Number.isFinite(id),
+  })
+}
+
+/** Changing a split changes every total the member sees, so this invalidates broadly. */
+export function useUpdateOwnership() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: OwnershipRequest }) =>
+      accountsApi.updateOwnership(id, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts', variables.id, 'ownership'] })
+      queryClient.invalidateQueries({ queryKey: ['real-estate'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['history'] })
     },
   })
 }

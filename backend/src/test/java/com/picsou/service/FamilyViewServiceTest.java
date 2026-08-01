@@ -16,6 +16,7 @@ import com.picsou.repository.SharedResourceRepository;
 import com.picsou.repository.SharingSettingsRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,7 +44,14 @@ class FamilyViewServiceTest {
     @Mock AccountService accountService;
     @Mock GoalManualContributionRepository contributionRepository;
 
+    @Mock AccountAccessResolver accessResolver;
+
     @InjectMocks FamilyViewService familyViewService;
+
+    @BeforeEach
+    void stubOwnershipShares() {
+        lenient().when(accessResolver.shareFor(any(), any())).thenReturn(new java.math.BigDecimal("100"));
+    }
 
     @Test
     void getFamilyDashboard_manualAccounts_usesMemberScopedRepository() {

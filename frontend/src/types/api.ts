@@ -2,13 +2,173 @@ export type AccountType =
   | 'LEP' | 'PEA' | 'COMPTE_TITRES' | 'CRYPTO' | 'CHECKING' | 'SAVINGS'
   | 'REAL_ESTATE' | 'LOAN' | 'EMPLOYEE_SAVINGS' | 'OTHER'
 
+export type PropertyKind = 'HOUSE' | 'APARTMENT' | 'BUILDING' | 'LAND' | 'PARKING' | 'COMMERCIAL'
+
+export type PropertyCategory =
+  | 'PRIMARY_RESIDENCE' | 'SECONDARY_RESIDENCE' | 'RENTAL' | 'LAND' | 'OTHER'
+
+/** Only houses and apartments have a reliable price per m² in the open data. */
+export const ESTIMABLE_PROPERTY_KINDS: PropertyKind[] = ['HOUSE', 'APARTMENT']
+
+export type ValuationMode = 'ESTIMATED' | 'MANUAL'
+
+export type ValuationConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export type ValuationStatus =
+  | 'OK'
+  | 'UNSUPPORTED_AREA'
+  | 'NOT_ESTIMABLE'
+  | 'INCOMPLETE_DATA'
+  | 'GEOCODING_FAILED'
+  | 'NO_COMPARABLE_DATA'
+  | 'PROVIDER_UNAVAILABLE'
+
 export interface RealEstateMetadata {
   purchasePrice: number
   purchaseDate: string | null
-  surfaceArea: number | null
-  address: string | null
+  agencyFees: number | null
+  notaryFees: number | null
+  worksCost: number | null
+  /** Purchase price plus every acquisition fee — what gain/loss is measured against. */
+  costBasis: number
   propertyType: string | null
+  category: PropertyCategory | null
+  description: string | null
+  address: string | null
+  postalCode: string | null
+  city: string | null
+  country: string | null
+  /** Present once geocoded; its absence is why a valuation cannot run. */
+  inseeCode: string | null
+  latitude: number | null
+  longitude: number | null
+  geocodeScore: number | null
+  geocodedAt: string | null
+  surfaceArea: number | null
+  landArea: number | null
+  constructionYear: number | null
+  rooms: number | null
+  bedrooms: number | null
+  floorNumber: number | null
+  floorsTotal: number | null
+  hasElevator: boolean | null
+  garageCount: number | null
+  parkingCount: number | null
+  hasGarden: boolean | null
+  hasTerrace: boolean | null
+  hasBalcony: boolean | null
+  energyClass: string | null
+  valuationMode: ValuationMode
   rentalIncome: number | null
+}
+
+export interface PropertyAdjustment {
+  code: string
+  factor: number | null
+  sqm: number | null
+  amount: number | null
+}
+
+export interface PropertyValuation {
+  status: ValuationStatus
+  mode: ValuationMode
+  appliedToBalance: boolean
+  estimatedValue: number | null
+  lowValue: number | null
+  highValue: number | null
+  pricePerSqm: number | null
+  sampleSize: number | null
+  confidence: ValuationConfidence | null
+  sourceYear: number | null
+  provider: string | null
+  scale: string | null
+  valuedAt: string | null
+  reindexRatio: number | null
+  adjustments: PropertyAdjustment[]
+}
+
+export interface PropertyValuationHistoryEntry {
+  valuedAt: string
+  estimatedValue: number
+  lowValue: number | null
+  highValue: number | null
+  pricePerSqm: number | null
+  provider: string
+  confidence: ValuationConfidence | null
+  sampleSize: number | null
+  sourceYear: number | null
+}
+
+export interface MemberShare {
+  memberId: number
+  displayName: string
+  avatarColor: string
+  sharePercent: number
+  isOwner: boolean
+}
+
+export interface Ownership {
+  shares: MemberShare[]
+  totalAssigned: number
+  /** 100 − totalAssigned: held outside Picsou, so counted in nobody's net worth. */
+  unassigned: number
+}
+
+export interface OwnershipRequest {
+  shares: { memberId: number; sharePercent: number }[]
+}
+
+export interface LinkedLoan {
+  accountId: number
+  name: string
+  lenderName: string | null
+  outstandingBalance: number
+  sharePercent: number
+  monthlyPayment: number | null
+  endDate: string | null
+}
+
+export interface RealEstatePropertyLine {
+  accountId: number
+  name: string
+  color: string
+  propertyType: string | null
+  category: string | null
+  city: string | null
+  sharePercent: number
+  grossValue: number
+  outstandingDebt: number
+  netValue: number
+  costBasis: number
+  unrealizedGain: number
+  surfaceArea: number | null
+  rentalIncome: number | null
+  valuationMode: ValuationMode
+  lastValuedAt: string | null
+  lastConfidence: ValuationConfidence | null
+  loans: LinkedLoan[]
+}
+
+export interface RealEstateSummary {
+  grossValue: number
+  outstandingDebt: number
+  netValue: number
+  costBasis: number
+  unrealizedGain: number
+  unrealizedGainPercent: number | null
+  loanToValue: number | null
+  monthlyRentalIncome: number
+  properties: RealEstatePropertyLine[]
+}
+
+export interface GeocodeSuggestion {
+  label: string
+  score: number | null
+  postcode: string | null
+  city: string | null
+  inseeCode: string | null
+  latitude: number | null
+  longitude: number | null
 }
 
 export interface DebtInfo {
@@ -41,6 +201,10 @@ export interface Account {
   createdAt: string
   realEstate?: RealEstateMetadata
   debt?: DebtInfo
+  /** Set only when the member owns less than all of it — the co-ownership badge signal. */
+  sharePercent?: number | null
+  /** Whether the viewer administers the account. Holding a share does not grant write access. */
+  isOwner?: boolean | null
 }
 
 export interface AccountRequest {
@@ -56,11 +220,33 @@ export interface AccountRequest {
 
 export interface RealEstateMetadataRequest {
   purchasePrice: number
-  purchaseDate?: string
-  surfaceArea?: number
-  address?: string
-  propertyType?: string
-  rentalIncome?: number
+  purchaseDate?: string | null
+  agencyFees?: number | null
+  notaryFees?: number | null
+  worksCost?: number | null
+  propertyType?: string | null
+  category?: PropertyCategory | null
+  description?: string | null
+  address?: string | null
+  postalCode?: string | null
+  city?: string | null
+  country?: string | null
+  surfaceArea?: number | null
+  landArea?: number | null
+  constructionYear?: number | null
+  rooms?: number | null
+  bedrooms?: number | null
+  floorNumber?: number | null
+  floorsTotal?: number | null
+  hasElevator?: boolean | null
+  garageCount?: number | null
+  parkingCount?: number | null
+  hasGarden?: boolean | null
+  hasTerrace?: boolean | null
+  hasBalcony?: boolean | null
+  energyClass?: string | null
+  valuationMode?: ValuationMode
+  rentalIncome?: number | null
 }
 
 export interface DebtRequest {

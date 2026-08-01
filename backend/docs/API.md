@@ -371,9 +371,122 @@ priced — a manually entered position, or one whose ticker no provider resolves
 ]
 ```
 
+#### `POST /api/accounts/{id}/valuation/refresh`
+
+Re-estimates a `REAL_ESTATE` account from open data. **Owner only** — a co-owner may read a
+property but not move its balance.
+
+- **Auth:** Required
+
+Always answers `200`. A non-`OK` `status` is not an error: it explains why no figure could be
+produced, which the UI renders as guidance.
+
+| `status` | Meaning |
+|---|---|
+| `OK` | An estimate was produced |
+| `UNSUPPORTED_AREA` | Outside coverage — Alsace-Moselle (57/67/68) and Mayotte keep the *livre foncier* registry |
+| `NOT_ESTIMABLE` | Building, land, parking or commercial: no reliable price per m² |
+| `INCOMPLETE_DATA` | Living area missing |
+| `GEOCODING_FAILED` | Address could not be resolved to an INSEE commune |
+| `NO_COMPARABLE_DATA` | Source answered with no usable sample |
+| `PROVIDER_UNAVAILABLE` | Source unreachable; the previous valuation is kept |
+
+**Response `200`:**
+```json
+{
+  "status": "OK",
+  "mode": "ESTIMATED",
+  "appliedToBalance": true,
+  "estimatedValue": 412000.00,
+  "lowValue": 362560.00,
+  "highValue": 469680.00,
+  "pricePerSqm": 4336.00,
+  "sampleSize": 1048,
+  "confidence": "HIGH",
+  "sourceYear": 2025,
+  "provider": "CEREMA_DV3F",
+  "scale": "communes",
+  "valuedAt": "2026-08-01",
+  "reindexRatio": 1.021,
+  "adjustments": [
+    { "code": "GARDEN", "factor": 0.02, "sqm": null, "amount": 8080.00 },
+    { "code": "GARAGE", "factor": null, "sqm": 12, "amount": 52032.00 }
+  ]
+}
+```
+
+#### `GET /api/accounts/{id}/ownership`
+
+Current split. Readable by co-owners.
+
+**Response `200`:**
+```json
+{
+  "shares": [
+    { "memberId": 1, "displayName": "Alice", "avatarColor": "#6366f1", "sharePercent": 50, "isOwner": true },
+    { "memberId": 2, "displayName": "Bob", "avatarColor": "#22c55e", "sharePercent": 50, "isOwner": false }
+  ],
+  "totalAssigned": 100,
+  "unassigned": 0
+}
+```
+
+#### `PUT /api/accounts/{id}/ownership`
+
+Replaces the whole split. **Owner only.** An empty `shares` array clears it, restoring the
+default where the owner holds 100%.
+
+Only `REAL_ESTATE` and `LOAN` accounts may be split. `unassigned` above zero is legitimate —
+that part is held outside Picsou and counts towards nobody's net worth.
+
+**Request:**
+```json
+{ "shares": [{ "memberId": 1, "sharePercent": 60 }, { "memberId": 2, "sharePercent": 40 }] }
+```
+
+**Errors:** `422` if the sum exceeds 100, if the owner is absent from the split, if a member
+appears twice, or if the account is not a property or a loan.
+
 ---
 
-### 4. Goals — `/api/goals`
+### 4. Real estate — `/api/real-estate`
+
+#### `GET /api/real-estate/summary`
+
+Property wealth, already weighted by the member's shares.
+
+**Response `200`:**
+```json
+{
+  "grossValue": 412000.00,
+  "outstandingDebt": 168400.00,
+  "netValue": 243600.00,
+  "costBasis": 368800.00,
+  "unrealizedGain": 43200.00,
+  "unrealizedGainPercent": 11.71,
+  "loanToValue": 40.87,
+  "monthlyRentalIncome": 0.00,
+  "properties": [{ "accountId": 8, "name": "Résidence principale", "sharePercent": 100, "loans": [] }]
+}
+```
+
+#### `GET /api/real-estate/{accountId}/valuations`
+
+Past estimates, newest first. Readable by co-owners.
+
+---
+
+### 5. Geocoding — `/api/geocode`
+
+#### `GET /api/geocode?q={query}&limit={n}`
+
+Address suggestions, proxied to the IGN Géoplateforme so the rate limit is enforceable.
+Queries shorter than 3 characters return `[]`. Rate-limited to 60 lookups/minute per member;
+exceeding it returns `429`.
+
+---
+
+### 6. Goals — `/api/goals`
 
 #### `GET /api/goals`
 
@@ -493,7 +606,7 @@ priced — a manually entered position, or one whose ticker no provider resolves
 
 ---
 
-### 5. Bank Sync (Enable Banking) — `/api/sync`
+### 7. Bank Sync (Enable Banking) — `/api/sync`
 
 #### `GET /api/sync/institutions`
 
@@ -606,7 +719,7 @@ consent step.
 
 ---
 
-### 6. Trade Republic — `/api/tr`
+### 8. Trade Republic — `/api/tr`
 
 #### `POST /api/tr/auth/initiate`
 
@@ -688,7 +801,7 @@ consent step.
 
 ---
 
-### 7. Bourse Direct — `/api/bourse-direct`
+### 9. Bourse Direct — `/api/bourse-direct`
 
 The connector is read-only. Authentication persists an encrypted browser
 session, then portfolio import continues asynchronously.
@@ -772,7 +885,7 @@ rate limiting returns `429`.
 
 ---
 
-### 8. Crypto Wallets — `/api/crypto/wallet`
+### 10. Crypto Wallets — `/api/crypto/wallet`
 
 #### `POST /api/crypto/wallet`
 
@@ -825,7 +938,7 @@ rate limiting returns `429`.
 
 ---
 
-### 9. Crypto Exchanges — `/api/crypto/exchange`
+### 11. Crypto Exchanges — `/api/crypto/exchange`
 
 #### `POST /api/crypto/exchange`
 
@@ -924,7 +1037,7 @@ quantity`. The per-line figures therefore still add up to the holding's own cost
 
 ---
 
-### 10. Prices — `/api/prices`
+### 12. Prices — `/api/prices`
 
 #### `GET /api/prices`
 
@@ -948,7 +1061,7 @@ Prices are in EUR. Results are cached for 15 minutes.
 
 ---
 
-### 11. Finary — `/api/finary`
+### 13. Finary — `/api/finary`
 
 Two import modes: **file-based** (XLSX upload) and **API-based** (direct sync). Both use a two-phase flow: preview then execute with account mappings.
 

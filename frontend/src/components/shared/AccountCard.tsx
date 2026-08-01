@@ -34,11 +34,14 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
   const isLoan = account.type === 'LOAN'
   const isRealEstate = account.type === 'REAL_ESTATE'
 
+  // Measured against costBasis, not purchasePrice: notary fees alone run 7-8% of a French
+  // purchase, so ignoring the acquisition costs overstated every property's gain by that much.
+  const costBasis = account.realEstate?.costBasis ?? account.realEstate?.purchasePrice ?? 0
   const pnl = isRealEstate && account.realEstate
-    ? account.currentBalanceEur - account.realEstate.purchasePrice
+    ? account.currentBalanceEur - costBasis
     : null
-  const pnlPct = isRealEstate && account.realEstate && account.realEstate.purchasePrice > 0
-    ? ((pnl! / account.realEstate.purchasePrice) * 100).toFixed(1)
+  const pnlPct = isRealEstate && account.realEstate && costBasis > 0
+    ? ((pnl! / costBasis) * 100).toFixed(1)
     : null
 
   return (
@@ -56,6 +59,12 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{account.name}</span>
             <AccountTypeBadge type={account.type} />
+            {/* Present only below 100%, so the balance above is knowingly a shared figure. */}
+            {account.sharePercent != null && (
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                {Number(account.sharePercent).toFixed(0)} %
+              </span>
+            )}
           </div>
           {account.provider && (
             <p className="text-xs text-muted-foreground">{account.provider}</p>

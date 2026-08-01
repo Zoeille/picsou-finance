@@ -13,7 +13,7 @@ Picsou is a self-hosted personal-finance dashboard for an individual or a small 
 com.picsou/
 ├── model/          JPA entities — financial: Account, AccountHolding, Transaction,
 │                   BalanceSnapshot, Goal, GoalManualContribution, GoalContributor,
-│                   Debt, RealEstateMetadata, WalletAddress;
+│                   Debt, RealEstateMetadata, PropertyValuation, AccountOwnership, WalletAddress;
 │                   integrations: Requisition, TradeRepublicSession, CryptoExchangeSession,
 │                   FinarySession, BoursoSession, BourseDirectSession, DegiroSession,
 │                   AmundiSession,
