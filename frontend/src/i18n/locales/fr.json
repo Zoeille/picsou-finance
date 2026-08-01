@@ -164,6 +164,7 @@
     "history": "Historique",
     "priceLive": "Prix en direct",
     "priceStale": "Prix datant de {{time}}",
+    "priceAsOf": "Cours du {{date}} — le fournisseur de prix n'a pas répondu",
     "manual": "Manuel",
     "allTypes": "Tous les types",
     "accountName": "Nom du compte",

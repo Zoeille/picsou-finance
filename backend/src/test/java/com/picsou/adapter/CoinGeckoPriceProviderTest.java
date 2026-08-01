@@ -195,6 +195,57 @@ class CoinGeckoPriceProviderTest {
     }
 
     @Test
+    void rateLimit_stopsSendingRequestsUntilTheCooldownExpires() {
+        var requests = new java.util.concurrent.atomic.AtomicInteger();
+        ExchangeFunction exchange = request -> {
+            requests.incrementAndGet();
+            return Mono.just(ClientResponse.create(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .body("{\"status\":\"rate limited\"}").build());
+        };
+        var provider = new CoinGeckoPriceProvider(WebClient.builder().exchangeFunction(exchange).build());
+
+        provider.getPricesEur(Set.of("BTC"));
+        provider.getPricesEur(Set.of("ETH"));
+        provider.getHistoricalPricesEur("SOL", LocalDate.now().minusDays(1), LocalDate.now());
+
+        // One request, then silence. CoinGecko's free tier counts the calls it rejects, so
+        // answering a 429 with more traffic is what turns a one-minute limit into a morning of
+        // missing prices. The pause covers every endpoint: they share one per-IP budget.
+        assertThat(requests.get()).isEqualTo(1);
+        assertThat(eventsAt(Level.WARN)).singleElement()
+            .satisfies(e -> assertThat(e.getFormattedMessage()).contains("pausing calls for 60s"));
+    }
+
+    @Test
+    void rateLimit_honoursRetryAfter_withinReason() {
+        var provider = providerReturning(Mono.just(ClientResponse.create(HttpStatus.TOO_MANY_REQUESTS)
+            .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+            .header("Retry-After", "120")
+            .body("{}").build()));
+
+        provider.getPricesEur(Set.of("BTC"));
+
+        assertThat(eventsAt(Level.WARN)).singleElement()
+            .satisfies(e -> assertThat(e.getFormattedMessage()).contains("pausing calls for 120s"));
+    }
+
+    @Test
+    void rateLimit_ignoresAnAbsurdRetryAfter() {
+        // A day-long pause would leave the instance unable to price anything long after the real
+        // limit lifted -- the cure being worse than the disease.
+        var provider = providerReturning(Mono.just(ClientResponse.create(HttpStatus.TOO_MANY_REQUESTS)
+            .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+            .header("Retry-After", "86400")
+            .body("{}").build()));
+
+        provider.getPricesEur(Set.of("BTC"));
+
+        assertThat(eventsAt(Level.WARN)).singleElement()
+            .satisfies(e -> assertThat(e.getFormattedMessage()).contains("pausing calls for 900s"));
+    }
+
+    @Test
     void serverError_returnsNoPrices_andWarnsRatherThanErrors() {
         // Their outage, not our bug. These callers run on a scheduler and per-ticker, so
         // grading this ERROR would flood the log for the whole outage.

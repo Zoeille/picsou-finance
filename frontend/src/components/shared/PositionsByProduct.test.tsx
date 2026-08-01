@@ -14,10 +14,10 @@ vi.mock('react-i18next', () => ({
 const { PositionsByProduct } = await import('./PositionsByProduct')
 
 const POSITIONS: ExchangePositionResponse[] = [
-  { product: 'SPOT', ticker: 'BTC', quantity: 0.5, principal: null, interest: null, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 50, costBasisEur: 40, pnlEur: 10, pnlPercent: 25 },
-  { product: 'STAKING', ticker: 'ATOM', quantity: 33.154, principal: 19.73, interest: 13.424, averageBuyIn: 6, currentPriceEur: 5, currentValueEur: 165.77, costBasisEur: 198.92, pnlEur: -33.15, pnlPercent: -16.7 },
+  { product: 'SPOT', ticker: 'BTC', quantity: 0.5, principal: null, interest: null, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 50, costBasisEur: 40, pnlEur: 10, pnlPercent: 25, priceAsOf: '2026-08-01', priceStale: false },
+  { product: 'STAKING', ticker: 'ATOM', quantity: 33.154, principal: 19.73, interest: 13.424, averageBuyIn: 6, currentPriceEur: 5, currentValueEur: 165.77, costBasisEur: 198.92, pnlEur: -33.15, pnlPercent: -16.7, priceAsOf: '2026-08-01', priceStale: false },
   // Same asset, two products — the split this component exists to show.
-  { product: 'STAKING', ticker: 'BTC', quantity: 0.25, principal: 0.2, interest: 0.05, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 25, costBasisEur: 20, pnlEur: 5, pnlPercent: 25 },
+  { product: 'STAKING', ticker: 'BTC', quantity: 0.25, principal: 0.2, interest: 0.05, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 25, costBasisEur: 20, pnlEur: 5, pnlPercent: 25, priceAsOf: '2026-08-01', priceStale: false },
 ]
 
 function sectionFor(product: string) {
@@ -58,6 +58,21 @@ describe('PositionsByProduct', () => {
     const staking = sectionFor('STAKING')
     expect(staking.getByText('-16.7%')).toBeInTheDocument()
     expect(sectionFor('SPOT').getByText('+25.0%')).toBeInTheDocument()
+  })
+
+  it('marks a price that is a recorded one rather than a live quote', () => {
+    // The point of the marker: the figure is still shown. Blanking these lines is what made an
+    // untouched account read as a large loss the morning the price API rate-limited us.
+    render(<PositionsByProduct positions={[{ ...POSITIONS[0], priceStale: true, priceAsOf: '2026-07-31' }]} />)
+
+    expect(screen.getByLabelText('accounts.priceAsOf')).toBeInTheDocument()
+    expect(sectionFor('SPOT').getByText('+25.0%')).toBeInTheDocument()
+  })
+
+  it('leaves a live price unmarked', () => {
+    render(<PositionsByProduct positions={POSITIONS} />)
+
+    expect(screen.queryByLabelText('accounts.priceAsOf')).not.toBeInTheDocument()
   })
 
   it('renders nothing when there is no breakdown', () => {

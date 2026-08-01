@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { ExchangePositionResponse } from '@/types/api'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
+import { PriceFreshnessDot } from '@/components/shared/PriceFreshnessDot'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import {
@@ -99,7 +100,15 @@ export function PositionsByProduct({ positions }: PositionsByProductProps) {
                         </TableCell>
                         <TableCell className="text-right">
                           {row.currentPriceEur != null
-                            ? <CurrencyDisplay value={row.currentPriceEur} className="text-sm" />
+                            ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <PriceFreshnessDot
+                                  priceUpdatedAt={null}
+                                  staleAsOf={row.priceStale ? row.priceAsOf : null}
+                                />
+                                <CurrencyDisplay value={row.currentPriceEur} className="text-sm" />
+                              </div>
+                            )
                             : '—'}
                         </TableCell>
                         <TableCell className="text-right font-medium">

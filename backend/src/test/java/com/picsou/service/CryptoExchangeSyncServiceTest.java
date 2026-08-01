@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -201,7 +202,8 @@ class CryptoExchangeSyncServiceTest {
             new ExchangePosition(Product.STAKING, "ETH", BigDecimal.ONE, new BigDecimal("0.9"),
                 new BigDecimal("0.1"))));
         arrangeAccountResolution();
-        when(priceService.refreshCryptoPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("100")));
+        when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of(
+            "ETH", new PriceService.Quote(new BigDecimal("100"), LocalDate.now(), true)));
 
         serviceWith(adapter).sync(7L, MEMBER_ID);
 
@@ -241,6 +243,81 @@ class CryptoExchangeSyncServiceTest {
         verify(sessionRepository, never()).save(any());
         verifyNoInteractions(accountService);
         verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void sync_refusesToRecordAZeroBalanceWhenNothingCanBeValued() {
+        // What actually happened on 2026-08-01: a sync ran while CoinGecko was rate-limiting,
+        // no asset priced, and the 448 EUR account was written to 0 -- balance *and* daily
+        // snapshot, which nothing later goes back to correct. Failing is the only safe answer:
+        // it leaves the previous figures standing and surfaces the problem on the session.
+        CryptoExchangePort adapter = singleKeyAdapter();
+        CryptoExchangeSession session = session(ExchangeType.MERIA, "enc:" + KEY, null);
+        when(sessionRepository.findByIdAndMemberId(7L, MEMBER_ID)).thenReturn(Optional.of(session));
+        when(encryption.decrypt("enc:" + KEY)).thenReturn(KEY);
+        when(encryption.decrypt(null)).thenReturn(null);
+        when(adapter.fetchPositions(KEY, null))
+            .thenReturn(List.of(ExchangePosition.spot("BTC", new BigDecimal("0.5"))));
+        when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> serviceWith(adapter).sync(7L, MEMBER_ID))
+            .isInstanceOf(SyncException.class);
+
+        verify(statusWriter).markError(7L);
+        verifyNoInteractions(accountService);
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void sync_stillConnectsAnExchangeWhoseAssetsCannotBePricedYet() {
+        // The refusal above protects an existing balance. On the *first* sync there is none —
+        // and refusing there would roll back the whole @Transactional addExchange, taking the
+        // session it had just saved with it, so a user whose coins CoinGecko does not map (or
+        // who connects during a rate-limit) could never add the exchange at all. The account is
+        // created unvalued instead, and no snapshot is written, so no zero reaches the history.
+        CryptoExchangePort adapter = singleKeyAdapter();
+        CryptoExchangeSession session = session(ExchangeType.MERIA, "enc:" + KEY, null);
+        when(sessionRepository.findByIdAndMemberId(7L, MEMBER_ID)).thenReturn(Optional.of(session));
+        when(encryption.decrypt("enc:" + KEY)).thenReturn(KEY);
+        when(encryption.decrypt(null)).thenReturn(null);
+        when(adapter.fetchPositions(KEY, null))
+            .thenReturn(List.of(ExchangePosition.spot("STX", new BigDecimal("5"))));
+        when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of());
+        // No account yet: this is the add path.
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), eq(MEMBER_ID)))
+            .thenReturn(Optional.empty());
+        when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId(any(), eq(MEMBER_ID)))
+            .thenReturn(false);
+        when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));
+        when(accountRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(accountService.toResponse(any())).thenReturn(null);
+
+        assertThatCode(() -> serviceWith(adapter).sync(7L, MEMBER_ID)).doesNotThrowAnyException();
+
+        verify(accountService, never()).upsertSnapshot(any(), any(BigDecimal.class), any());
+        verify(statusWriter, never()).markError(any());
+    }
+
+    @Test
+    void sync_valuesFromARecordedPriceRatherThanRefusing() {
+        // The other half of the same rule: a price we recorded yesterday is a valuation, so the
+        // sync proceeds normally. Only a total absence of any price is fatal.
+        CryptoExchangePort adapter = singleKeyAdapter();
+        CryptoExchangeSession session = session(ExchangeType.MERIA, "enc:" + KEY, null);
+        when(sessionRepository.findByIdAndMemberId(7L, MEMBER_ID)).thenReturn(Optional.of(session));
+        when(encryption.decrypt("enc:" + KEY)).thenReturn(KEY);
+        when(encryption.decrypt(null)).thenReturn(null);
+        when(adapter.fetchPositions(KEY, null))
+            .thenReturn(List.of(ExchangePosition.spot("BTC", new BigDecimal("0.5"))));
+        arrangeAccountResolutionWithoutPrices();
+        when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of(
+            "BTC", new PriceService.Quote(new BigDecimal("54619"), LocalDate.now().minusDays(1), false)));
+
+        serviceWith(adapter).sync(7L, MEMBER_ID);
+
+        verify(accountService).upsertHolding(any(), eq(MEMBER_ID), eq("BTC"), eq("BTC"),
+            eq(new BigDecimal("0.5")), eq(new BigDecimal("54619")));
+        verify(accountService).upsertSnapshot(any(), eq(new BigDecimal("27309.50")), any());
     }
 
     @Test
@@ -290,7 +367,12 @@ class CryptoExchangeSyncServiceTest {
     }
 
     private void arrangeAccountResolution() {
-        when(priceService.refreshCryptoPrices(any())).thenReturn(Map.of());
+        when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of());
+        arrangeAccountResolutionWithoutPrices();
+    }
+
+    /** Account plumbing only, for tests that stub the quotes themselves. */
+    private void arrangeAccountResolutionWithoutPrices() {
         Account account = mock(Account.class);
         when(accountRepository.findByExternalAccountIdAndMemberId(any(), eq(MEMBER_ID)))
             .thenReturn(Optional.of(account));

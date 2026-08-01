@@ -163,6 +163,7 @@
     "assetNamePlaceholder": "Example: iShares Core MSCI World",
     "priceLive": "Live price",
     "priceStale": "Price from {{time}}",
+    "priceAsOf": "Price from {{date}} — the price provider did not respond",
     "history": "History",
     "manual": "Manual",
     "allTypes": "All types",

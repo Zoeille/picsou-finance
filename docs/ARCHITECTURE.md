@@ -100,10 +100,12 @@ Enable Banking (PSD2) is the canonical `BankConnectorPort` in 1.0.0. The Powens 
 ### 2. Price refresh
 
 ```
-SchedulerService (cron) → PriceService → PriceProviderPort → CoinGecko / Yahoo Finance → 15-min cache
+SchedulerService (hourly) → PriceService → PriceProviderPort → CoinGecko / Yahoo Finance
+                                        ↘ 15-min in-memory cache
+                                        ↘ price_snapshot (last known price, ≤ 7 days)
 ```
 
-`SchedulerService` triggers daily refresh. `PriceService` holds a 15-minute in-memory cache. CoinGecko for crypto, Yahoo Finance for stocks/ETFs.
+`SchedulerService.refreshPrices` runs hourly over one global ticker set (account tickers ∪ holding tickers). CoinGecko for crypto, Yahoo Finance for stocks/ETFs. On-demand reads resolve a whole set in one call and degrade in three steps — cache, batched provider call, last recorded price — so a rate-limited provider makes prices *older*, not absent. See [ADR 2026-08-01](./decisions/2026-08-01-last-known-price-fallback.md).
 
 ### 3. Trade Republic
 

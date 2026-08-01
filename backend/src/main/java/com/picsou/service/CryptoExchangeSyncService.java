@@ -137,13 +137,21 @@ public class CryptoExchangeSyncService {
             }
 
             // Crypto-only: an exchange holding must never fall through to Yahoo Finance and be
-            // valued as the equity trading under the same symbol.
-            Map<String, BigDecimal> prices = priceService.refreshCryptoPrices(quantities.keySet());
+            // valued as the equity trading under the same symbol. Quotes rather than raw prices:
+            // whatever the provider cannot deliver right now is valued from the last price we
+            // recorded for it, because this total is not only displayed — it is written into the
+            // account's daily BalanceSnapshot, where a hole becomes a permanent dip in the
+            // net-worth history that no later sync goes back to fix.
+            Map<String, PriceService.Quote> quotes = priceService.refreshCryptoQuotes(quantities.keySet());
+            Map<String, BigDecimal> prices = new TreeMap<>();
+            quotes.forEach((ticker, quote) -> prices.put(ticker, quote.price()));
 
             BigDecimal totalEur = BigDecimal.ZERO;
+            boolean anyPriced = false;
             for (var holding : quantities.entrySet()) {
                 BigDecimal price = prices.get(holding.getKey());
                 if (price != null) {
+                    anyPriced = true;
                     totalEur = totalEur.add(
                         holding.getValue().multiply(price).setScale(2, RoundingMode.HALF_UP));
                 } else {
@@ -151,11 +159,38 @@ public class CryptoExchangeSyncService {
                 }
             }
 
+            boolean nothingPriced = !quantities.isEmpty() && !anyPriced;
+            String externalId = externalIdOf(session.getExchangeType());
+
+            // Nothing could be valued, not even from a recorded price. What that costs depends
+            // entirely on whether there is already an account to overwrite.
+            //
+            // There is: refuse. Writing would replace a correct balance with a zero and stamp a
+            // zero snapshot over it — which is what this instance actually did on 2026-08-01,
+            // during a CoinGecko rate-limit, to a 448 EUR account. Past days are never revisited.
+            // Failing leaves the previous figures standing and puts the session in ERROR where
+            // the user can see it. WalletSyncService applies the same rule on-chain.
+            //
+            // There is not: proceed. This is the first sync, so there is nothing to protect, and
+            // refusing here would roll the whole @Transactional addExchange back — including the
+            // session row it had just saved. The user would be told to "try again later" for a
+            // failure that, if the coins are simply unmapped, never resolves. The snapshot is
+            // still withheld below, so no zero reaches the history either way.
+            boolean accountExists = accountRepository
+                .findByExternalAccountIdAndMemberId(externalId, memberId).isPresent();
+            if (nothingPriced && accountExists) {
+                throw new SyncException("No EUR price available for any asset held on this "
+                    + "exchange -- refusing to record a zero balance for "
+                    + session.getExchangeType());
+            }
+            if (nothingPriced) {
+                log.warn("No EUR price for any asset on the first {} sync -- creating the account "
+                    + "unvalued, and recording no snapshot for today", session.getExchangeType());
+            }
+
             session.setStatus("CONNECTED");
             session.setLastSyncedAt(Instant.now());
             sessionRepository.save(session);
-
-            String externalId = externalIdOf(session.getExchangeType());
 
             // Resolve or create the account (without snapshot yet). If the account
             // was soft-deleted by the user, skip the rest of this sync — the user
@@ -180,8 +215,11 @@ public class CryptoExchangeSyncService {
 
             replacePositions(account, positions);
 
-            // Now create snapshot with correct invested amount from holdings
-            accountService.upsertSnapshot(account, totalEur, LocalDate.now());
+            // Now create snapshot with correct invested amount from holdings — unless nothing
+            // could be valued, in which case today's point would be a zero that nothing revisits.
+            if (!nothingPriced) {
+                accountService.upsertSnapshot(account, totalEur, LocalDate.now());
+            }
 
             return accountService.toResponse(account);
 
@@ -235,11 +273,22 @@ public class CryptoExchangeSyncService {
             .collect(Collectors.toMap(HoldingResponse::ticker, HoldingResponse::averageBuyIn,
                 (a, b) -> a));
 
-        return positionRepository.findByAccountIdOrderByProductAscTickerAsc(accountId).stream()
+        List<CryptoExchangePosition> positions =
+            positionRepository.findByAccountIdOrderByProductAscTickerAsc(accountId);
+
+        // One resolution for the whole page. Per-position lookups meant an HTTP request per line
+        // on every render, which is exactly the traffic that gets an instance rate-limited — and
+        // then leaves it with nothing to display. Crypto-only, for the same reason the sync uses
+        // it: a ticker CoinGecko doesn't map must read as "no price", never as the same-named
+        // share price.
+        Map<String, PriceService.Quote> quotes = priceService.getCryptoQuotes(positions.stream()
+            .map(CryptoExchangePosition::getTicker)
+            .collect(Collectors.toSet()));
+
+        return positions.stream()
             .map(position -> {
-                // Crypto-only pricing, for the same reason the sync uses it: a ticker CoinGecko
-                // doesn't map must read as "no price", never as the same-named share price.
-                BigDecimal price = priceService.getCryptoPriceEur(position.getTicker());
+                PriceService.Quote quote = quotes.get(position.getTicker());
+                BigDecimal price = quote == null ? null : quote.price();
                 BigDecimal quantity = position.getQuantity();
                 BigDecimal averageBuyIn = unitCost.get(position.getTicker());
 
@@ -263,7 +312,9 @@ public class CryptoExchangeSyncService {
                     value,
                     costBasis,
                     pnl,
-                    pnlPercent
+                    pnlPercent,
+                    quote == null ? null : quote.asOf(),
+                    quote != null && !quote.live()
                 );
             })
             .toList();

@@ -198,6 +198,11 @@ export interface HoldingResponse {
   pnlEur: number | null
   pnlPercent: number | null
   priceUpdatedAt: string | null
+  // The day the EUR price is for, and whether it is a recorded price rather than a live quote.
+  // Set by the backend when the price provider could not be reached; the value is still shown,
+  // marked, instead of leaving the line blank.
+  priceAsOf: string | null
+  priceStale: boolean
 }
 
 // --- Security insight (asset type + ETF composition) ---
@@ -276,6 +281,10 @@ export interface ExchangePositionResponse {
   costBasisEur: number | null
   pnlEur: number | null
   pnlPercent: number | null
+  /** The day `currentPriceEur` is for; null when no price could be resolved. */
+  priceAsOf: string | null
+  /** True when the price is the last one recorded rather than a live quote — shown, but marked. */
+  priceStale: boolean
 }
 
 export interface ExchangeStatus {

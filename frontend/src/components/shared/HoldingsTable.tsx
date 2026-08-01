@@ -57,7 +57,10 @@ export function HoldingsTable({ holdings, onEdit, onDelete }: HoldingsTableProps
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex items-center gap-1.5">
-                    <PriceFreshnessDot priceUpdatedAt={h.priceUpdatedAt} />
+                    <PriceFreshnessDot
+                      priceUpdatedAt={h.priceUpdatedAt}
+                      staleAsOf={h.priceStale ? h.priceAsOf : null}
+                    />
                     {h.currentPrice != null ? <CurrencyDisplay value={h.currentPrice} currency={h.quoteCurrency ?? undefined} className="text-sm" /> : '\u2014'}
                   </div>
                 </TableCell>

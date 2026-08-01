@@ -13,6 +13,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 412.5,
       pnlPercent: 17.7,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
     {
       ticker: 'MSFT',
@@ -25,6 +27,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 600.0,
       pnlPercent: 22.1,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
     {
       ticker: 'AMZN',
@@ -37,6 +41,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 660.0,
       pnlPercent: 22.8,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
     {
       ticker: 'NVDA',
@@ -49,6 +55,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 4000.0,
       pnlPercent: 83.3,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
   ],
   6: [
@@ -63,6 +71,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 1040.0,
       pnlPercent: 62.5,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
     {
       ticker: 'ETH',
@@ -75,6 +85,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 360.0,
       pnlPercent: 16.7,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
     {
       ticker: 'SOL',
@@ -87,6 +99,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 795.0,
       pnlPercent: 55.8,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
   ],
   3: [
@@ -101,6 +115,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 325.0,
       pnlPercent: 18.1,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
     {
       ticker: 'EUNL',
@@ -113,6 +129,8 @@ export const mockHoldings: Record<number, HoldingResponse[]> = {
       pnlEur: 180.0,
       pnlPercent: 15.8,
       priceUpdatedAt: new Date().toISOString(),
+      priceAsOf: new Date().toISOString().slice(0, 10),
+      priceStale: false,
     },
   ],
 }
