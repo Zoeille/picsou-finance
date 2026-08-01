@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.picsou.dto.PropertyValuationResponse;
 import com.picsou.dto.PropertyValuationResponse.AdjustmentDto;
+import com.picsou.exception.ValuationProviderException;
 import com.picsou.model.*;
 import com.picsou.port.GeocodingPort;
 import com.picsou.port.HousingPriceIndexPort;
@@ -150,19 +151,23 @@ public class PropertyValuationService {
         ValuationMode mode = metadata.getValuationMode();
 
         if (!enabled) {
-            return PropertyValuationResponse.failed(ValuationStatus.PROVIDER_UNAVAILABLE, mode);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(ValuationStatus.PROVIDER_UNAVAILABLE, mode));
         }
         PropertyKind kind = metadata.kind();
         if (kind == null || !kind.isEstimable()) {
-            return PropertyValuationResponse.failed(ValuationStatus.NOT_ESTIMABLE, mode);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(ValuationStatus.NOT_ESTIMABLE, mode));
         }
         if (metadata.getSurfaceArea() == null || metadata.getSurfaceArea().signum() <= 0) {
-            return PropertyValuationResponse.failed(ValuationStatus.INCOMPLETE_DATA, mode);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(ValuationStatus.INCOMPLETE_DATA, mode));
         }
 
         ValuationStatus geocodeStatus = geocodeIfNeeded(metadata);
         if (geocodeStatus != ValuationStatus.OK) {
-            return PropertyValuationResponse.failed(geocodeStatus, mode);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(geocodeStatus, mode));
         }
 
         ValuationInput input = toInput(metadata, kind);
@@ -174,12 +179,23 @@ public class PropertyValuationService {
         if (provider == null) {
             // No provider covers this area at all — Alsace-Moselle and Mayotte are the
             // structural cases, and the user needs to be told that rather than shown a guess.
-            return PropertyValuationResponse.failed(ValuationStatus.UNSUPPORTED_AREA, mode);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(ValuationStatus.UNSUPPORTED_AREA, mode));
         }
 
-        Optional<ValuationResult> raw = provider.estimate(input);
+        Optional<ValuationResult> raw;
+        try {
+            raw = provider.estimate(input);
+        } catch (ValuationProviderException ex) {
+            // The source was unreachable. Saying so beats telling the user their commune has
+            // no sales, which is what a swallowed transport error used to look like.
+            log.warn("Valuation provider unavailable for property {}", account.getId(), ex);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(ValuationStatus.PROVIDER_UNAVAILABLE, mode));
+        }
         if (raw.isEmpty()) {
-            return PropertyValuationResponse.failed(ValuationStatus.NO_COMPARABLE_DATA, mode);
+            return withCostBasisFloor(account, metadata,
+                PropertyValuationResponse.failed(ValuationStatus.NO_COMPARABLE_DATA, mode));
         }
         ValuationResult result = raw.get();
 
@@ -210,6 +226,34 @@ public class PropertyValuationService {
 
         return PropertyValuationResponse.from(
             saved, mode, applied, reindexRatio, toDtos(adjusted.applied()), result.scale());
+    }
+
+    /**
+     * Keeps a property that could not be valued from sitting at zero.
+     *
+     * <p>A property with no estimate and no balance reported 0 € and a 100% loss against its
+     * purchase price — technically "we have no figure", but read by anyone as "your flat is
+     * worthless". What was paid for it is a fact the user supplied, so it is a far better
+     * floor than nothing, and it is replaced the moment a real estimate succeeds.
+     *
+     * <p>Only ever raises a zero balance: an existing valuation, manual or estimated, is left
+     * exactly as it was.
+     */
+    private PropertyValuationResponse withCostBasisFloor(Account account, RealEstateMetadata metadata,
+                                                         PropertyValuationResponse response) {
+        BigDecimal current = account.getCurrentBalance();
+        if (current != null && current.signum() != 0) {
+            return response;
+        }
+        BigDecimal costBasis = metadata.costBasis();
+        if (costBasis == null || costBasis.signum() <= 0) {
+            return response;
+        }
+        log.info("Property {} has no valuation yet; seeding its value from the cost basis {}",
+            account.getId(), costBasis);
+        account.setCurrentBalance(costBasis);
+        accountRepository.save(account);
+        return response;
     }
 
     private ValuationInput toInput(RealEstateMetadata m, PropertyKind kind) {

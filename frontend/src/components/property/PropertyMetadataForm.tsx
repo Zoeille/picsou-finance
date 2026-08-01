@@ -42,6 +42,7 @@ const propertySchema = z.object({
   constructionYear: z.number().min(1000).max(2200).optional(),
   rooms: z.number().min(0).optional(),
   bedrooms: z.number().min(0).optional(),
+  bathrooms: z.number().min(0).optional(),
   floorNumber: z.number().optional(),
   floorsTotal: z.number().min(0).optional(),
   garageCount: z.number().min(0).optional(),
@@ -97,6 +98,7 @@ export function PropertyMetadataForm({ accountId, metadata, onSaved }: PropertyM
       constructionYear: metadata?.constructionYear ?? undefined,
       rooms: metadata?.rooms ?? undefined,
       bedrooms: metadata?.bedrooms ?? undefined,
+      bathrooms: metadata?.bathrooms ?? undefined,
       floorNumber: metadata?.floorNumber ?? undefined,
       floorsTotal: metadata?.floorsTotal ?? undefined,
       garageCount: metadata?.garageCount ?? undefined,
@@ -214,6 +216,9 @@ export function PropertyMetadataForm({ accountId, metadata, onSaved }: PropertyM
         </Field>
         <Field label={t('property.form.bedrooms')} htmlFor="bedrooms">
           <NumericInput id="bedrooms" {...register('bedrooms', { setValueAs: toOptionalNumber })} />
+        </Field>
+        <Field label={t('property.form.bathrooms')} htmlFor="bathrooms">
+          <NumericInput id="bathrooms" {...register('bathrooms', { setValueAs: toOptionalNumber })} />
         </Field>
         <Field label={t('property.form.constructionYear')} htmlFor="constructionYear">
           <NumericInput id="constructionYear" {...register('constructionYear', { setValueAs: toOptionalNumber })} />

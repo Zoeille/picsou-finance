@@ -117,6 +117,8 @@ public class RealEstateMetadata extends AuditableEntity {
 
     private Short bedrooms;
 
+    private Short bathrooms;
+
     @Column(name = "floor_number")
     private Short floorNumber;
 

@@ -146,6 +146,7 @@ export const mockAccounts: Account[] = [
       constructionYear: 1994,
       rooms: 4,
       bedrooms: 3,
+      bathrooms: 2,
       floorNumber: null,
       floorsTotal: null,
       hasElevator: null,

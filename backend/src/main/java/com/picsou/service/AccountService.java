@@ -617,6 +617,7 @@ public class AccountService {
         metadata.setConstructionYear(req.constructionYear());
         metadata.setRooms(req.rooms());
         metadata.setBedrooms(req.bedrooms());
+        metadata.setBathrooms(req.bathrooms());
         metadata.setFloorNumber(req.floorNumber());
         metadata.setFloorsTotal(req.floorsTotal());
         metadata.setHasElevator(req.hasElevator());
@@ -630,6 +631,17 @@ public class AccountService {
         // Valuation & income
         metadata.setValuationMode(req.valuationMode() != null ? req.valuationMode() : ValuationMode.ESTIMATED);
         metadata.setRentalIncome(req.rentalIncome() != null ? req.rentalIncome() : BigDecimal.ZERO);
+
+        // A property described but never valued would otherwise sit at 0 € and report a 100%
+        // loss against its own purchase price. What the user paid is the honest starting
+        // point; the first successful estimate replaces it.
+        BigDecimal costBasis = metadata.costBasis();
+        if (account.getCurrentBalance() == null || account.getCurrentBalance().signum() == 0) {
+            if (costBasis.signum() > 0) {
+                account.setCurrentBalance(costBasis);
+                accountRepository.save(account);
+            }
+        }
 
         return RealEstateMetadataResponse.from(realEstateMetadataRepository.save(metadata));
     }

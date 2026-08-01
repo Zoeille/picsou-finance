@@ -414,7 +414,8 @@
       "degiro": "DEGIRO-Wertpapierkonto synchronisieren",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen",
-      "amundi": "PEE, PEG, PERCO, PER bei Amundi"
+      "amundi": "PEE, PEG, PERCO, PER bei Amundi",
+      "property": "Haus, Wohnung, Grundstück…"
     }
   },
   "sync": {
@@ -1339,7 +1340,8 @@
       "editTitle": "Objekt bearbeiten",
       "createTitle": "Objekt beschreiben",
       "intro": "Objektart, Wohnfläche und Adresse angeben, um die automatische Bewertung zu aktivieren.",
-      "saveError": "Objekt konnte nicht gespeichert werden"
+      "saveError": "Objekt konnte nicht gespeichert werden",
+      "bathrooms": "Badezimmer"
     },
     "details": {
       "title": "Merkmale",
@@ -1432,7 +1434,24 @@
       "ERA_PRE_1949": "Baujahr vor 1949",
       "ERA_1949_1974": "Baujahr 1949-1974",
       "ERA_2001_2012": "Baujahr 2001-2012",
-      "ERA_POST_2012": "Baujahr nach 2012"
+      "ERA_POST_2012": "Baujahr nach 2012",
+      "EXTRA_BATHROOMS": "Mehr als ein Badezimmer"
+    },
+    "add": {
+      "source": "Immobilien",
+      "title": "Immobilie hinzufügen",
+      "action": "Immobilie hinzufügen",
+      "submit": "Immobilie anlegen",
+      "progress": "Schritte",
+      "step1Hint": "Welche Art von Immobilie möchten Sie hinzufügen?",
+      "step2Hint": "Wo liegt sie, und wie groß ist sie?",
+      "step3Hint": "Was hat sie gekostet?",
+      "name": "Bezeichnung",
+      "namePlaceholder": "Hauptwohnsitz",
+      "addressHint": "Die Adresse bestimmt die Gemeinde und ermöglicht erst die automatische Bewertung.",
+      "feesHint": "Die Nebenkosten ergeben die Gesamtkosten: Der Wertzuwachs wird daran gemessen, nicht nur am Kaufpreis.",
+      "notEstimable": "Für diese Objektart gibt es keinen verlässlichen Quadratmeterpreis; der Wert bleibt manuell.",
+      "error": "Immobilie konnte nicht angelegt werden"
     }
   }
 }

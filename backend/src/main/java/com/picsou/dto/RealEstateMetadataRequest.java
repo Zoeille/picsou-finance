@@ -39,6 +39,7 @@ public record RealEstateMetadataRequest(
     @Min(1000) @Max(2200) Short constructionYear,
     @Min(0) @Max(1000) Short rooms,
     @Min(0) @Max(1000) Short bedrooms,
+    @Min(0) @Max(100) Short bathrooms,
     @Min(-10) @Max(200) Short floorNumber,
     @Min(0) @Max(200) Short floorsTotal,
     Boolean hasElevator,

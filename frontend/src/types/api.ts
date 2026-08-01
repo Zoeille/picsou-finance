@@ -49,6 +49,7 @@ export interface RealEstateMetadata {
   constructionYear: number | null
   rooms: number | null
   bedrooms: number | null
+  bathrooms: number | null
   floorNumber: number | null
   floorsTotal: number | null
   hasElevator: boolean | null
@@ -236,6 +237,7 @@ export interface RealEstateMetadataRequest {
   constructionYear?: number | null
   rooms?: number | null
   bedrooms?: number | null
+  bathrooms?: number | null
   floorNumber?: number | null
   floorsTotal?: number | null
   hasElevator?: boolean | null

@@ -45,6 +45,14 @@ public class PropertyAdjustments {
     /** Street-level flats trade at a discount (noise, privacy, security). */
     private static final BigDecimal GROUND_FLOOR = new BigDecimal("-0.03");
 
+    /**
+     * A second bathroom is a genuine differentiator for a family-sized home; beyond that the
+     * effect flattens. Small and capped because DVF records no bathroom count at all, so
+     * unlike the price per m² this is intuition, not measurement.
+     */
+    private static final BigDecimal EXTRA_BATHROOM = new BigDecimal("0.02");
+    private static final BigDecimal EXTRA_BATHROOM_CAP = new BigDecimal("0.04");
+
     private static final BigDecimal GARDEN_APARTMENT = new BigDecimal("0.05");
     private static final BigDecimal GARDEN_HOUSE = new BigDecimal("0.02");
     private static final BigDecimal TERRACE = new BigDecimal("0.03");
@@ -110,6 +118,7 @@ public class PropertyAdjustments {
         BigDecimal factorSum = BigDecimal.ZERO;
         factorSum = factorSum.add(floorFactors(m, kind, applied, baseValue));
         factorSum = factorSum.add(outdoorFactors(m, kind, applied, baseValue));
+        factorSum = factorSum.add(bathroomFactor(m, applied, baseValue));
         factorSum = factorSum.add(energyOrEraFactor(m, applied, baseValue));
 
         BigDecimal multiplier = clamp(BigDecimal.ONE.add(factorSum), MIN_MULTIPLIER, MAX_MULTIPLIER);
@@ -147,6 +156,24 @@ public class PropertyAdjustments {
             total = total.add(record(applied, "TOP_FLOOR_ELEVATOR", TOP_FLOOR_WITH_ELEVATOR, base));
         }
         return total;
+    }
+
+    /**
+     * Bathrooms beyond the first.
+     *
+     * <p>Counted relative to one because every dwelling has at least one; a flat with two is
+     * what commands the premium. Ignored when the count is unknown, so leaving the field empty
+     * costs nothing.
+     */
+    private BigDecimal bathroomFactor(RealEstateMetadata m, List<Adjustment> applied, BigDecimal base) {
+        Short bathrooms = m.getBathrooms();
+        if (bathrooms == null || bathrooms <= 1) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal factor = EXTRA_BATHROOM
+            .multiply(BigDecimal.valueOf(bathrooms - 1))
+            .min(EXTRA_BATHROOM_CAP);
+        return record(applied, "EXTRA_BATHROOMS", factor, base);
     }
 
     private BigDecimal outdoorFactors(RealEstateMetadata m, PropertyKind kind,

@@ -421,7 +421,8 @@
       "degiro": "Synchroniser votre compte-titres DEGIRO",
       "finary": "Importer depuis Finary",
       "manual": "Créer un compte manuellement",
-      "amundi": "PEE, PEG, PERCO, PER chez Amundi"
+      "amundi": "PEE, PEG, PERCO, PER chez Amundi",
+      "property": "Maison, appartement, terrain…"
     }
   },
   "sync": {
@@ -1346,7 +1347,8 @@
       "editTitle": "Modifier le bien",
       "createTitle": "Décrire le bien",
       "intro": "Renseignez le type, la surface et l'adresse pour activer l'estimation automatique.",
-      "saveError": "Impossible d'enregistrer le bien"
+      "saveError": "Impossible d'enregistrer le bien",
+      "bathrooms": "Salles de bain"
     },
     "details": {
       "title": "Caractéristiques",
@@ -1439,7 +1441,24 @@
       "ERA_PRE_1949": "Construction avant 1949",
       "ERA_1949_1974": "Construction 1949-1974",
       "ERA_2001_2012": "Construction 2001-2012",
-      "ERA_POST_2012": "Construction après 2012"
+      "ERA_POST_2012": "Construction après 2012",
+      "EXTRA_BATHROOMS": "Plusieurs salles de bain"
+    },
+    "add": {
+      "source": "Immobilier",
+      "title": "Ajouter un bien immobilier",
+      "action": "Ajouter un bien",
+      "submit": "Créer le bien",
+      "progress": "Étapes",
+      "step1Hint": "Quel type de bien souhaitez-vous ajouter ?",
+      "step2Hint": "Où se trouve-t-il, et quelle est sa surface ?",
+      "step3Hint": "Combien vous a-t-il coûté ?",
+      "name": "Nom du bien",
+      "namePlaceholder": "Résidence principale",
+      "addressHint": "L'adresse permet de localiser la commune et d'estimer le bien automatiquement.",
+      "feesHint": "Les frais servent à calculer le prix de revient : la plus-value est mesurée par rapport à ce total, pas au seul prix d'achat.",
+      "notEstimable": "Ce type de bien n'a pas de prix au m² fiable : sa valeur restera saisie manuellement.",
+      "error": "Impossible de créer le bien"
     }
   }
 }

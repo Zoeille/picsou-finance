@@ -28,7 +28,7 @@ function metadata(overrides: Partial<RealEstateMetadata> = {}): RealEstateMetada
     description: null, address: null, postalCode: null, city: null, country: 'FR',
     inseeCode: '33063', latitude: null, longitude: null, geocodeScore: null,
     geocodedAt: null, surfaceArea: 100, landArea: null, constructionYear: null,
-    rooms: null, bedrooms: null, floorNumber: null, floorsTotal: null,
+    rooms: null, bedrooms: null, bathrooms: null, floorNumber: null, floorsTotal: null,
     hasElevator: null, garageCount: 0, parkingCount: 0, hasGarden: false,
     hasTerrace: false, hasBalcony: false, energyClass: null,
     valuationMode: 'ESTIMATED', rentalIncome: 0,

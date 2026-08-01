@@ -3,6 +3,7 @@ package com.picsou.adapter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.picsou.model.PropertyKind;
 import com.picsou.model.ValuationConfidence;
+import com.picsou.exception.ValuationProviderException;
 import com.picsou.port.PropertyValuationPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +72,11 @@ public class CeremaDv3fValuationProvider implements PropertyValuationPort {
     ) {
         this(WebClient.builder()
             .baseUrl(baseUrl)
+            // One response carries every vintage back to 2010 with ~200 indicator columns each:
+            // ~265 KB for an ordinary commune, just past WebClient's 256 KB default. Over that
+            // limit the body is never assembled, so *every* commune failed -- and it surfaced
+            // as "no comparable transactions" rather than as an error.
+            .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
             .defaultHeader("Accept", "application/json")
             .build());
     }
@@ -129,10 +135,7 @@ public class CeremaDv3fValuationProvider implements PropertyValuationPort {
     private Optional<ValuationResult> fetchAndBuild(String scale, String code,
                                                     ValuationInput input, boolean degraded) {
         JsonNode payload = fetch(scale, code);
-        if (payload == null) {
-            return Optional.empty();
-        }
-        JsonNode results = payload.get("results");
+        JsonNode results = payload == null ? null : payload.get("results");
         if (results == null || !results.isArray() || results.isEmpty()) {
             return Optional.empty();
         }
@@ -159,8 +162,9 @@ public class CeremaDv3fValuationProvider implements PropertyValuationPort {
                 .timeout(TIMEOUT)
                 .block();
         } catch (RuntimeException ex) {
-            // Transient 503s are normal on this host. Returning null keeps the last stored
-            // valuation in place instead of blanking a property's value over a blip.
+            // Raised rather than swallowed: the caller keeps the previous valuation either
+            // way, but the user is told the source was unreachable instead of being told
+            // their commune has no sales -- a distinction that cost real debugging time.
             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
             if (cause instanceof WebClientResponseException http) {
                 log.warn("Cerema DV3F {}={} failed: HTTP {}", scale, code, http.getStatusCode().value());
@@ -170,7 +174,8 @@ public class CeremaDv3fValuationProvider implements PropertyValuationPort {
             } else {
                 log.warn("Cerema DV3F {}={} failed", scale, code, ex);
             }
-            return null;
+            throw new ValuationProviderException(
+                "Cerema DV3F " + scale + "=" + code + " failed", ex);
         }
     }
 

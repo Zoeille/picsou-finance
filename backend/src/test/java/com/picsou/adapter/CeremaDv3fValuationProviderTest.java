@@ -1,5 +1,6 @@
 package com.picsou.adapter;
 
+import com.picsou.exception.ValuationProviderException;
 import com.picsou.model.PropertyKind;
 import com.picsou.model.ValuationConfidence;
 import com.picsou.port.PropertyValuationPort.ValuationInput;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Field naming and vintage selection are the fragile parts here: DV3F encodes the property
@@ -206,22 +208,26 @@ class CeremaDv3fValuationProviderTest {
     }
 
     @Test
-    void estimate_transientOutage_returnsEmptyInsteadOfThrowing() {
-        // This host is still preprod and returns sporadic 503s. Blanking a property's value
-        // over a blip would be far worse than keeping yesterday's figure.
-        Optional<ValuationResult> result = providerReturning(
+    void estimate_transientOutage_reportsAProviderFailure() {
+        // This host is still preprod and returns sporadic 503s. The caller keeps the previous
+        // valuation either way, but it must be able to tell "the source is down" from "this
+        // commune has no sales" -- swallowing the difference once surfaced a 256 KB buffer
+        // limit to users as "no comparable transactions".
+        CeremaDv3fValuationProvider provider = providerReturning(
             Mono.just(ClientResponse.create(HttpStatus.SERVICE_UNAVAILABLE)
                 .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .body("{}").build()))
-            .estimate(house("33063", "100"));
+                .body("{}").build()));
 
-        assertThat(result).isEmpty();
+        assertThatThrownBy(() -> provider.estimate(house("33063", "100")))
+            .isInstanceOf(ValuationProviderException.class);
     }
 
     @Test
-    void estimate_timeout_returnsEmpty() {
-        assertThat(providerReturning(Mono.error(new TimeoutException("slow")))
-            .estimate(house("33063", "100"))).isEmpty();
+    void estimate_timeout_reportsAProviderFailure() {
+        CeremaDv3fValuationProvider provider = providerReturning(Mono.error(new TimeoutException("slow")));
+
+        assertThatThrownBy(() -> provider.estimate(house("33063", "100")))
+            .isInstanceOf(ValuationProviderException.class);
     }
 
     @Test

@@ -90,6 +90,17 @@ Daily snapshot job (unchanged) picks up the new balance -> gain curve for free
 
 ## Gotchas / Pitfalls
 
+- **The Cerema client needs a raised buffer.** One response carries every vintage back to
+  2010 with ~200 indicator columns each — about 265 KB, just past WebClient's 256 KB default.
+  Over the limit the body is never assembled and *every* commune fails. It shipped that way,
+  and because the error was swallowed it surfaced as "no comparable transactions in this
+  municipality", sending debugging towards the address instead of the logs. Transport
+  failures now raise `ValuationProviderException` → `PROVIDER_UNAVAILABLE`, which is a
+  different message from an empty market.
+- **A property is never left at 0 €.** Without a valuation it falls back to its cost basis;
+  0 € against a purchase price renders as a 100% loss, which reads as "your flat is
+  worthless" rather than "no figure yet". The floor only ever lifts a zero — a real
+  valuation, manual or estimated, is never overwritten.
 - **`data.geopf.fr`, never `api-adresse.data.gouv.fr`.** The old host was decommissioned end of
   January 2026 and survives only as a cross-host 301. Any client not following redirects across
   hosts — or the day the redirect stops — breaks.
@@ -117,6 +128,9 @@ Daily snapshot job (unchanged) picks up the new balance -> gain curve for free
 
 - `CeremaDv3fValuationProviderTest` — vintage selection, room-count series, department
   fallback, uncovered areas, transient outages
+- `ValuationAdapterWiringTest` — builds the adapters the way Spring does and serves a
+  >256 KB payload over a real socket; stubbed `ClientResponse` fixtures decode with their own
+  strategies, so neither the constructor nor the buffer regression is visible to them
 - `GeoplateformeGeocoderTest` — INSEE mapping, coordinate order, overseas department codes
 - `PropertyValuationServiceTest` — MANUAL lock, status paths, re-indexing, per-property guard
 - `PropertyAdjustmentsTest` — direction, bounds, no double-counting of energy vs era

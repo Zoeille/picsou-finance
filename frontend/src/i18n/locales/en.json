@@ -421,7 +421,8 @@
       "degiro": "Sync your DEGIRO securities account",
       "finary": "Import from Finary",
       "manual": "Create an account manually",
-      "amundi": "PEE, PEG, PERCO, PER held at Amundi"
+      "amundi": "PEE, PEG, PERCO, PER held at Amundi",
+      "property": "House, apartment, land…"
     }
   },
   "sync": {
@@ -1346,7 +1347,8 @@
       "editTitle": "Edit property",
       "createTitle": "Describe the property",
       "intro": "Fill in the type, living area and address to enable automatic valuation.",
-      "saveError": "Could not save the property"
+      "saveError": "Could not save the property",
+      "bathrooms": "Bathrooms"
     },
     "details": {
       "title": "Characteristics",
@@ -1439,7 +1441,24 @@
       "ERA_PRE_1949": "Built before 1949",
       "ERA_1949_1974": "Built 1949-1974",
       "ERA_2001_2012": "Built 2001-2012",
-      "ERA_POST_2012": "Built after 2012"
+      "ERA_POST_2012": "Built after 2012",
+      "EXTRA_BATHROOMS": "More than one bathroom"
+    },
+    "add": {
+      "source": "Real estate",
+      "title": "Add a property",
+      "action": "Add a property",
+      "submit": "Create property",
+      "progress": "Steps",
+      "step1Hint": "What kind of property are you adding?",
+      "step2Hint": "Where is it, and how big is it?",
+      "step3Hint": "What did it cost you?",
+      "name": "Property name",
+      "namePlaceholder": "Primary residence",
+      "addressHint": "The address locates the municipality and is what makes automatic valuation possible.",
+      "feesHint": "Fees make up the total cost: gain is measured against that, not against the purchase price alone.",
+      "notEstimable": "This property type has no reliable price per m², so its value stays manually entered.",
+      "error": "Could not create the property"
     }
   }
 }

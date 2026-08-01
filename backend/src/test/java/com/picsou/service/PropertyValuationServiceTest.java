@@ -2,6 +2,7 @@ package com.picsou.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.picsou.dto.PropertyValuationResponse;
+import com.picsou.exception.ValuationProviderException;
 import com.picsou.model.*;
 import com.picsou.port.GeocodingPort;
 import com.picsou.port.HousingPriceIndexPort;
@@ -339,5 +340,60 @@ class PropertyValuationServiceTest {
 
         assertThat(disabled.estimate(10L, 1L).status()).isEqualTo(ValuationStatus.PROVIDER_UNAVAILABLE);
         verifyNoInteractions(provider);
+    }
+
+    @Test
+    void estimate_withoutData_seedsTheValueFromTheCostBasisInsteadOfLeavingItAtZero() {
+        Account account = house();
+        account.setCurrentBalance(BigDecimal.ZERO);
+        RealEstateMetadata m = metadata(account, "HOUSE", "29019", ValuationMode.ESTIMATED);
+        m.setNotaryFees(new BigDecimal("10800"));
+
+        when(accessResolver.requireOwner(10L, 1L)).thenReturn(account);
+        when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.of(m));
+        when(provider.supports(any())).thenReturn(true);
+        when(provider.estimate(any())).thenReturn(Optional.empty());
+
+        PropertyValuationResponse result = service.estimate(10L, 1L);
+
+        // Zero would render as a 100% loss against the purchase price -- read by anyone as
+        // "your property is worthless" rather than "we have no figure yet".
+        assertThat(result.status()).isEqualTo(ValuationStatus.NO_COMPARABLE_DATA);
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("310800");
+        verify(accountRepository).save(account);
+    }
+
+    @Test
+    void estimate_withoutData_leavesAnExistingValueAlone() {
+        Account account = house(); // already worth 300000
+        when(accessResolver.requireOwner(10L, 1L)).thenReturn(account);
+        when(metadataRepository.findByAccountId(10L))
+            .thenReturn(Optional.of(metadata(account, "HOUSE", "29019", ValuationMode.ESTIMATED)));
+        when(provider.supports(any())).thenReturn(true);
+        when(provider.estimate(any())).thenReturn(Optional.empty());
+
+        service.estimate(10L, 1L);
+
+        // The floor only ever lifts a zero; a real valuation is never overwritten by it.
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("300000");
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void estimate_providerTransportFailure_reportsUnavailableNotMissingData() {
+        Account account = house();
+        when(accessResolver.requireOwner(10L, 1L)).thenReturn(account);
+        when(metadataRepository.findByAccountId(10L))
+            .thenReturn(Optional.of(metadata(account, "HOUSE", "29019", ValuationMode.ESTIMATED)));
+        when(provider.supports(any())).thenReturn(true);
+        when(provider.estimate(any()))
+            .thenThrow(new ValuationProviderException("boom", new RuntimeException()));
+
+        PropertyValuationResponse result = service.estimate(10L, 1L);
+
+        // "The source was unreachable" and "this commune has no sales" are different facts.
+        // Collapsing them once sent a user hunting through their address for a bug that was
+        // actually a 256 KB buffer limit.
+        assertThat(result.status()).isEqualTo(ValuationStatus.PROVIDER_UNAVAILABLE);
     }
 }

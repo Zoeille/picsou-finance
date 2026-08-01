@@ -414,7 +414,8 @@
       "degiro": "Sincronizar tu cuenta de valores DEGIRO",
       "finary": "Importar desde Finary",
       "manual": "Crear una cuenta manualmente",
-      "amundi": "PEE, PEG, PERCO, PER en Amundi"
+      "amundi": "PEE, PEG, PERCO, PER en Amundi",
+      "property": "Casa, piso, terreno…"
     }
   },
   "sync": {
@@ -1339,7 +1340,8 @@
       "editTitle": "Editar inmueble",
       "createTitle": "Describir el inmueble",
       "intro": "Indica el tipo, la superficie y la dirección para activar la estimación automática.",
-      "saveError": "No se pudo guardar el inmueble"
+      "saveError": "No se pudo guardar el inmueble",
+      "bathrooms": "Baños"
     },
     "details": {
       "title": "Características",
@@ -1432,7 +1434,24 @@
       "ERA_PRE_1949": "Construido antes de 1949",
       "ERA_1949_1974": "Construido 1949-1974",
       "ERA_2001_2012": "Construido 2001-2012",
-      "ERA_POST_2012": "Construido después de 2012"
+      "ERA_POST_2012": "Construido después de 2012",
+      "EXTRA_BATHROOMS": "Más de un baño"
+    },
+    "add": {
+      "source": "Inmobiliario",
+      "title": "Añadir un inmueble",
+      "action": "Añadir un inmueble",
+      "submit": "Crear el inmueble",
+      "progress": "Pasos",
+      "step1Hint": "¿Qué tipo de inmueble quieres añadir?",
+      "step2Hint": "¿Dónde está y qué superficie tiene?",
+      "step3Hint": "¿Cuánto te costó?",
+      "name": "Nombre del inmueble",
+      "namePlaceholder": "Vivienda habitual",
+      "addressHint": "La dirección localiza el municipio y es lo que permite la estimación automática.",
+      "feesHint": "Los gastos forman el coste total: la plusvalía se mide sobre ese total, no solo sobre el precio de compra.",
+      "notEstimable": "Este tipo de inmueble no tiene un precio por m² fiable; su valor se introduce manualmente.",
+      "error": "No se pudo crear el inmueble"
     }
   }
 }
