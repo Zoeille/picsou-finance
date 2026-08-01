@@ -243,5 +243,6 @@ Upsert Account (type=CRYPTO, no ticker)
 - Related ADR: [EVM multichain wallets](../decisions/2026-07-17-evm-multichain-wallets.md)
 - Related ADR: [AES-256-GCM for crypto secrets](../decisions/2026-03-01-aes-gcm-crypto-secrets.md)
 - Related ADR: [Ports and adapters](../decisions/2026-01-01-ports-and-adapters.md)
+- Related feature: [Logos on account cards](./bank-logos.md) — Meria's mark ships in `frontend/public/exchanges/`, mapped on `Account.provider`
 - Related feature: [Encryption at rest](./encryption-at-rest.md)
 - Related feature: [Price service](./price-service.md)
