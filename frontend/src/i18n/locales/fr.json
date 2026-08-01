@@ -415,6 +415,8 @@
       "search": "Rechercher une banque",
       "searchPlaceholder": "Ex: BNP Paribas...",
       "searchError": "Impossible de rechercher les banques pour le moment.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Compte professionnel — cette banque ne s'adresse qu'aux pros",
       "connected": "Connexions actives",
       "noConnections": "Aucune connexion bancaire",
       "connect": "Connecter",

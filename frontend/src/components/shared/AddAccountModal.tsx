@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { AccountForm } from '@/components/shared/AccountForm'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { BourseDirectPanel } from '@/components/sync/BourseDirectPanel'
@@ -359,6 +360,11 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
                 <div className="flex min-w-0 items-center gap-2">
                   <InstitutionLogo logoUrl={inst.logoUrl} />
                   <span className="min-w-0 text-sm font-medium leading-5">{inst.name}</span>
+                  {inst.psuType !== 'personal' && (
+                    <Badge variant="outline" title={t('sync.banks.proBadgeTitle')}>
+                      {t('sync.banks.proBadge')}
+                    </Badge>
+                  )}
                 </div>
                 <span className="justify-self-center text-xs text-muted-foreground">{inst.country}</span>
                 <Button

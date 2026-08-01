@@ -179,11 +179,14 @@ export interface DashboardData {
 }
 
 export interface Institution {
+  /** Opaque round-trip token ("Swan::FR::business") — pass back to /sync/initiate verbatim. */
   id: string
   name: string
   bic: string | null
   logoUrl: string | null
   country: string
+  /** 'personal' | 'business' — kept as a string so an unknown provider value degrades to no badge. */
+  psuType: string
 }
 
 export interface HoldingResponse {

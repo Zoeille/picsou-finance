@@ -493,14 +493,20 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 ```json
 [
   {
-    "id": "BNP_PARIBAS",
-    "name": "BNP Paribas",
-    "bic": "BNPAFRPP",
+    "id": "Swan::FR::business",
+    "name": "Swan",
+    "bic": "SWNBFR22",
     "logoUrl": "https://...",
-    "country": "FR"
+    "country": "FR",
+    "psuType": "business"
   }
 ]
 ```
+
+`id` is an opaque token encoding `name::country::psuType` — pass it back to
+`/sync/initiate` verbatim. `psuType` is `personal` or `business`; business-only
+banks (Swan and other BaaS providers) present a professional login at the
+consent step.
 
 ---
 
@@ -512,7 +518,7 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 **Request body:**
 | Field | Type | Description |
 |-------|------|-------------|
-| `institutionId` | `string` | Bank identifier from `/institutions` |
+| `institutionId` | `string` | Bank identifier from `/institutions`, passed back verbatim — it encodes the country and PSU type |
 | `institutionName` | `string` | Display name |
 
 **Response `200` — `InitiateResponse`:**
@@ -552,7 +558,7 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
   {
     "id": 1,
     "requisitionId": "uuid",
-    "institutionId": "BNP_PARIBAS",
+    "institutionId": "BNP Paribas::FR::personal",
     "institutionName": "BNP Paribas",
     "status": "LINKED",
     "authLink": null

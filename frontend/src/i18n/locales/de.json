@@ -408,6 +408,8 @@
       "search": "Bank suchen",
       "searchPlaceholder": "z. B. BNP Paribas...",
       "searchError": "Die Bankensuche ist derzeit nicht möglich.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Geschäftskonto — diese Bank richtet sich nur an Geschäftskunden",
       "connected": "Aktive Verbindungen",
       "noConnections": "Keine Bankverbindungen",
       "connect": "Verbinden",

@@ -1,6 +1,6 @@
 # Feature: Bank Logos on Account Cards
 
-> Last updated: 2026-07-01
+> Last updated: 2026-08-01 (institution id gained a PSU-type segment)
 
 ## Context
 
@@ -15,12 +15,12 @@ Only accounts connected via **Enable Banking** get a real logo — it's the sole
 ### Capture at connection time
 
 1. `BankWizard` (`AddAccountModal.tsx`) shows each institution's `logoUrl` from `GET /sync/institutions` in the search list, purely for display — selecting a bank only sends `{ institutionId, institutionName }` to `POST /sync/initiate`. The client-supplied logo URL is never sent to the server or persisted; a client can't inject an arbitrary third-party image URL that every family member's browser would later fetch.
-2. `SyncService.initiateConnection()` resolves the logo itself: it re-queries `bankConnector.searchInstitutions(institutionName, country)` (country parsed from `institutionId`, e.g. `"BankName::FR"` → `"FR"`), matches the result by exact institution id (falling back to a case-insensitive name match only if no id match exists), and stores that logo on the new `Requisition.logoUrl` column.
+2. `SyncService.initiateConnection()` resolves the logo itself: it re-queries `bankConnector.searchInstitutions(institutionName, country)` (country parsed from `institutionId`, e.g. `"BankName::FR::personal"` → `"FR"`), matches the result by exact institution id, then on name+country alone, and only then by a case-insensitive name match, and stores that logo on the new `Requisition.logoUrl` column. The middle tier covers requisitions written before the id carried a PSU-type segment — see [bank-sync.md](./bank-sync.md).
 3. `SyncService.upsertAccount()` copies `requisition.getLogoUrl()` onto `Account.logoUrl` when creating a new account, and onto an existing account only if its `logoUrl` was still `null` (never overwrites a value once set).
 
 ### Backfill for pre-existing connections
 
-Requisitions created before this feature shipped (or whose initial lookup missed) have `logoUrl = null`. `SyncService.ensureLogoUrl()` runs at the top of `resyncAll()` (daily scheduler), `retrySync()` (manual retry), and `resyncLatest()` (re-auth of an already-linked session): if the requisition has no logo yet, it re-searches institutions **scoped to the requisition's own country** (not the full multi-country catalog) and applies the same id-first/name-fallback matching described above.
+Requisitions created before this feature shipped (or whose initial lookup missed) have `logoUrl = null`. `SyncService.ensureLogoUrl()` runs at the top of `resyncAll()` (daily scheduler), `retrySync()` (manual retry), and `resyncLatest()` (re-auth of an already-linked session): if the requisition has no logo yet, it re-searches institutions **scoped to the requisition's own country** (not the full multi-country catalog) and applies the same three-tier matching described above.
 
 The backfill is bounded to a single attempt per requisition via `Requisition.logoBackfillAttemptedAt`: the marker is set as soon as the search call completes (hit or miss), so a permanent miss (renamed institution, no provider logo) is never retried on subsequent syncs. A failed *network* call does not set the marker, so a transient provider outage can still be retried next sync. A failed or empty lookup is otherwise swallowed (logged as a warning) — the requisition simply stays logo-less.
 

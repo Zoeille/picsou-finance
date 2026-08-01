@@ -4,6 +4,7 @@ import type {
   ExchangeType,
   ChainType,
   ExchangeStatus,
+  Institution,
   WalletStatus,
   FinaryPreviewResponse,
   FinaryConnectionStatus,
@@ -22,10 +23,7 @@ import type {
 export const bankSyncApi = {
   searchInstitutions: (query: string) =>
     api
-      .get<{ id: string; name: string; bic: string | null; logoUrl?: string | null; country: string }[]>(
-        '/sync/institutions',
-        { params: { query }, skipGlobalErrorRedirect: true },
-      )
+      .get<Institution[]>('/sync/institutions', { params: { query }, skipGlobalErrorRedirect: true })
       .then(r => r.data),
 
   initiate: (institutionId: string, institutionName: string) =>

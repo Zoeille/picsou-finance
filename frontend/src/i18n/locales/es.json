@@ -408,6 +408,8 @@
       "search": "Buscar un banco",
       "searchPlaceholder": "p. ej. BNP Paribas...",
       "searchError": "No se pueden buscar bancos en este momento.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Cuenta de empresa — este banco solo atiende a clientes profesionales",
       "connected": "Conexiones activas",
       "noConnections": "Sin conexiones bancarias",
       "connect": "Conectar",
