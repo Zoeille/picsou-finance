@@ -404,6 +404,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sync your PEA and securities accounts",
+      "degiro": "Sync your DEGIRO securities account",
       "finary": "Import from Finary",
       "manual": "Create an account manually"
     }
@@ -578,6 +579,27 @@
         "invalidMfaCode": "Invalid or expired MFA code.",
         "sessionExpired": "Session expired. Please reconnect.",
         "serverError": "BoursoBank server error. Please try again."
+      }
+    },
+    "degiro": {
+      "title": "DEGIRO",
+      "username": "Username",
+      "password": "Password",
+      "totpCode": "Authenticator code",
+      "connect": "Connect",
+      "sync": "Synchronize",
+      "clearSession": "Disconnect",
+      "noSession": "No active session",
+      "sessionActive": "Active session",
+      "reauthRequired": "Reconnection needed",
+      "lastSyncedAt": "Last synced on",
+      "totpPrompt": "Enter the 6-digit code from your authenticator app",
+      "errors": {
+        "tooManyAttempts": "Too many attempts. Please wait.",
+        "invalidCredentials": "Invalid credentials.",
+        "invalidTotpCode": "Invalid or expired authenticator code.",
+        "sessionExpired": "Session expired. Please reconnect.",
+        "serverError": "DEGIRO server error. Please try again."
       }
     },
     "bourseDirect": {

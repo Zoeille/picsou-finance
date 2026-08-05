@@ -276,6 +276,19 @@ export interface BoursoAuthInitResponse {
   contact: string | null
 }
 
+export type DegiroSessionStatusValue = 'ACTIVE' | 'REAUTH_REQUIRED' | 'FAILED'
+
+export interface DegiroSessionStatus {
+  isActive: boolean
+  status: DegiroSessionStatusValue
+  lastSyncedAt: string | null
+}
+
+export interface DegiroAuthInitResponse {
+  processId: string | null
+  totpRequired: boolean
+}
+
 interface BourseDirectSessionStatusBase {
   isActive: boolean
   expiresAt: string | null

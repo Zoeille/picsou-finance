@@ -397,6 +397,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
+      "degiro": "Sincronizar tu cuenta de valores DEGIRO",
       "finary": "Importar desde Finary",
       "manual": "Crear una cuenta manualmente"
     }
@@ -571,6 +572,27 @@
         "invalidMfaCode": "Código MFA no válido o caducado.",
         "sessionExpired": "Sesión caducada. Vuelve a conectarte.",
         "serverError": "Error del servidor de BoursoBank. Inténtalo de nuevo."
+      }
+    },
+    "degiro": {
+      "title": "DEGIRO",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "totpCode": "Código del autenticador",
+      "connect": "Conectar",
+      "sync": "Sincronizar",
+      "clearSession": "Desconectar",
+      "noSession": "Sin sesión activa",
+      "sessionActive": "Sesión activa",
+      "reauthRequired": "Reconexión necesaria",
+      "lastSyncedAt": "Última sincronización el",
+      "totpPrompt": "Introduce el código de 6 dígitos de tu aplicación de autenticación",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espera un momento.",
+        "invalidCredentials": "Credenciales incorrectas.",
+        "invalidTotpCode": "Código del autenticador no válido o caducado.",
+        "sessionExpired": "Sesión caducada. Vuelve a conectarte.",
+        "serverError": "Error del servidor de DEGIRO. Inténtalo de nuevo."
       }
     },
     "bourseDirect": {

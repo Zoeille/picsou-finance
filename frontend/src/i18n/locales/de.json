@@ -397,6 +397,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "PEA- und Wertpapierkonten synchronisieren",
+      "degiro": "DEGIRO-Wertpapierkonto synchronisieren",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen"
     }
@@ -571,6 +572,27 @@
         "invalidMfaCode": "Ungültiger oder abgelaufener MFA-Code.",
         "sessionExpired": "Sitzung abgelaufen. Bitte verbinde dich erneut.",
         "serverError": "BoursoBank-Serverfehler. Bitte versuche es erneut."
+      }
+    },
+    "degiro": {
+      "title": "DEGIRO",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "totpCode": "Authenticator-Code",
+      "connect": "Verbinden",
+      "sync": "Synchronisieren",
+      "clearSession": "Trennen",
+      "noSession": "Keine aktive Sitzung",
+      "sessionActive": "Aktive Sitzung",
+      "reauthRequired": "Erneute Anmeldung erforderlich",
+      "lastSyncedAt": "Zuletzt synchronisiert am",
+      "totpPrompt": "Gib den 6-stelligen Code aus deiner Authenticator-App ein",
+      "errors": {
+        "tooManyAttempts": "Zu viele Versuche. Bitte warte einen Moment.",
+        "invalidCredentials": "Ungültige Zugangsdaten.",
+        "invalidTotpCode": "Ungültiger oder abgelaufener Authenticator-Code.",
+        "sessionExpired": "Sitzung abgelaufen. Bitte verbinde dich erneut.",
+        "serverError": "DEGIRO-Serverfehler. Bitte versuche es erneut."
       }
     },
     "bourseDirect": {

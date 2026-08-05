@@ -15,6 +15,8 @@ import type {
   BoursoAuthInitResponse,
   BourseDirectSessionStatus,
   BourseDirectAuthInitResponse,
+  DegiroSessionStatus,
+  DegiroAuthInitResponse,
 } from '@/types/api'
 
 // --- Bank Sync (Enable Banking) ---
@@ -150,6 +152,29 @@ export const boursoApi = {
 
   clearSession: () =>
     api.delete('/bourso/session'),
+}
+
+// --- DEGIRO ---
+
+export const degiroApi = {
+  initiateAuth: (username: string, password: string) =>
+    api
+      .post<DegiroAuthInitResponse>('/degiro/auth/initiate', { username, password })
+      .then(r => r.data),
+
+  completeAuth: (processId: string, code: string) =>
+    api
+      .post<DegiroSessionStatus>('/degiro/auth/complete', { processId, code })
+      .then(r => r.data),
+
+  sync: () =>
+    api.post<Account>('/degiro/sync').then(r => r.data),
+
+  getStatus: () =>
+    api.get<DegiroSessionStatus>('/degiro/status').then(r => r.data),
+
+  clearSession: () =>
+    api.delete('/degiro/session'),
 }
 
 // --- Bourse Direct ---

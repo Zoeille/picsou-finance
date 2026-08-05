@@ -8,6 +8,7 @@ import {
   finaryApi,
   boursoApi,
   bourseDirectApi,
+  degiroApi,
 } from './api'
 import type {
   ExchangeType,
@@ -27,6 +28,7 @@ export const syncKeys = {
   tr: () => [...syncKeys.all, 'tr'] as const,
   bourso: () => [...syncKeys.all, 'bourso'] as const,
   bourseDirect: () => [...syncKeys.all, 'bourse-direct'] as const,
+  degiro: () => [...syncKeys.all, 'degiro'] as const,
   exchanges: () => [...syncKeys.all, 'exchanges'] as const,
   wallets: () => [...syncKeys.all, 'wallets'] as const,
   finary: () => [...syncKeys.all, 'finary'] as const,
@@ -217,6 +219,60 @@ export function useSyncBourso() {
       queryClient.invalidateQueries({ queryKey: syncKeys.bourso() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// DEGIRO
+// ---------------------------------------------------------------------------
+
+export function useDegiroSessionStatus() {
+  return useQuery({
+    queryKey: syncKeys.degiro(),
+    queryFn: degiroApi.getStatus,
+    staleTime: 30_000,
+  })
+}
+
+export function useInitiateDegiroAuth() {
+  return useMutation({
+    mutationFn: ({ username, password }: { username: string; password: string }) =>
+      degiroApi.initiateAuth(username, password),
+  })
+}
+
+export function useCompleteDegiroAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ processId, code }: { processId: string; code: string }) =>
+      degiroApi.completeAuth(processId, code),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useSyncDegiro() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => degiroApi.sync(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useClearDegiroSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => degiroApi.clearSession(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
     },
   })
 }

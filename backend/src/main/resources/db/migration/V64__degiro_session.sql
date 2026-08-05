@@ -1,0 +1,27 @@
+-- V64: DEGIRO session storage (one row per family member)
+--
+-- DEGIRO's unofficial session cookie times out after ~30 minutes of inactivity
+-- and there is no refresh token, unlike Trade Republic / Bourse Direct / Bourso
+-- sessions which last days to weeks. Picsou therefore never stores the account's
+-- TOTP secret to re-authenticate unattended (see
+-- docs/decisions/2026-08-05-degiro-session-only-no-stored-totp.md): status simply
+-- flips to REAUTH_REQUIRED when a sync call finds the session expired, and there
+-- is no scheduled background resync for this integration.
+
+CREATE TABLE degiro_session (
+    id              BIGSERIAL PRIMARY KEY,
+    member_id       BIGINT NOT NULL UNIQUE REFERENCES family_member(id),
+    session_blob    VARCHAR(4000) NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    last_synced_at  TIMESTAMPTZ,
+    last_error      VARCHAR(40),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_degiro_session_status
+        CHECK (status IN ('ACTIVE', 'REAUTH_REQUIRED', 'FAILED')),
+    CONSTRAINT ck_degiro_session_failed_error
+        CHECK (
+            (status = 'FAILED' AND last_error IS NOT NULL)
+            OR (status <> 'FAILED')
+        )
+);

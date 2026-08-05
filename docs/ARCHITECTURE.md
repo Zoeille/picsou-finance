@@ -15,7 +15,8 @@ com.picsou/
 │                   BalanceSnapshot, Goal, GoalManualContribution, GoalContributor,
 │                   Debt, RealEstateMetadata, WalletAddress;
 │                   integrations: Requisition, TradeRepublicSession, CryptoExchangeSession,
-│                   FinarySession, BoursoSession, BourseDirectSession, PriceSnapshot;
+│                   FinarySession, BoursoSession, BourseDirectSession, DegiroSession,
+│                   PriceSnapshot;
 │                   identity & sharing: AppUser, FamilyMember, UserRole, SharingSettings,
 │                   SharingLevel, SharedResource, UserMfa, UserMfaRecoveryCode,
 │                   PersistentSession;
@@ -27,7 +28,7 @@ com.picsou/
 │                   SchedulerService;
 │                   integrations: SyncService, TradeRepublicSyncService,
 │                   CryptoExchangeSyncService, WalletSyncService, BoursoSyncService,
-│                   BourseDirectSyncService,
+│                   BourseDirectSyncService, DegiroSyncService,
 │                   FinaryImportService, FinaryApiSyncService;
 │                   identity & family: UserContext, FamilyService, FamilyViewService,
 │                   MfaService, PersistentSessionService, ReAuthService;
@@ -41,11 +42,12 @@ com.picsou/
 ├── dto/            Request/response records (records are the convention)
 ├── port/           Port interfaces (BankConnectorPort, PriceProviderPort,
 │                   TradeRepublicPort, CryptoExchangePort, WalletPort, BoursoPort,
-│                   BourseDirectPort)
+│                   BourseDirectPort, DegiroPort)
 ├── adapter/        Port implementations + util/BitcoinKeyUtils
 │   ├── EnableBankingBankConnector (bank sync)
 │   ├── PowensBankConnector (Powens / Budget Insight — experimental, disabled in 1.0.0)
 │   ├── BoursoAdapter (BoursoBank — disabled in 1.0.0)
+│   ├── DegiroAdapter (DEGIRO — compte-titres sync; requires `degiro-auth` uncommented in docker-compose.yml)
 │   ├── CoinGeckoPriceProvider, YahooFinancePriceProvider (prices)
 │   ├── OpenFigiIsinConverter (ISIN → Yahoo ticker)
 │   ├── TradeRepublicAdapter (broker)
@@ -223,6 +225,7 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 | Trade Republic | Broker sync via Python microservice | `TR_AUTH_URL` |
 | Bourse Direct | PEA/CTO sync via internal Python sidecar | `BOURSE_DIRECT_AUTH_URL` |
 | BoursoBank | Bank sync via Python sidecar (**disabled in 1.0.0**) | `BOURSO_AUTH_URL` |
+| DEGIRO | Compte-titres sync via internal Python sidecar (sidecar off by default — uncomment in `docker-compose.yml`) | `DEGIRO_AUTH_URL` |
 | Binance | Crypto exchange balances | Via CryptoExchangePort |
 | CoinGecko | Crypto prices (free) | No config |
 | Yahoo Finance | Stock/ETF prices (free) | No config |
