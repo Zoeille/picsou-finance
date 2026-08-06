@@ -6,11 +6,16 @@ valuation/positions fetching, via DEGIRO's unofficial, reverse-engineered
 trading API (no official public API exists — see
 docs/features/degiro-sync.md and the design ADR referenced there).
 
-CAUTION — unverified against a live account. The endpoint shapes below are
-reconstructed from public reference implementations (Chavithra/degiro-connector,
-bramton/degiro), not from a live test. The parts marked "NOTE: unverified"
-are the most likely to need correction once tested against a real account —
-see docs/features/degiro-sync.md "Known limitations".
+The endpoint shapes below started out reconstructed from public reference
+implementations (Chavithra/degiro-connector, bramton/degiro) and have since been
+confirmed end-to-end against a live account: /login/secure/login and its /totp
+variant, /pa/secure/client, /trading/secure/v5/update (portfolio + cashFunds, in
+the name/value-pair shape portfolio_parser handles) and
+/product_search/secure/v5/products/info. Two live-only quirks that the reference
+implementations do not mention are handled explicitly: the "FLATEX_EUR" cash
+pseudo-position mixed in among real security ids, and the literal string "NULL"
+standing in for a missing product-info field. Remaining gaps are tracked in
+docs/features/degiro-sync.md "Known limitations".
 
 Auth flow:
   POST /initiate  {username, password}
@@ -64,6 +69,36 @@ _USER_AGENT = (
 )
 
 
+_REDACTED_KEYS = {
+    "sessionid", "password", "onetimepassword", "token", "accesstoken", "refreshtoken",
+    "email", "emailaddress", "username", "firstcontact", "address", "phonenumber",
+    "mobilephonenumber", "cellphonenumber", "bankaccount", "iban",
+}
+
+
+def _redact(value):
+    """Strips credentials and PII out of a DEGIRO response before it is logged.
+
+    These bodies are logged to make the unofficial API's real shapes debuggable, but a
+    login response carries a live `sessionId` (a usable bearer of the whole session)
+    and the client/profile response carries the account holder's name, email, address
+    and bank details. Keys are matched case-insensitively and the walk is recursive,
+    since DEGIRO nests everything under `data`.
+    """
+    if isinstance(value, dict):
+        return {
+            k: "***" if k.lower() in _REDACTED_KEYS else _redact(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact(v) for v in value]
+    return value
+
+
+def _safe_body(payload) -> str:
+    return json.dumps(_redact(payload))[:500]
+
+
 def _clean_pending():
     now = time.time()
     expired = [k for k, v in _pending.items() if now - v.get("created_at", 0) > _PENDING_TTL]
@@ -95,13 +130,13 @@ async def _login(client: httpx.AsyncClient, username: str, password: str, totp: 
     POST /login/secure/login (or /login/secure/login/totp when a code is supplied).
     Returns {"needsTotp": bool} or {"sessionId": "..."} on success.
 
-    NOTE: unverified, and deliberately defensive — real logins observed so far
-    (see docs/features/degiro-sync.md "Known limitations") returned shapes this
-    function did not originally anticipate: an HTTP 200 + session cookie with no
-    usable account behind it, and a plain HTTP 202 on the initial POST. Every
-    response is logged (status, whether a cookie came back, and the JSON body —
-    DEGIRO's own response, never the submitted credentials) so a live test run
-    tells us exactly what to fix here next, instead of failing silently.
+    Confirmed live, including the TOTP variant, but deliberately defensive: real
+    logins returned shapes this function did not originally anticipate (an HTTP 200 +
+    session cookie with no usable account behind it, and a plain HTTP 202 on the
+    initial POST), so the branches below stay explicit rather than assuming one
+    canonical success shape. Every response is logged — status, whether a cookie came
+    back, and the body via `_safe_body`, which redacts the session id and any PII, and
+    never includes the submitted credentials.
     """
     path = "/login/secure/login/totp" if totp else "/login/secure/login"
     body = {"username": username, "password": password, "isPassCodeReset": False, "isRedirectToMobile": False}
@@ -118,7 +153,7 @@ async def _login(client: httpx.AsyncClient, username: str, password: str, totp: 
 
     log.info(
         "DEGIRO login response: HTTP %s, session_cookie=%s, body=%s",
-        resp.status_code, bool(session_id), json.dumps(payload)[:500],
+        resp.status_code, bool(session_id), _safe_body(payload),
     )
 
     needs_totp = (
@@ -149,7 +184,7 @@ async def _fetch_int_account(client: httpx.AsyncClient, session_id: str) -> int:
         payload = resp.json()
     except ValueError:
         payload = {}
-    log.info("DEGIRO /pa/secure/client response: HTTP %s, body=%s", resp.status_code, json.dumps(payload)[:500])
+    log.info("DEGIRO /pa/secure/client response: HTTP %s, body=%s", resp.status_code, _safe_body(payload))
 
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Could not resolve DEGIRO account after login")
@@ -187,10 +222,9 @@ async def _fetch_product_info(client: httpx.AsyncClient, session_id: str, int_ac
     """
     POST /product_search/secure/v5/products/info — resolves productId → ISIN/name.
 
-    NOTE: unverified — confirm the request/response envelope against a live
-    account. On any failure, positions still come through (see caller) with
-    the raw productId standing in for symbol/name rather than failing the
-    whole sync — an incomplete label is recoverable, a missing position isn't.
+    Confirmed live. On any failure, positions still come through (see caller) with
+    the raw productId standing in for symbol/name rather than failing the whole
+    sync — an incomplete label is recoverable, a missing position isn't.
     """
     try:
         resp = await client.post(
@@ -238,7 +272,10 @@ async def initiate(req: InitiateRequest):
     client = _client()
     try:
         result = await _login(client, req.username, req.password, totp=None)
-    except HTTPException:
+    except BaseException:
+        # Not just HTTPException: _login can also raise httpx.ConnectError/ReadTimeout,
+        # and the client would then never be closed — every sidecar outage leaking a
+        # connection pool.
         await client.aclose()
         raise
 
@@ -284,8 +321,11 @@ async def portfolio(req: PortfolioRequest):
         parsed = json.loads(req.sessionBlob)
         session_id = parsed["sessionId"]
         int_account = parsed["intAccount"]
-    except (json.JSONDecodeError, KeyError):
-        raise HTTPException(status_code=400, detail="Invalid sessionBlob format")
+    # TypeError too: json.loads happily returns a scalar or a list for a blob like "5"
+    # or "[1]", and subscripting that raises TypeError, which would escape as a 500
+    # instead of the 400 this is meant to be.
+    except (json.JSONDecodeError, KeyError, TypeError) as ex:
+        raise HTTPException(status_code=400, detail="Invalid sessionBlob format") from ex
 
     client = _client()
     client.cookies.set("JSESSIONID", session_id, domain="trader.degiro.nl")

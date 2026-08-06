@@ -10,7 +10,10 @@
 
 CREATE TABLE degiro_session (
     id              BIGSERIAL PRIMARY KEY,
-    member_id       BIGINT NOT NULL UNIQUE REFERENCES family_member(id),
+    -- ON DELETE CASCADE, matching what V61 retrofitted onto bourse_direct_session:
+    -- without it, deleting a family member fails outright once they have a stored
+    -- DEGIRO session, since nothing in the member-deletion path clears this row first.
+    member_id       BIGINT NOT NULL UNIQUE REFERENCES family_member(id) ON DELETE CASCADE,
     session_blob    VARCHAR(4000) NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     last_synced_at  TIMESTAMPTZ,

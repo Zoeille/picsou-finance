@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.picsou.adapter.OpenFigiIsinConverter;
 import com.picsou.config.CryptoEncryption;
 import com.picsou.dto.AccountResponse;
+import com.picsou.exception.DegiroSessionExpiredException;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.exception.SyncException;
 import com.picsou.model.Account;
@@ -67,6 +68,7 @@ public class DegiroSyncService {
     private final AccountService           accountService;
     private final OpenFigiIsinConverter    isinConverter;
     private final CryptoEncryption         encryption;
+    private final DegiroSessionStatusWriter statusWriter;
 
     public DegiroSyncService(
         DegiroPort degiroPort,
@@ -76,7 +78,8 @@ public class DegiroSyncService {
         FamilyMemberRepository familyMemberRepository,
         AccountService accountService,
         OpenFigiIsinConverter isinConverter,
-        CryptoEncryption encryption
+        CryptoEncryption encryption,
+        DegiroSessionStatusWriter statusWriter
     ) {
         this.degiroPort          = degiroPort;
         this.sessionRepository   = sessionRepository;
@@ -86,6 +89,7 @@ public class DegiroSyncService {
         this.accountService      = accountService;
         this.isinConverter       = isinConverter;
         this.encryption          = encryption;
+        this.statusWriter        = statusWriter;
     }
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -151,16 +155,13 @@ public class DegiroSyncService {
             });
             log.info("DEGIRO sync complete for member {}", memberId);
             return response;
-        } catch (SyncException e) {
-            if ("SESSION_EXPIRED".equals(e.getMessage())) {
-                log.warn("DEGIRO session expired for member {} — marking REAUTH_REQUIRED", memberId);
-                sessionRepository.findByMemberId(memberId).ifPresent(s -> {
-                    s.setStatus(DegiroSessionStatus.REAUTH_REQUIRED);
-                    s.setLastError("SESSION_EXPIRED");
-                });
-                throw new SyncException(
-                    "Your DEGIRO session has expired. Please reconnect from the DEGIRO page.");
-            }
+        } catch (DegiroSessionExpiredException e) {
+            log.warn("DEGIRO session expired for member {} — marking REAUTH_REQUIRED", memberId);
+            // Written through statusWriter, not this managed entity: rethrowing marks this
+            // @Transactional method rollback-only, so a plain save here would be discarded
+            // and the next sync would sail past the REAUTH_REQUIRED guard in sync() and hit
+            // the sidecar again instead of prompting the user to reconnect.
+            statusWriter.markReauthRequired(memberId);
             throw e;
         }
     }

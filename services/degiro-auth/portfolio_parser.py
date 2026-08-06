@@ -3,9 +3,9 @@ Pure parsing helpers for DEGIRO's /trading/secure/v5/update response shape.
 Kept dependency-free (no fastapi/httpx) so it can be unit tested in isolation —
 mirrors services/bourse-direct-auth/portfolio_parser.py.
 
-NOTE: unverified — the "value" array-of-{name, value}-pairs shape modeled here
-is reconstructed from public reference implementations, not a live account.
-See docs/features/degiro-sync.md "Known limitations".
+The "value" array-of-{name, value}-pairs shape modeled here was reconstructed from
+public reference implementations and has since been confirmed against a live
+account. See docs/features/degiro-sync.md "Known limitations" for what remains open.
 """
 
 
@@ -34,7 +34,11 @@ def sanitize_product_info(info: dict) -> dict:
         "isin": _sanitize(info.get("isin")),
         "symbol": _sanitize(info.get("symbol")),
         "name": _sanitize(info.get("name")),
-        "closePrice": info.get("closePrice"),
+        # Sanitized like the rest: the literal string "NULL" is truthy, so an unsanitized
+        # one would win the `closePrice or price` fallback in build_positions and reach
+        # Java as a non-numeric node — decoded as 0, pricing the holding at zero and
+        # silently understating the account balance with no error anywhere.
+        "closePrice": _sanitize(info.get("closePrice")),
     }
 
 

@@ -31,7 +31,12 @@ export function DegiroTab() {
   const [processId, setProcessId] = useState<string | null>(null)
   const [errorMsg, setErrorMsg]   = useState<string | null>(null)
 
-  const { data: sessionStatus, isLoading: statusLoading } = useDegiroSessionStatus()
+  const {
+    data: sessionStatus,
+    isLoading: statusLoading,
+    isError: statusIsError,
+    error: statusError,
+  } = useDegiroSessionStatus()
   const initiateMutation = useInitiateDegiroAuth()
   const completeMutation = useCompleteDegiroAuth()
   const syncMutation     = useSyncDegiro()
@@ -68,6 +73,12 @@ export function DegiroTab() {
             setAuthState('IDLE')
             setUsername('')
             setPassword('')
+          } else if (!data.processId) {
+            // Shouldn't happen — the adapter rejects a blank processId before reporting
+            // totpRequired. Guarded anyway: without it a malformed response strands the
+            // user on a TOTP prompt whose submit handler silently returns.
+            setErrorMsg(t('sync.degiro.errors.serverError'))
+            setAuthState('ERROR')
           } else {
             setProcessId(data.processId)
             setAuthState('AWAITING_TOTP')
@@ -114,6 +125,10 @@ export function DegiroTab() {
     return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
   }
 
+  // A failed status query would otherwise leave the tab rendering stale session state
+  // with no indication anything went wrong, so it feeds the same panel as action errors.
+  const visibleError = errorMsg ?? (statusIsError ? formatError(statusError) : null)
+
   return (
     <div className="space-y-6">
       {/* Session status */}
@@ -141,12 +156,12 @@ export function DegiroTab() {
       </Card>
 
       {/* Error */}
-      {errorMsg && (
+      {visibleError && (
         <Card size="sm" className="border-destructive/30">
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
               <AlertTriangle className="size-5 text-destructive shrink-0" />
-              <p className="text-sm text-destructive flex-1">{errorMsg}</p>
+              <p className="text-sm text-destructive flex-1">{visibleError}</p>
               <Button size="sm" variant="outline" onClick={handleRetry}>
                 {t('common.retry')}
               </Button>
@@ -158,11 +173,24 @@ export function DegiroTab() {
       {/* Connected (and not needing reauth) */}
       {effectiveState === 'CONNECTED' && (
         <div className="flex flex-wrap gap-3">
-          <Button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
+          <Button
+            onClick={() => {
+              setErrorMsg(null)
+              syncMutation.mutate(undefined, { onError: error => setErrorMsg(formatError(error)) })
+            }}
+            disabled={syncMutation.isPending}
+          >
             <RefreshCw />
             {t('sync.degiro.sync')}
           </Button>
-          <Button variant="destructive" onClick={() => clearMutation.mutate()} disabled={clearMutation.isPending}>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              setErrorMsg(null)
+              clearMutation.mutate(undefined, { onError: error => setErrorMsg(formatError(error)) })
+            }}
+            disabled={clearMutation.isPending}
+          >
             <LogOut />
             {t('sync.degiro.clearSession')}
           </Button>

@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.picsou.adapter.OpenFigiIsinConverter;
 import com.picsou.config.CryptoEncryption;
 import com.picsou.dto.AccountResponse;
+import com.picsou.exception.DegiroSessionExpiredException;
 import com.picsou.exception.SyncException;
 import com.picsou.model.Account;
 import com.picsou.model.AccountHolding;
@@ -52,6 +53,7 @@ class DegiroSyncServiceTest {
     @Mock AccountService accountService;
     @Mock OpenFigiIsinConverter isinConverter;
     @Mock CryptoEncryption encryption;
+    @Mock DegiroSessionStatusWriter statusWriter;
     @Captor ArgumentCaptor<AccountHolding> holdingCaptor;
 
     DegiroSyncService service;
@@ -62,7 +64,7 @@ class DegiroSyncServiceTest {
     void setUp() {
         service = new DegiroSyncService(
             port, sessionRepository, accountRepository, holdingRepository,
-            memberRepository, accountService, isinConverter, encryption);
+            memberRepository, accountService, isinConverter, encryption, statusWriter);
     }
 
     private FamilyMember member() {
@@ -190,14 +192,28 @@ class DegiroSyncServiceTest {
         DegiroSession session = DegiroSession.builder().status(DegiroSessionStatus.ACTIVE).sessionBlob("enc").build();
         when(sessionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(session));
         when(encryption.decrypt("enc")).thenReturn("plain");
-        when(port.fetchPortfolio("plain")).thenThrow(new SyncException("SESSION_EXPIRED"));
+        when(port.fetchPortfolio("plain")).thenThrow(new DegiroSessionExpiredException());
 
         assertThatThrownBy(() -> service.sync(MEMBER_ID))
             .isInstanceOf(SyncException.class)
             .hasMessageContaining("reconnect");
 
-        assertThat(session.getStatus()).isEqualTo(DegiroSessionStatus.REAUTH_REQUIRED);
-        assertThat(session.getLastError()).isEqualTo("SESSION_EXPIRED");
+        // Through the REQUIRES_NEW writer, never by mutating the managed entity: rethrowing
+        // marks this service's transaction rollback-only, so an in-transaction save would be
+        // discarded and the user would never be prompted to reconnect.
+        verify(statusWriter).markReauthRequired(MEMBER_ID);
+    }
+
+    @Test
+    void sync_nonExpiryFailure_leavesSessionStatusAlone() {
+        DegiroSession session = DegiroSession.builder().status(DegiroSessionStatus.ACTIVE).sessionBlob("enc").build();
+        when(sessionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(session));
+        when(encryption.decrypt("enc")).thenReturn("plain");
+        when(port.fetchPortfolio("plain")).thenThrow(new SyncException("Could not fetch your DEGIRO portfolio."));
+
+        assertThatThrownBy(() -> service.sync(MEMBER_ID)).isInstanceOf(SyncException.class);
+
+        verify(statusWriter, never()).markReauthRequired(any());
     }
 
     // ─── Status / clear ────────────────────────────────────────────────────────

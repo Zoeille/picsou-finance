@@ -150,6 +150,14 @@ export function DegiroPanel({ onConnected }: DegiroPanelProps = {}) {
                 onSuccess: result => {
                   setPassword("")
                   if (result.totpRequired) {
+                    if (!result.processId) {
+                      // Shouldn't happen — the adapter rejects a blank processId before
+                      // reporting totpRequired. Guarded anyway: without it a malformed
+                      // response strands the user on a TOTP prompt that can never submit.
+                      setError(t("sync.degiro.errors.serverError"))
+                      setAuthState("ERROR")
+                      return
+                    }
                     setProcessId(result.processId)
                     setAuthState("AWAITING_TOTP")
                     return

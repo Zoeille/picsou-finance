@@ -58,6 +58,13 @@ class SanitizeProductInfoTest(unittest.TestCase):
         self.assertIsNone(result["name"])
         self.assertIsNone(result["closePrice"])
 
+    def test_literal_null_close_price_becomes_none(self):
+        # "NULL" is truthy, so an unsanitized closePrice would win the
+        # `closePrice or price` fallback in build_positions and reach Java as a
+        # non-numeric node — decoded as 0, pricing the holding at zero.
+        info = {"isin": "IE00B4L5Y983", "symbol": "IWDA", "name": "iShares", "closePrice": "NULL"}
+        self.assertIsNone(sanitize_product_info(info)["closePrice"])
+
 
 class ValuePairsToDictTest(unittest.TestCase):
     def test_flattens_name_value_pairs(self):
@@ -147,6 +154,19 @@ class BuildPositionsTest(unittest.TestCase):
 
         self.assertEqual(result[0]["currentPrice"], 42.0)
         self.assertEqual(result[0]["buyingPrice"], 38.0)
+
+    def test_literal_null_close_price_falls_back_to_portfolio_row_price(self):
+        # End-to-end over the sanitize step: a "NULL" closePrice must not be treated
+        # as a real reference price, otherwise the holding is priced at zero and the
+        # account balance is silently understated.
+        raw = [{"productId": "123", "size": 10.0, "price": 42.0, "breakEvenPrice": 38.0}]
+        products = build_product_info_map({"123": {
+            "isin": "IE00B4L5Y983", "symbol": "IWDA", "name": "iShares", "closePrice": "NULL",
+        }})
+
+        result = build_positions(raw, products)
+
+        self.assertEqual(result[0]["currentPrice"], 42.0)
 
     def test_survives_missing_product_info_with_raw_id_labels(self):
         raw = [{"productId": "999", "size": 1.0, "price": 5.0, "breakEvenPrice": 4.5}]

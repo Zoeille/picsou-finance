@@ -284,10 +284,15 @@ export interface DegiroSessionStatus {
   lastSyncedAt: string | null
 }
 
-export interface DegiroAuthInitResponse {
-  processId: string | null
-  totpRequired: boolean
-}
+/**
+ * A discriminated union rather than `{ processId: string | null; totpRequired: boolean }`:
+ * the /complete endpoint cannot work without a processId, so the TOTP branch must not
+ * type-check with a null one. The no-TOTP branch keeps it nullable — the backend has
+ * nothing useful to send there and the client never reads it.
+ */
+export type DegiroAuthInitResponse =
+  | { totpRequired: true; processId: string }
+  | { totpRequired: false; processId: string | null }
 
 interface BourseDirectSessionStatusBase {
   isActive: boolean

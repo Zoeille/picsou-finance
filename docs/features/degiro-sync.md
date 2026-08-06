@@ -22,7 +22,7 @@ Trade Republic and Bourse Direct.
 
 ### Architecture
 
-```
+```text
 Client → DegiroController → DegiroSyncService → DegiroPort
       → DegiroAdapter → degiro-auth (FastAPI, httpx — no browser needed) → trader.degiro.nl
 ```
@@ -56,9 +56,23 @@ Picsou:
   wired into `SchedulerService.dailyBankSync`. Sync is manual only, from the
   DEGIRO tab's "Synchronize" button.
 - Flips `DegiroSession.status` to `REAUTH_REQUIRED` when a sync call meets an
-  expired session (`DegiroPort.fetchPortfolio` throws `SyncException("SESSION_EXPIRED")`
+  expired session (`DegiroPort.fetchPortfolio` throws `DegiroSessionExpiredException`
   on an upstream 401), instead of retrying or failing silently. The UI surfaces
   this as a reconnect prompt, not an error.
+
+  That write goes through `DegiroSessionStatusWriter`, a separate bean whose
+  method is `@Transactional(REQUIRES_NEW)`, and **not** by mutating the managed
+  entity: `DegiroSyncService` is `@Transactional` and rethrows after flipping the
+  status, which marks its transaction rollback-only. An in-transaction write would
+  therefore be discarded, the stored status would stay `ACTIVE`, and every later
+  sync would sail past the `REAUTH_REQUIRED` guard in `sync()` and call the sidecar
+  again instead of prompting the user. Same reasoning and same shape as
+  `IbkrStatusWriter` — it has to be a distinct bean, since a `REQUIRES_NEW` method
+  called via `this` would not cross the Spring proxy.
+
+  The expiry condition is carried by a dedicated exception type rather than a
+  `"SESSION_EXPIRED"` message string, so a reworded message can't silently break
+  the transition and the internal marker never reaches a user-facing error.
 
 ### Sync scope (v1)
 
@@ -86,6 +100,8 @@ position. Holdings that resolve to the same ticker are merged with
 - `backend/src/main/java/com/picsou/port/DegiroPort.java` — port interface
 - `backend/src/main/java/com/picsou/adapter/DegiroAdapter.java` — `WebClient` calls to the sidecar
 - `backend/src/main/java/com/picsou/service/DegiroSyncService.java` — auth orchestration, sync, `REAUTH_REQUIRED` handling
+- `backend/src/main/java/com/picsou/service/DegiroSessionStatusWriter.java` — commits the `REAUTH_REQUIRED` flip in its own transaction
+- `backend/src/main/java/com/picsou/exception/DegiroSessionExpiredException.java` — typed expiry signal between adapter and service
 - `backend/src/main/java/com/picsou/controller/DegiroController.java` — REST endpoints under `/api/degiro/`
 - `backend/src/main/java/com/picsou/model/DegiroSession.java`, `DegiroSessionStatus.java`
 - `backend/src/main/resources/db/migration/V64__degiro_session.sql`
@@ -204,11 +220,15 @@ keeping an eye on across future syncs, especially the 2FA response shape.
   literal sanitization, `closePrice`/`breakEvenPrice` sourcing, and an
   end-to-end regression test for the int/string product-id key mismatch that
   caused every "NULL" ticker seen live), run with `python3 -m unittest` —
-  28/28 passing.
+  30/30 passing.
 - `backend/src/test/java/com/picsou/service/DegiroSyncServiceTest.java` —
-  auth flow, sync upsert + holding dedup, `SESSION_EXPIRED` → `REAUTH_REQUIRED`
-  transition, status/clear endpoints. Run with `mvn test -Dtest=DegiroSyncServiceTest`
-  — 9/9 passing; full backend suite (`mvn test`) also green (756/756).
+  auth flow, sync upsert + holding dedup, expired-session → `REAUTH_REQUIRED`
+  transition (asserted through `DegiroSessionStatusWriter`, since an
+  in-transaction write would be rolled back by the rethrow), the non-expiry
+  failure path leaving the status alone, and the status/clear endpoints. Run
+  with `mvn test -Dtest=DegiroSyncServiceTest` — 10/10 passing. The full
+  backend suite (`mvn test`) is the CI gate; no absolute count is recorded here
+  because it drifts with every unrelated PR.
 - Frontend: `tsc --noEmit` and `eslint .` both clean; no dedicated
   `DegiroTab.test.tsx` yet (matching `BoursoTab`'s own untested precedent).
 - First live smoke test completed (real account, real 2FA) — login, sync, and

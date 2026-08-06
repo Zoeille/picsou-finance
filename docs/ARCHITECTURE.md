@@ -28,7 +28,7 @@ com.picsou/
 │                   SchedulerService;
 │                   integrations: SyncService, TradeRepublicSyncService,
 │                   CryptoExchangeSyncService, WalletSyncService, BoursoSyncService,
-│                   BourseDirectSyncService, DegiroSyncService,
+│                   BourseDirectSyncService, DegiroSyncService, DegiroSessionStatusWriter,
 │                   FinaryImportService, FinaryApiSyncService;
 │                   identity & family: UserContext, FamilyService, FamilyViewService,
 │                   MfaService, PersistentSessionService, ReAuthService;
@@ -37,8 +37,8 @@ com.picsou/
 │                   EnableBankingKeyPairService
 ├── controller/     REST controllers under /api/ — auth, mfa, sessions, family,
 │                   accounts, transactions, holdings, goals, debts, dashboard, history,
-│                   sync, tr, bourso, bourse-direct, crypto-exchange, wallet, finary-import,
-│                   finary-api-sync, setup, admin, admin-mfa, me-export, price
+│                   sync, tr, bourso, bourse-direct, degiro, crypto-exchange, wallet,
+│                   finary-import, finary-api-sync, setup, admin, admin-mfa, me-export, price
 ├── dto/            Request/response records (records are the convention)
 ├── port/           Port interfaces (BankConnectorPort, PriceProviderPort,
 │                   TradeRepublicPort, CryptoExchangePort, WalletPort, BoursoPort,
@@ -219,7 +219,7 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 | Service | Usage | Config |
 |---------|-------|--------|
 | PostgreSQL 16 | Persistence | `SPRING_DATASOURCE_URL` |
-| Flyway | Schema migrations | `db/migration/` (latest V63) |
+| Flyway | Schema migrations | `db/migration/` (latest V64) |
 | Enable Banking | PSD2 bank sync (optional) | `ENABLEBANKING_*` |
 | Powens / Budget Insight | Scraping bank sync (**experimental, disabled in 1.0.0**) | `POWENS_*` |
 | Trade Republic | Broker sync via Python microservice | `TR_AUTH_URL` |
