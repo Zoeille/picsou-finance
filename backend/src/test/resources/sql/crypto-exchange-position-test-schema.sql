@@ -35,4 +35,8 @@ CREATE TABLE crypto_exchange_position (
     CONSTRAINT fk_crypto_exchange_position_account FOREIGN KEY (account_id) REFERENCES account(id)
 );
 
+-- Two accounts, because one cannot show that `deleteAllForAccount` filters by account at all:
+-- with a single row in the table, dropping the WHERE clause from the JPQL delete would pass every
+-- assertion while wiping every other account's breakdown on each sync.
 INSERT INTO account (id, deleted_at) VALUES (1, NULL);
+INSERT INTO account (id, deleted_at) VALUES (2, NULL);

@@ -301,6 +301,15 @@ could not be reached and the last recorded price (up to 7 days old) was used ins
 still returned in that case — clients should display it and mark it, not hide it. Both are
 `null`/`false` when no price could be resolved at all.
 
+`priceUpdatedAt` answers a different question: it is the instant the stored price on the holding
+was last refreshed, whereas `priceAsOf` is the calendar day that price *is for*. A holding synced
+minutes ago can carry a `priceAsOf` of yesterday. It is `null` when the holding has never been
+priced — a manually entered position, or one whose ticker no provider resolves.
+
+> A crypto exchange account also exposes its per-product breakdown at
+> [`GET /api/accounts/{id}/positions`](#get-apiaccountsidpositions), documented with the crypto
+> exchange endpoints in section 9.
+
 ---
 
 #### `GET /api/accounts/{id}/history`
@@ -826,6 +835,7 @@ rate limiting returns `429`.
 **Response `200` — `AccountResponse`.**
 
 **Errors:**
+
 | Status | When |
 |--------|------|
 | `400` | Blank API key; missing secret for an exchange that needs one; secret supplied for a single-key exchange |

@@ -369,6 +369,13 @@ public class AccountService {
             // Falls through with no quote only for a holding that has no ticker to price. Its
             // cost basis is still counted, as it always was: the value it lacks comes from the
             // provider's own figures, not from a lookup we could have made and failed.
+            //
+            // It counts as priced for the same reason. anyPriced answers "could anything here be
+            // valued at all", and dailySnapshots skips the day when the answer is no — a refusal
+            // meant for a transient provider outage. A holding with nothing to look up is not an
+            // outage and never becomes one, so leaving the flag false froze such an account's
+            // net-worth history permanently.
+            anyHoldingPriced = true;
 
             BigDecimal costBasis = providerCostBasisEur(h);
             if (costBasis == null && h.getAverageBuyIn() != null) {

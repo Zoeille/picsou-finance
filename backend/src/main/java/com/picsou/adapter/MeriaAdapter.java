@@ -1,7 +1,6 @@
 package com.picsou.adapter;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,6 +18,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -225,11 +225,11 @@ public class MeriaAdapter implements CryptoExchangePort {
                     .map(bytes -> new RawResponse(
                         response.statusCode().value(),
                         response.headers().contentType().map(Object::toString).orElse("<none>"),
-                        new String(bytes, StandardCharsets.UTF_8))))
+                        bytes)))
                 .timeout(timeout)
                 .block();
         } catch (RuntimeException ex) {
-            throw failure(path, ex);
+            throw failure(path, ex, timeout);
         }
 
         if (raw == null) {
@@ -247,8 +247,8 @@ public class MeriaAdapter implements CryptoExchangePort {
             throw new SyncException("Meria answered HTTP " + raw.status() + " for " + path + ".");
         }
 
-        String body = raw.body();
-        if (body.isBlank()) {
+        byte[] body = raw.body();
+        if (isBlank(body)) {
             // A 2xx with nothing in it carries no failure signal — failures come as a non-2xx or
             // a success:false envelope — so it can only mean "no entries".
             log.info("Meria returned an empty body for {} on HTTP {} (content-type {}) -- reading "
@@ -258,8 +258,16 @@ public class MeriaAdapter implements CryptoExchangePort {
 
         MeriaEnvelope<T> envelope;
         try {
+            // Parsed straight from the bytes: /stakings runs to MAX_RESPONSE_BYTES, and decoding
+            // it to a String first would hold a second full copy of it alongside the array while
+            // Jackson builds a third representation from it. Only the failure paths below need
+            // the text form, and they need at most 200 characters of it.
             envelope = objectMapper.readValue(body, type);
-        } catch (JacksonException ex) {
+        } catch (IOException ex) {
+            // IOException rather than JacksonException (its subclass): the byte[] overload
+            // declares the wider type, and reading from an in-memory array cannot fail any other
+            // way — there is no stream left to break.
+            //
             // WARN, not ERROR: an unparseable body is upstream's doing (a Cloudflare challenge
             // page is the likely one), not a request we built wrong — same severity grading as
             // CoinGeckoPriceProvider. The truncated body is what makes it diagnosable.
@@ -287,7 +295,7 @@ public class MeriaAdapter implements CryptoExchangePort {
      * that {@code block()} wraps in a reactor exception, so matching the declared type without
      * unwrapping would miss the most common real failure. Never logs the API key, only the path.
      */
-    private static SyncException failure(String path, RuntimeException ex) {
+    private static SyncException failure(String path, RuntimeException ex, Duration timeout) {
         Throwable cause = reactor.core.Exceptions.unwrap(ex);
         if (cause instanceof WebClientResponseException http) {
             // Reachable only for something the byte[] read could not absorb — the status is now
@@ -306,7 +314,10 @@ public class MeriaAdapter implements CryptoExchangePort {
             return new SyncException("Meria answered HTTP " + status + " for " + path + ".", ex);
         }
         if (cause instanceof TimeoutException) {
-            log.warn("Meria request for {} timed out after {} -- failing the sync", path, DEFAULT_TIMEOUT);
+            // The configured timeout, not the constant: the package-private constructor lets a
+            // caller (the tests, today) pass its own, and logging the default then contradicts
+            // what actually happened.
+            log.warn("Meria request for {} timed out after {} -- failing the sync", path, timeout);
             return new SyncException("Meria took too long to answer. Please try again later.", ex);
         }
         if (cause instanceof WebClientRequestException) {
@@ -360,18 +371,39 @@ public class MeriaAdapter implements CryptoExchangePort {
     private static Object lazyBody(WebClientResponseException http) {
         return new Object() {
             @Override public String toString() {
-                return truncate(http.getResponseBodyAsString());
+                return truncate(http.getResponseBodyAsByteArray());
             }
         };
     }
 
-    private static String truncate(String body) {
-        if (body == null || body.isBlank()) return "<empty body>";
-        return body.length() <= 200 ? body : body.substring(0, 200) + "... (truncated)";
+    private static String truncate(byte[] body) {
+        if (body == null || body.length == 0) return "<empty body>";
+        // Decode only what can be logged. 200 characters occupy at most 800 UTF-8 bytes, so
+        // slicing there can never drop a character that would have been shown — at worst it
+        // splits the one just past the limit, which is then cut away anyway.
+        int slice = Math.min(body.length, 800);
+        String text = new String(body, 0, slice, StandardCharsets.UTF_8);
+        if (text.isBlank()) return "<empty body>";
+        if (slice == body.length && text.length() <= 200) return text;
+        return text.substring(0, Math.min(text.length(), 200)) + "... (truncated)";
     }
 
-    /** A response read without interpreting it: status, declared content type, body as text. */
-    private record RawResponse(int status, String contentType, String body) {}
+    /**
+     * Whether a body holds nothing but whitespace, without decoding it.
+     *
+     * <p>Any byte outside ASCII whitespace is content, including every continuation byte of a
+     * multi-byte character (they are negative as {@code byte}, and never whitespace), so the scan
+     * stops at the first one — a 16 MB payload costs a single comparison.
+     */
+    private static boolean isBlank(byte[] body) {
+        for (byte b : body) {
+            if (!Character.isWhitespace(b)) return false;
+        }
+        return true;
+    }
+
+    /** A response read without interpreting it: status, declared content type, body as bytes. */
+    private record RawResponse(int status, String contentType, byte[] body) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record MeriaEnvelope<T>(Boolean success, List<T> data, MeriaError error) {}

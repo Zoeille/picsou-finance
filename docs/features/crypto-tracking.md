@@ -1,6 +1,6 @@
 # Feature: Crypto Tracking
 
-> Last updated: 2026-08-01
+> Last updated: 2026-08-07
 
 ## Context
 
@@ -31,7 +31,7 @@ Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (B
 - **A single read-only API key**, sent as an `API-KEY` header — no secret, no request signing. Users generate it at `dashboard.meria.com/account/api`. The adapter reports `requiresApiSecret() == false`.
 - **Three endpoints, one balance.** A Meria position is spread across `GET /wallets` (spot), `GET /stakings` and `GET /lendings`, all shaped as `currencyCode` + amount. The adapter sums them per currency, counting a staking/lending contract as its **`amount` alone** — see the double-counting gotcha below before adding `reward` back. `GET /status` backs `testConnection()`.
 
-Every call must return a `success: true` envelope, or an empty body on a 2xx; anything else fails the whole sync — see the all-or-nothing gotchas below. Note the staking payload is **large** (full reward history per contract), which is why the client raises its in-memory buffer to 16 MB. `app.meria.base-url` is a plain config value with an identical `@Value` default, so a stripped config still boots.
+Every call must return a `success: true` envelope, or an empty body on a 2xx; anything else fails the whole sync — see the all-or-nothing gotchas below. Note the staking payload is **large** (full reward history per contract), which is why the client raises its in-memory buffer to 16 MB — and why the body is parsed straight from the byte array rather than decoded to a `String` first, which would hold a second full copy of it. `app.meria.base-url` accepts a `MERIA_BASE_URL` override like every other external base URL, and `MeriaAdapter` carries the same value as its `@Value` default, so a stripped config still boots.
 
 ### Per-product positions
 
@@ -138,13 +138,17 @@ CryptoEncryption.encrypt(key [+ secret]) -- AES-256-GCM
 Save CryptoExchangeSession (encryptedKey + encryptedSecret or NULL)
         |
         v
-CryptoExchangePort.fetchHoldings() -- get balances
+CryptoExchangePort.fetchPositions() -- one line per (product, asset)
         |
         v
-PriceService.refreshPrices() -- convert to EUR
+PriceService.refreshCryptoQuotes() -- convert to EUR, crypto-only
         |
         v
 Upsert Account (type=CRYPTO) + AccountHolding per coin
+        + rewrite crypto_exchange_position
+        |
+        v
+Mark the session CONNECTED -- last, see the transaction gotcha below
 
 Add Wallet:
 User submits chain + address
@@ -195,6 +199,7 @@ Upsert Account (type=CRYPTO, no ticker)
 - **`TICKER_TO_ID` is a router, so adding a symbol has a cost on the *stock* side**: `PriceService` and `AccountService` branch on `supports()` with no idea which account a ticker came from, so mapping a symbol that is also a listed equity makes that **stock** get priced as a token. `STX` (Seagate), `SNX` (TD SYNNEX), `SEI` (Solaris Energy Infrastructure) and `APT` (Alpha Pro Tech) are deliberately **not** mapped for that reason, even though Meria offers coins with those symbols — a missing value beats a wrong one. `CoinGeckoPriceProviderTest.supports_rejectsSymbolsSharedWithListedEquities` pins it. (`ATOM`/Atomera predates this rule.)
 - **New Meria coin = one edit in `TICKER_TO_ID`**: same trap as the EVM token gotcha below — an unmapped `currencyCode` is fetched from Meria and then dropped from the EUR total, with only a WARN to show for it. Resolve each id on CoinGecko's `/coins/list` and pick the **canonical** entry: `TIA`, `ZEC`, `BCH`, `TRX`, `XTZ`, `ROSE` and `DYDX` all have `binance-peg-*` / `*-wormhole` / `bridged-*` homonyms, and a wrong id is a wrong valuation that nothing surfaces.
 - **A failed exchange sync writes its `ERROR` status through `CryptoExchangeStatusWriter`**: `CryptoExchangeSyncService` is `@Transactional` and rethrows, so a plain `save` of the status inside the catch is rolled back on the manual path — the session would keep reading `CONNECTED` after a revoked key, while the scheduled path (which catches before crossing the proxy) reported `ERROR`. The writer's `REQUIRES_NEW` method commits independently. Same arrangement, and same reason, as `IbkrStatusWriter`.
+- **…but it is called *after* the failing transaction ends, never inside it**: a second transaction updating the session row waits for the first one's row lock, and the first one holds that lock whenever it has touched the row — `addExchange` rewrites an existing session's credentials, and the `findByIdAndMemberId` opening `sync` queries the very table that update is pending on, so Hibernate flushes it first. Calling `markError` inline then blocks the new transaction on a lock only the caller can release, while the caller waits for `markError` to return. Postgres sees no cycle (one side waits in Java, not on a lock), so nothing breaks the tie and the request hangs until a `lock_timeout` that is unset by default, holding two pooled connections. `markErrorWhenThisTransactionEnds` registers a `TransactionSynchronization` and writes in `afterCompletion`; outside a transaction (unit tests) it writes inline. For the same reason the sync marks the session `CONNECTED` **last**, once the risky work is done, instead of before resolving the account.
 - **Wallet RPC errors must not read as 0**: When parsing a blockchain JSON-RPC response, always go through `JsonRpcResponse.requireResult(...)` — never `response.path("result")` directly. `path(...)` returns a `MissingNode` for an error payload, which silently becomes a 0 balance (this caused the July 2026 Ethereum outage). `requireResult` uses `get(...)` to reject a missing/error result while still allowing a legitimate `0x0` / `value:0`.
 - **Don't re-throw `WalletRpcException` raw from `sync()`**: it has no `@ExceptionHandler`, so a raw re-throw becomes a `500`, not the friendly `422`. Keep it wrapped in `SyncException`. The split catch is only about **log level** — unexpected errors log at ERROR with a stacktrace; the user-facing status/message is unchanged.
 - **Per-token Solana failures are logged, not fatal**: a malformed `uiAmountString` or a non-array token `value` is logged and skipped so the SOL balance and other tokens survive. Only an envelope-level RPC `error`/missing-`result` (via `requireResult`) fails the whole sync. Loud (logged) ≠ fatal (thrown) — pick per blast radius.
@@ -227,10 +232,11 @@ Upsert Account (type=CRYPTO, no ticker)
 
 > `CryptoEncryptionTest` and `BitcoinKeyUtilsTest` were listed here for a long time without existing. AES-GCM round-tripping and BIP32 derivation are still untested — treat that as a known gap, not as coverage.
 
-- `CryptoExchangeSyncServiceTest` -- credential contract: blank key rejected, missing secret rejected for an exchange that needs one and stray secret rejected for one that doesn't (both **before** `testConnection`, so no wasted round-trip), blank secret normalised to `NULL` for a single-key exchange, Binance still requires both, a failed adapter marks the session `ERROR` without touching `accountService` (no snapshot, no holdings), and an exchange with no adapter fails as a readable 422
-- `MeriaAdapterTest` -- aggregation across wallets/stakings/lendings per currency, staking counted as `amount` with accrued interest **not** added on top, a contract with no reward fields at all, symbols upper-cased under a forced Turkish locale, zero/blank entries dropped; and the all-or-nothing contract: every endpoint × {401, 403, 404, 429, 500} throws, as do `success:false` on HTTP 200, an empty body, a reactor-wrapped timeout and a non-JSON (Cloudflare) body — while `data: []` on all three yields an empty list without throwing. Also pins that only an `API-KEY` header is sent (no `Authorization`, no `X-MBX-APIKEY`, no `signature` query), that the secret argument is ignored, and that no message or log line contains the API key
+- `CryptoExchangeSyncServiceTest` -- credential contract: blank key rejected, missing secret rejected for an exchange that needs one and stray secret rejected for one that doesn't (both **before** `testConnection`, so no wasted round-trip), blank secret normalised to `NULL` for a single-key exchange, Binance still requires both, a failed adapter marks the session `ERROR` without touching `accountService` (no snapshot, no holdings), and an exchange with no adapter fails as a readable 422. Plus the two refusals and their messages: an existing account's balance is left standing when nothing can be valued (**stub the account**, or the test runs the first-sync path and passes for an unrelated reason), and a deleted account tells the user to remove the session — both assert the specific text, since the generic catch used to replace it with "try again later", and that no session write happens on either path
+- `CryptoExchangePositionRepositoryTest` -- the delete-then-reinsert rewrite against the real `uq_crypto_exchange_position`, the exact quantities it leaves behind, a product no longer held disappearing, and — with a second seeded account — that the bulk delete filters by account rather than emptying the table
+- `MeriaAdapterTest` -- aggregation across wallets/stakings/lendings per currency, staking counted as `amount` with accrued interest **not** added on top, a contract with no reward fields at all, symbols upper-cased under a forced Turkish locale, zero/blank entries dropped; and the all-or-nothing contract: every endpoint × {401, 403, 404, 429, 500} throws, as do `success:false` on HTTP 200, a reactor-wrapped timeout and a non-JSON (Cloudflare) body — while `data: []` **and an empty body on a 2xx** both yield an empty list without throwing. Also pins that only an `API-KEY` header is sent (no `Authorization`, no `X-MBX-APIKEY`, no `signature` query), that the secret argument is ignored, and that no message or log line contains the API key
 - `MeriaAdapterWiringTest` -- Spring picks the production constructor with and without `app.meria.base-url` set, and the production client reads a staking payload larger than the framework's default buffer (served over a real socket — the `ExchangeFunction` fixtures decode with the stub's strategies and cannot see that configuration)
-- `PositionsByProduct.test.tsx` -- positions grouped per product, the same asset kept in both its spot and staking sections, principal/interest columns only where the exchange reports yield
+- `PositionsByProduct.test.tsx` -- positions grouped per product, the same asset kept in both its spot and staking sections, principal/interest columns only where the exchange reports yield, no subtotal at all when a product is fully *or partly* unvalued (an EUR 0 there reads as "worth nothing"), and the recorded-price marker naming its own day under a time zone behind UTC
 - `WalletSyncServiceTest` -- unit tests for wallet sync
 - `JsonRpcResponseTest` -- envelope validation: valid/zero/empty-array results returned; null/error/missing/explicit-null throw
 - `WalletSyncServiceTest` -- RPC error wrapped as `SyncException` (wallet not marked synced), empty balances throw, `resyncAll` summary reports failed chains, holdings pruned to the currently-held tickers, held assets kept when prices are unavailable, malformed address rejected before anything is persisted

@@ -3,12 +3,12 @@ package com.picsou.service;
 import com.picsou.config.CryptoEncryption;
 import com.picsou.dto.AccountResponse;
 import com.picsou.dto.ExchangePositionResponse;
-import com.picsou.dto.HoldingResponse;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.exception.SyncException;
 import com.picsou.model.*;
 import com.picsou.port.CryptoExchangePort;
 import com.picsou.port.CryptoExchangePort.ExchangePosition;
+import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.CryptoExchangePositionRepository;
 import com.picsou.repository.CryptoExchangeSessionRepository;
@@ -17,6 +17,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -45,6 +47,7 @@ public class CryptoExchangeSyncService {
     private final CryptoEncryption encryption;
     private final CryptoExchangeStatusWriter statusWriter;
     private final CryptoExchangePositionRepository positionRepository;
+    private final AccountHoldingRepository holdingRepository;
 
     public CryptoExchangeSyncService(
         List<CryptoExchangePort> exchangeAdapters,
@@ -55,7 +58,8 @@ public class CryptoExchangeSyncService {
         PriceService priceService,
         CryptoEncryption encryption,
         CryptoExchangeStatusWriter statusWriter,
-        CryptoExchangePositionRepository positionRepository
+        CryptoExchangePositionRepository positionRepository,
+        AccountHoldingRepository holdingRepository
     ) {
         this.exchangeAdapters = exchangeAdapters;
         this.sessionRepository = sessionRepository;
@@ -66,6 +70,7 @@ public class CryptoExchangeSyncService {
         this.encryption = encryption;
         this.statusWriter = statusWriter;
         this.positionRepository = positionRepository;
+        this.holdingRepository = holdingRepository;
     }
 
     public AccountResponse addExchange(ExchangeType type, String apiKey, String apiSecret, Long memberId) {
@@ -188,10 +193,6 @@ public class CryptoExchangeSyncService {
                     + "unvalued, and recording no snapshot for today", session.getExchangeType());
             }
 
-            session.setStatus("CONNECTED");
-            session.setLastSyncedAt(Instant.now());
-            sessionRepository.save(session);
-
             // Resolve or create the account (without snapshot yet). If the account
             // was soft-deleted by the user, skip the rest of this sync — the user
             // explicitly removed it and we won't resurrect.
@@ -221,13 +222,33 @@ public class CryptoExchangeSyncService {
                 accountService.upsertSnapshot(account, totalEur, LocalDate.now());
             }
 
+            // Last, and deliberately so. Marking the session CONNECTED any earlier leaves a
+            // dirty row in the persistence context, and `resolveAccount` runs a *native* query
+            // (existsSoftDeletedByExternalAccountIdAndMemberId) whose query spaces Hibernate
+            // cannot infer, so it flushes everything — including that UPDATE. The row lock then
+            // belongs to this transaction, and the REQUIRES_NEW markError() below blocks on it
+            // while this transaction waits for markError to return: two transactions, no cycle
+            // Postgres can see, and the request hangs until the lock times out. Writing the
+            // session only once the sync has actually succeeded removes the row from the picture.
+            session.setStatus("CONNECTED");
+            session.setLastSyncedAt(Instant.now());
+            sessionRepository.save(session);
+
             return accountService.toResponse(account);
 
+        } catch (SyncException ex) {
+            // Rethrown as-is: the messages built above name what went wrong and what to do about
+            // it (no price for any asset, or an account the user deleted whose session is still
+            // syncing). Wrapping them in the generic text below told the user to retry a
+            // condition that retrying never resolves.
+            markErrorWhenThisTransactionEnds(session.getId());
+            log.warn("Crypto exchange sync failed for {}: {}", session.getExchangeType(), ex.getMessage());
+            throw ex;
         } catch (Exception ex) {
             // Through the status writer, not a plain save: this method is @Transactional and
             // rethrows, so a save here would be rolled back on the manual path and the session
             // would keep reading CONNECTED. See CryptoExchangeStatusWriter.
-            statusWriter.markError(session.getId());
+            markErrorWhenThisTransactionEnds(session.getId());
             log.warn("Crypto exchange sync failed for {}: {}", session.getExchangeType(), ex.getMessage());
             throw new SyncException("Could not sync your " + session.getExchangeType() + " account. Please try again later.");
         }
@@ -268,9 +289,14 @@ public class CryptoExchangeSyncService {
         // Cost basis is tracked per asset on AccountHolding, not per product — Meria reports no
         // per-contract acquisition price. Each line therefore reuses the asset's unit cost and
         // multiplies by its own quantity, so the lines still sum to the holding's cost and P&L.
-        Map<String, BigDecimal> unitCost = accountService.getHoldings(accountId, memberId).stream()
-            .filter(holding -> holding.averageBuyIn() != null)
-            .collect(Collectors.toMap(HoldingResponse::ticker, HoldingResponse::averageBuyIn,
+        //
+        // The entities, not accountService.getHoldings: that method values every holding through
+        // its own quotesFor() pass, and all this needs is averageBuyIn — a stored column. Going
+        // through it resolved the same tickers twice per request, which is exactly the fan-out
+        // the single resolution below exists to avoid.
+        Map<String, BigDecimal> unitCost = holdingRepository.findByAccount_Id(accountId).stream()
+            .filter(holding -> holding.getTicker() != null && holding.getAverageBuyIn() != null)
+            .collect(Collectors.toMap(AccountHolding::getTicker, AccountHolding::getAverageBuyIn,
                 (a, b) -> a));
 
         List<CryptoExchangePosition> positions =
@@ -370,6 +396,37 @@ public class CryptoExchangeSyncService {
      */
     private static String externalIdOf(ExchangeType type) {
         return "crypto_exchange_" + type.name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Records the {@code ERROR} status once this transaction is over, never while it is running.
+     *
+     * <p>{@link CryptoExchangeStatusWriter#markError} is {@code REQUIRES_NEW} so the status
+     * survives the rollback this class's rethrow triggers — but a second transaction updating the
+     * session row cannot proceed while the first one holds its lock. And the first one does hold
+     * it whenever it has touched that row: {@code addExchange} rewrites the credentials of an
+     * existing session, and the {@code findByIdAndMemberId} at the top of {@code sync} is a query
+     * against the very table that update is pending on, so Hibernate flushes it before running.
+     * Calling {@code markError} inline then blocks the new transaction on a lock the caller can
+     * only release by returning — which it is waiting on {@code markError} to do. Postgres sees
+     * no cycle (one of the two waits in Java, not on a lock), so nothing breaks the tie: the
+     * request hangs until a lock timeout that is unset by default, holding two pooled connections.
+     *
+     * <p>{@code afterCompletion} runs once the transaction has committed or rolled back and its
+     * locks are gone, so the write simply succeeds. Outside a transaction — unit tests, or a
+     * future non-transactional caller — there is nothing to wait for and the write happens inline.
+     */
+    private void markErrorWhenThisTransactionEnds(Long sessionId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            statusWriter.markError(sessionId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                statusWriter.markError(sessionId);
+            }
+        });
     }
 
     private CryptoExchangePort findAdapter(ExchangeType type) {

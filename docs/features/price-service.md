@@ -1,6 +1,6 @@
 # Feature: Price Service
 
-> Last updated: 2026-08-01
+> Last updated: 2026-08-07
 
 ## Context
 
@@ -42,6 +42,8 @@ Anything still unresolved returns nothing, and the ticker is marked in the negat
 ### Scheduler
 
 `SchedulerService.refreshPrices()` runs every hour (`fixedDelay = 3600000`). It builds **one** global set — `account.ticker` for accounts that are themselves one asset, **union** `AccountHoldingRepository.findDistinctTickers()` for everything held inside brokerage/exchange/wallet accounts — and calls `PriceService.refreshPrices()` once. Prices are global (no member scoping anywhere in the cache, the table or the providers), so iterating members would only re-fetch shared tickers once per member.
+
+Both halves are split by account type before the call: `AccountRepository.findDistinctTickersByType(CRYPTO)` joins the crypto holding tickers, and `findDistinctTickersExcludingType(CRYPTO)` feeds the rest. A manual crypto account tracking one coin carries its symbol on the account row and has no holdings at all, so reading only holdings sent it down the Yahoo Finance branch — the exact contamination the split below exists to prevent. Both are repository projections rather than `findAll()`: one column is read, and loading every account entity hourly to reach it is waste.
 
 ### Key files
 
@@ -121,6 +123,7 @@ Update cache + upsert today's price_snapshot rows
 - **Read paths must resolve the whole set at once**: `AccountService.valuation` and `CryptoExchangeSyncService.getPositions` build their ticker set first and make one call. Reverting either to a per-holding lookup re-creates the amplification above, and the tests that pin it (`aSetOfTickersCostsOneProviderCall`, `aFailedLookupIsNotRetriedOnEveryRead`) are the only thing that will say so.
 - **Call `valuation()` once per account, never `liveBalanceEur` then `calculateInvestedAmount`**: both accessors run the whole pass, so the pair costs twice the work — and, worse, the two runs can straddle a cache expiry or the end of a 429 cooldown, so the value excludes an asset the cost basis then includes. That is the -85% disagreement rebuilt from two calls that were each individually correct. `SchedulerService.dailySnapshots` and both `HistoryService` live points take a single `Valuation`.
 - **Nothing priced is not a small balance**: `Valuation.anyPriced()` is false only when an account holds assets and none could be valued, and every caller that *persists* a valuation must refuse rather than record it — `dailySnapshots` skips the day, `CryptoExchangeSyncService` throws, `WalletSyncService` throws. A zero written into `balance_snapshot` is permanent: no later sync revisits a past date.
+- **A holding with no ticker counts as priced**: there is no lookup to fail, so it is not an unpriced asset — its value comes from the provider's own figures, which is why its cost basis has always been counted. Leaving `anyPriced()` false for it turned the outage refusal above into a permanent one: an account whose holdings all lack a ticker never receives another daily snapshot, and its net-worth history stops advancing rather than dipping. `AccountServiceTest.holdingsWithNoTickerToPriceCountAsValued` pins it.
 - **The in-memory cache dies on restart, the fallback does not**: `PriceService` holds prices in the heap only, and `StartupSyncService` replays the whole daily sync on every boot. That combination is why a restart used to blank the interface — the cache was empty and the burst got rate-limited. `price_snapshot` is now consulted whenever the providers come back empty, so a cold JVM values from yesterday's row instead of showing nothing.
 - **The fallback is keyed by ticker alone, exactly like the cache**: so it inherits the crypto/equity symbol ambiguity. `getCryptoQuote` checks `CoinGeckoPriceProvider.supports()` **before** touching either, which is what stops an unmapped symbol (`STX`, `SNX`, `SEI`, `APT`) from reading a row a same-named stock wrote. Keep that check first.
 - **`backfillHistoricalPrices` skips tickers whose history is already there — but it scans, it does not probe**: it runs at every boot, once per held ticker, and used to re-request twelve months only to discard every row as a duplicate, exhausting the rate limit seconds after startup. Coverage is now decided by walking the whole range and rejecting any hole longer than 7 days (a weekend is 2, an Easter or Christmas week reaches 5). Checking only the two ends is the tempting simplification and it is wrong: an instance offline for three months has history on *both* sides of the hole, so every boot would declare it covered and `HistoryService` would flat-line the chart across those months forever. A ticker whose history simply starts late (an asset younger than the range) reads as uncovered and is re-requested each boot — we cannot tell "the provider has nothing earlier" from "we never asked" without asking.

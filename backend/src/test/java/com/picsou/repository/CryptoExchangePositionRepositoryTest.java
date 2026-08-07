@@ -16,6 +16,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * Pins the delete-then-reinsert rewrite {@code CryptoExchangeSyncService.replacePositions} performs
@@ -77,14 +78,35 @@ class CryptoExchangePositionRepositoryTest {
             positionRepository.flush();
         }).doesNotThrowAnyException();
 
+        // The exact quantities, not "anything but the old one": the expected values are known, and
+        // "not 0.5" would accept a rewrite that stored the wrong number entirely.
         assertThat(positionRepository.findByAccountIdOrderByProductAscTickerAsc(1L))
-            .extracting(CryptoExchangePosition::getProduct, CryptoExchangePosition::getTicker)
+            .extracting(CryptoExchangePosition::getProduct, CryptoExchangePosition::getTicker,
+                position -> position.getQuantity().stripTrailingZeros())
             .containsExactly(
-                org.assertj.core.api.Assertions.tuple(Product.SPOT, "ETH"),
-                org.assertj.core.api.Assertions.tuple(Product.STAKING, "ATOM"));
-        assertThat(positionRepository.findByAccountIdOrderByProductAscTickerAsc(1L))
-            .extracting(CryptoExchangePosition::getQuantity)
-            .allSatisfy(quantity -> assertThat(quantity).isNotEqualByComparingTo("0.5"));
+                tuple(Product.SPOT, "ETH", new BigDecimal("0.75")),
+                tuple(Product.STAKING, "ATOM", new BigDecimal("34")));
+    }
+
+    @Test
+    void deletingOnesAccountPositionsLeavesAnotherAccountsAlone() {
+        // The `WHERE p.account.id = :accountId` of the bulk delete, which no other test exercises
+        // as a filter: every one of them holds a single account, so a delete that ignored its
+        // parameter would pass them all and quietly wipe every other account on each sync.
+        Account first = testEntityManager.getEntityManager().getReference(Account.class, 1L);
+        Account second = testEntityManager.getEntityManager().getReference(Account.class, 2L);
+        positionRepository.saveAll(List.of(
+            position(first, Product.SPOT, "ETH", "0.5"),
+            position(second, Product.SPOT, "ETH", "1.25")));
+        positionRepository.flush();
+
+        positionRepository.deleteAllForAccount(1L);
+        positionRepository.flush();
+
+        assertThat(positionRepository.findByAccountIdOrderByProductAscTickerAsc(1L)).isEmpty();
+        assertThat(positionRepository.findByAccountIdOrderByProductAscTickerAsc(2L))
+            .extracting(CryptoExchangePosition::getTicker)
+            .containsExactly("ETH");
     }
 
     @Test

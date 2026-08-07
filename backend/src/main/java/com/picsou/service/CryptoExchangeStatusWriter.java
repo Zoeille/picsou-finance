@@ -19,6 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code REQUIRES_NEW} method commits independently of the caller's transaction. Must be a
  * separate Spring bean: a {@code REQUIRES_NEW} method invoked via {@code this} would not cross
  * the proxy and would have no effect. Mirrors {@link IbkrStatusWriter}.
+ *
+ * <p><b>Call it once the caller's transaction is over, not from inside it.</b> A second
+ * transaction updating the session row waits for the first one's row lock, and the first one
+ * holds that lock as soon as it has touched the row — which {@code addExchange} does, and which
+ * any query against {@code crypto_exchange_session} then flushes. Waiting here would block on a
+ * lock only the caller can release while the caller waits for this method to return; Postgres
+ * sees no cycle, so the request hangs until a {@code lock_timeout} that is unset by default.
+ * {@code CryptoExchangeSyncService.markErrorWhenThisTransactionEnds} defers the call to
+ * {@code afterCompletion} for exactly that reason.
  */
 @Service
 public class CryptoExchangeStatusWriter {

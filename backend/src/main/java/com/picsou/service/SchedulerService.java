@@ -21,7 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.TreeSet;
 
 @Service
 public class SchedulerService {
@@ -230,12 +230,15 @@ public class SchedulerService {
         // share price — and refreshPrices *records* what it fetches in price_snapshot, so a
         // single hourly tick would poison the table the last-known-price fallback reads from.
         // Before holding tickers were warmed here, no crypto symbol ever reached this method.
-        Set<String> cryptoTickers = holdingRepository.findDistinctTickersByAccountType(AccountType.CRYPTO);
+        // Account-level tickers too, not just holdings: an account that *is* one asset (a manual
+        // crypto account tracking BTC, say) carries its symbol on the account row and has no
+        // holdings at all, so reading holdings alone sent it down the Yahoo Finance branch below.
+        Set<String> cryptoTickers = new TreeSet<>(
+            holdingRepository.findDistinctTickersByAccountType(AccountType.CRYPTO));
+        cryptoTickers.addAll(accountRepository.findDistinctTickersByType(AccountType.CRYPTO));
 
-        Set<String> otherTickers = accountRepository.findAll().stream()
-            .map(Account::getTicker)
-            .filter(ticker -> ticker != null && !ticker.isBlank())
-            .collect(Collectors.toCollection(java.util.TreeSet::new));
+        Set<String> otherTickers = new TreeSet<>(
+            accountRepository.findDistinctTickersExcludingType(AccountType.CRYPTO));
         otherTickers.addAll(holdingRepository.findDistinctTickers());
         otherTickers.removeAll(cryptoTickers);
 

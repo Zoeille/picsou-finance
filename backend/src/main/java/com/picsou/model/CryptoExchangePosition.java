@@ -18,7 +18,12 @@ import java.time.Instant;
  * wholesale, and nothing computes net worth from them.
  */
 @Entity
-@Table(name = "crypto_exchange_position")
+// Declared for readers and schema-validation tooling only — Flyway owns the schema, and V65
+// already creates this constraint. It is what makes the delete-then-insert rewrite in
+// CryptoExchangeSyncService.replacePositions a hard requirement rather than a style choice.
+@Table(name = "crypto_exchange_position", uniqueConstraints = @UniqueConstraint(
+    name = "uq_crypto_exchange_position",
+    columnNames = {"account_id", "product", "ticker"}))
 @Getter
 @Setter
 @NoArgsConstructor

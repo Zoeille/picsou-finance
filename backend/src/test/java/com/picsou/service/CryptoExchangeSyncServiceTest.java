@@ -10,6 +10,7 @@ import com.picsou.model.FamilyMember;
 import com.picsou.port.CryptoExchangePort;
 import com.picsou.port.CryptoExchangePort.ExchangePosition;
 import com.picsou.port.CryptoExchangePort.Product;
+import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.CryptoExchangePositionRepository;
 import com.picsou.repository.CryptoExchangeSessionRepository;
@@ -62,6 +63,7 @@ class CryptoExchangeSyncServiceTest {
     @Mock CryptoEncryption encryption;
     @Mock CryptoExchangeStatusWriter statusWriter;
     @Mock CryptoExchangePositionRepository positionRepository;
+    @Mock AccountHoldingRepository holdingRepository;
 
     private final CryptoExchangeSession[] saved = new CryptoExchangeSession[1];
 
@@ -69,7 +71,7 @@ class CryptoExchangeSyncServiceTest {
         return new CryptoExchangeSyncService(
             List.of(adapters), sessionRepository, accountRepository,
             familyMemberRepository, accountService, priceService, encryption, statusWriter,
-            positionRepository);
+            positionRepository, holdingRepository);
     }
 
     // Both fixtures are lenient: which of the two traits a given test exercises depends on how far
@@ -259,13 +261,54 @@ class CryptoExchangeSyncServiceTest {
         when(adapter.fetchPositions(KEY, null))
             .thenReturn(List.of(ExchangePosition.spot("BTC", new BigDecimal("0.5"))));
         when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of());
+        // The refusal only exists when there is a balance to protect, so the account has to be
+        // there. Without this stub the sync takes the first-sync path instead, dies on an
+        // unstubbed familyMemberRepository, and every assertion below passes for a reason that
+        // has nothing to do with the guard.
+        Account existing = Account.builder().currentBalance(new BigDecimal("448.00")).build();
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), eq(MEMBER_ID)))
+            .thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> serviceWith(adapter).sync(7L, MEMBER_ID))
-            .isInstanceOf(SyncException.class);
+            .isInstanceOf(SyncException.class)
+            // The specific message, not the generic "try again later": retrying does not map a
+            // coin CoinGecko has never heard of, and the user needs to know what to act on.
+            .hasMessageContaining("refusing to record a zero balance");
 
+        assertThat(existing.getCurrentBalance()).isEqualByComparingTo("448.00");
         verify(statusWriter).markError(7L);
         verifyNoInteractions(accountService);
         verify(accountRepository, never()).save(any());
+        // Nothing may be written to the session either: the status write is what would make the
+        // REQUIRES_NEW markError above contend with a row lock this transaction still holds.
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    void sync_tellsTheUserToRemoveTheSessionWhenTheAccountWasDeleted() {
+        // The user removed the account but kept the session, so every sync rediscovers a
+        // soft-deleted row and can do nothing with it. Retrying never fixes that — the message
+        // has to survive to the UI, which is what the generic catch used to prevent.
+        CryptoExchangePort adapter = singleKeyAdapter();
+        CryptoExchangeSession session = session(ExchangeType.MERIA, "enc:" + KEY, null);
+        when(sessionRepository.findByIdAndMemberId(7L, MEMBER_ID)).thenReturn(Optional.of(session));
+        when(encryption.decrypt("enc:" + KEY)).thenReturn(KEY);
+        when(encryption.decrypt(null)).thenReturn(null);
+        when(adapter.fetchPositions(KEY, null))
+            .thenReturn(List.of(ExchangePosition.spot("ETH", new BigDecimal("1"))));
+        when(priceService.refreshCryptoQuotes(any())).thenReturn(Map.of(
+            "ETH", new PriceService.Quote(new BigDecimal("100"), LocalDate.now(), true)));
+        when(accountRepository.findByExternalAccountIdAndMemberId(any(), eq(MEMBER_ID)))
+            .thenReturn(Optional.empty());
+        when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId(any(), eq(MEMBER_ID)))
+            .thenReturn(true);
+
+        assertThatThrownBy(() -> serviceWith(adapter).sync(7L, MEMBER_ID))
+            .isInstanceOf(SyncException.class)
+            .hasMessageContaining("Settings");
+
+        verify(statusWriter).markError(7L);
+        verify(sessionRepository, never()).save(any());
     }
 
     @Test

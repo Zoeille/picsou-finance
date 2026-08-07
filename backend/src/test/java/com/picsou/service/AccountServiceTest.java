@@ -370,6 +370,27 @@ class AccountServiceTest {
     }
 
     @Test
+    void holdingsWithNoTickerToPriceCountAsValued() {
+        // A holding with no ticker is not an unpriced one: there is no lookup to fail, its value
+        // comes from the provider's own figures. Reporting anyPriced() == false for it made
+        // SchedulerService.dailySnapshots skip such an account *every* day — a refusal meant for
+        // a transient outage, applied to a condition that never changes, so the account's
+        // net-worth history simply stopped.
+        Account account = ownedAccount();
+        AccountHolding holding = AccountHolding.builder()
+            .quantity(new BigDecimal("3")).averageBuyIn(new BigDecimal("120")).build();
+        // No price stub at all, deliberately: with nothing to look up there is no provider call
+        // to make, which is the whole reason this holding is not an unpriced one.
+        when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
+
+        AccountService.Valuation valuation = accountService.valuation(account);
+
+        assertThat(valuation.anyPriced()).isTrue();
+        assertThat(valuation.allPriced()).isTrue();
+        assertThat(valuation.investedEur()).isEqualByComparingTo("360"); // 3 × 120, as before
+    }
+
+    @Test
     void aRecordedPriceStillValuesTheAccount_andIsReportedAsStale() {
         Account account = ownedAccount();
         AccountHolding holding = AccountHolding.builder()
