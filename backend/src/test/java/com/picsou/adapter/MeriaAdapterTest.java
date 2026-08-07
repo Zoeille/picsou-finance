@@ -233,14 +233,27 @@ class MeriaAdapterTest {
         "lendings,401", "lendings,403", "lendings,404", "lendings,429", "lendings,500",
     })
     void fetchPositions_failsWhenAnyEndpointReturnsAnHttpError(String endpoint, int status) {
+        // A perfectly healthy envelope behind a failing status, so the status is the only thing
+        // left to fail the sync. Every fixture here used to carry `success:false` as well, which
+        // meant an adapter ignoring the status code entirely and gating on the envelope alone
+        // passed all fifteen cases — the three branches below were never exercised.
         MeriaAdapter adapter = adapterRouting(path -> path.equals(endpoint)
-            ? response(HttpStatus.valueOf(status),
-                "{\"success\":false,\"error\":{\"code\":" + status + ",\"message\":\"NOPE\"}}")
+            ? response(HttpStatus.valueOf(status), "{\"success\":true,\"data\":[]}")
             : response(HttpStatus.OK, EMPTY));
 
+        // Each class of status has to keep its own message: they are the difference between
+        // telling the user their key was refused, that we were throttled, and that something
+        // else went wrong upstream.
+        String expected = switch (status) {
+            case 401, 403 -> "rejected the API key";
+            case 429 -> "rate-limited";
+            default -> "answered HTTP " + status;
+        };
         assertThatThrownBy(() -> adapter.fetchPositions(API_KEY, null))
-            .isInstanceOfSatisfying(SyncException.class,
-                error -> assertThat(error.getMessage()).doesNotContain(API_KEY));
+            .isInstanceOfSatisfying(SyncException.class, error -> {
+                assertThat(error.getMessage()).contains(expected);
+                assertThat(error.getMessage()).doesNotContain(API_KEY);
+            });
         assertThat(logs.list).noneSatisfy(event ->
             assertThat(event.getFormattedMessage()).contains(API_KEY));
     }
@@ -369,7 +382,16 @@ class MeriaAdapterTest {
 
         assertThatThrownBy(() -> adapter.fetchPositions(API_KEY, null))
             .isInstanceOf(SyncException.class);
-        assertThat(eventsAt(Level.ERROR)).isNotEmpty();
+        // The event this defect produced, not merely some ERROR: isNotEmpty() was satisfied by
+        // any unrelated error the adapter happened to log, which is no evidence that a bug on our
+        // side is reported as one.
+        assertThat(eventsAt(Level.ERROR)).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage())
+                .contains("failed unexpectedly")
+                .contains(IllegalStateException.class.getName());
+            // The stacktrace is the whole point of the level: without it this reads as an outage.
+            assertThat(event.getThrowableProxy()).isNotNull();
+        });
     }
 
     // ── Authentication ────────────────────────────────────────────────────────
