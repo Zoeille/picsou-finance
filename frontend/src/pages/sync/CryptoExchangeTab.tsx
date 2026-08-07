@@ -25,6 +25,7 @@ import {
   useRemoveCryptoExchange,
 } from '@/features/sync/hooks'
 import { extractErrorMessage } from '@/lib/errors'
+import { EXCHANGE_API_KEY_MAX_LENGTH, EXCHANGE_API_SECRET_MAX_LENGTH } from '@/lib/constants'
 
 export function CryptoExchangeTab() {
   const { t } = useTranslation()
@@ -60,7 +61,11 @@ export function CryptoExchangeTab() {
       {
         // Without this the backend's rejections (a wrong key, a missing or stray secret) leave
         // the form sitting there with no explanation at all.
-        onError: (err: unknown) => setAddError(extractErrorMessage(err) || t('sync.exchanges.connectError')),
+        // The fallback names only the credentials this exchange actually takes: telling a Meria
+        // user to check a secret they were never asked for sends them looking for a field that
+        // does not exist.
+        onError: (err: unknown) => setAddError(extractErrorMessage(err)
+          || t(requiresSecret ? 'sync.exchanges.connectError' : 'sync.exchanges.connectErrorKeyOnly')),
         onSuccess: () => {
           setApiKey('')
           setApiSecret('')
@@ -152,6 +157,7 @@ export function CryptoExchangeTab() {
                   onChange={e => setApiKey(e.target.value)}
                   placeholder={t('sync.exchanges.apiKey')}
                   required
+                  maxLength={EXCHANGE_API_KEY_MAX_LENGTH}
                 />
                 {!requiresSecret && (
                   <p className="text-xs text-muted-foreground">{t('sync.exchanges.apiKeyOnly')}</p>
@@ -169,11 +175,13 @@ export function CryptoExchangeTab() {
                       onChange={e => setApiSecret(e.target.value)}
                       placeholder={t('sync.exchanges.apiSecret')}
                       required
+                      maxLength={EXCHANGE_API_SECRET_MAX_LENGTH}
                       className="pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowSecret(prev => !prev)}
+                      aria-label={t(showSecret ? 'sync.exchanges.hideSecret' : 'sync.exchanges.showSecret')}
                       className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

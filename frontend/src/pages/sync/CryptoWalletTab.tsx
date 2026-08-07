@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api-client'
-import { syncKeys } from '@/features/sync/hooks'
+import {
+  useAddCryptoWallet,
+  useCryptoWallets,
+  useRemoveCryptoWallet,
+  useSyncCryptoWallet,
+} from '@/features/sync/hooks'
 import { formatDate } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -18,7 +21,7 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react'
-import type { WalletStatus, ChainType } from '@/types/api'
+import type { ChainType } from '@/types/api'
 import { SUPPORTED_CHAINS } from '@/types/api'
 import { extractErrorMessage, formatApiError } from '@/lib/errors'
 
@@ -33,60 +36,12 @@ function truncateAddress(address: string): string {
   return `${address.slice(0, 8)}...${address.slice(-4)}`
 }
 
-function useWallets() {
-  return useQuery<WalletStatus[]>({
-    // syncKeys.wallets(), not a local key: AddAccountModal adds wallets through
-    // useAddCryptoWallet, which invalidates that shared key — a private one here would leave
-    // this list stale until its 60s poll.
-    queryKey: syncKeys.wallets(),
-    queryFn: () => api.get('/crypto/wallet').then(r => r.data),
-    refetchInterval: 60_000,
-  })
-}
-
-function useAddWallet() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { chain: ChainType; address: string; label?: string }) =>
-      api.post('/crypto/wallet', body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: syncKeys.wallets() })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-    },
-  })
-}
-
-function useSyncWallet() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => api.post(`/crypto/wallet/${id}/sync`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: syncKeys.wallets() })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-    },
-  })
-}
-
-function useRemoveWallet() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => api.delete(`/crypto/wallet/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: syncKeys.wallets() })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-    },
-  })
-}
-
 export function CryptoWalletTab() {
   const { t } = useTranslation()
-  const { data: wallets, isLoading, error, refetch } = useWallets()
-  const addMutation = useAddWallet()
-  const syncMutation = useSyncWallet()
-  const removeMutation = useRemoveWallet()
+  const { data: wallets, isLoading, error, refetch } = useCryptoWallets()
+  const addMutation = useAddCryptoWallet()
+  const syncMutation = useSyncCryptoWallet()
+  const removeMutation = useRemoveCryptoWallet()
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [chain, setChain] = useState<ChainType>('EVM')

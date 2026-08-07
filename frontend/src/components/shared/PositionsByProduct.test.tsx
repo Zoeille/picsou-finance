@@ -6,7 +6,11 @@ import type { ExchangePositionResponse } from '@/types/api'
 vi.mock('react-i18next', () => ({
   // CurrencyDisplay reads i18n.resolvedLanguage to pick its number format.
   useTranslation: () => ({
-    t: (key: string) => key,
+    // Interpolation values are appended rather than dropped: the freshness marker's whole
+    // content is the date passed to it, and a mock returning the bare key would assert that a
+    // label exists while saying nothing about what it tells the user.
+    t: (key: string, options?: Record<string, unknown>) =>
+      options ? `${key} ${Object.values(options).join(' ')}` : key,
     i18n: { resolvedLanguage: 'fr', language: 'fr' },
   }),
 }))
@@ -19,6 +23,14 @@ const POSITIONS: ExchangePositionResponse[] = [
   // Same asset, two products — the split this component exists to show.
   { product: 'STAKING', ticker: 'BTC', quantity: 0.25, principal: 0.2, interest: 0.05, averageBuyIn: 80, currentPriceEur: 100, currentValueEur: 25, costBasisEur: 20, pnlEur: 5, pnlPercent: 25, priceAsOf: '2026-08-01', priceStale: false },
 ]
+
+/** The figure rendered next to a product's heading, which is the group's subtotal. */
+function subtotalFor(product: string): string {
+  const heading = screen.getByText(`positions.products.${product}`)
+  const header = heading.parentElement
+  if (!header) throw new Error(`no header for ${product}`)
+  return header.textContent!.replace(`positions.products.${product}`, '').trim()
+}
 
 function sectionFor(product: string) {
   const heading = screen.getByText(`positions.products.${product}`)
@@ -65,8 +77,52 @@ describe('PositionsByProduct', () => {
     // untouched account read as a large loss the morning the price API rate-limited us.
     render(<PositionsByProduct positions={[{ ...POSITIONS[0], priceStale: true, priceAsOf: '2026-07-31' }]} />)
 
-    expect(screen.getByLabelText('accounts.priceAsOf')).toBeInTheDocument()
+    expect(screen.getByLabelText(/accounts\.priceAsOf/)).toBeInTheDocument()
     expect(sectionFor('SPOT').getByText('+25.0%')).toBeInTheDocument()
+  })
+
+  it('names the recorded price’s own day, in a time zone behind UTC', () => {
+    // `priceAsOf` is a LocalDate. Parsed as an instant it lands on UTC midnight, so anywhere west
+    // of UTC the marker announced the day before the price was actually recorded — a figure the
+    // user is being asked to judge as stale, dated wrong.
+    vi.stubEnv('TZ', 'America/New_York')
+    try {
+      render(<PositionsByProduct positions={[{ ...POSITIONS[0], priceStale: true, priceAsOf: '2026-07-31' }]} />)
+
+      // Matched on the day alone, whichever component the active date format puts first.
+      const label = screen.getByLabelText(/accounts\.priceAsOf/).getAttribute('aria-label') ?? ''
+      expect(label).toMatch(/(^|\D)31(\D|$)/)
+      expect(label).not.toMatch(/(^|\D)30(\D|$)/)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('subtotals a product whose lines are all valued', () => {
+    render(<PositionsByProduct positions={POSITIONS} />)
+
+    expect(subtotalFor('SPOT')).toMatch(/50,00/)
+  })
+
+  it('shows no subtotal for a product whose assets could not be valued', () => {
+    // EUR 0 would read as "worth nothing" for what is really "we could not price it", in the
+    // same typography as a complete total.
+    render(<PositionsByProduct positions={[
+      { ...POSITIONS[0], currentPriceEur: null, currentValueEur: null, pnlEur: null, pnlPercent: null },
+    ]} />)
+
+    expect(subtotalFor('SPOT')).toBe('—')
+  })
+
+  it('shows no subtotal for a product only partly valued', () => {
+    // The dangerous case: a total that looks complete but silently omits the line that failed.
+    // 165,77 alone would be published as the staking total, 25 EUR short of the truth.
+    render(<PositionsByProduct positions={[
+      POSITIONS[1],
+      { ...POSITIONS[2], currentPriceEur: null, currentValueEur: null, pnlEur: null, pnlPercent: null },
+    ]} />)
+
+    expect(subtotalFor('STAKING')).toBe('—')
   })
 
   it('leaves a live price unmarked', () => {

@@ -50,15 +50,23 @@ export function PositionsByProduct({ positions }: PositionsByProductProps) {
       </CardHeader>
       <CardContent className="space-y-8">
         {groups.map(({ product, rows }) => {
-          // Only sum what is actually valued: a coin with no price must not read as EUR 0.
-          const subtotal = rows.reduce((sum, row) => sum + (row.currentValueEur ?? 0), 0)
+          // A subtotal is only honest when every line under it is valued. Coercing an unpriced
+          // line to 0 published a partial total in the same typography as a complete one: the
+          // reader has no way to tell EUR 0 for "worth nothing" from EUR 0 for "we don't know",
+          // and a product whose largest asset failed to price reads as a loss it never took.
+          // Same rule as the value column below, which shows a dash rather than a zero.
+          const subtotal = rows.some(row => row.currentValueEur == null)
+            ? null
+            : rows.reduce((sum, row) => sum + row.currentValueEur!, 0)
           const showYield = rows.some(row => row.interest != null)
 
           return (
             <div key={product} className="space-y-2">
               <div className="flex items-baseline justify-between gap-4">
                 <h3 className="text-sm font-medium">{t(`positions.products.${product}`)}</h3>
-                <CurrencyDisplay value={subtotal} className="text-sm font-medium" />
+                {subtotal != null
+                  ? <CurrencyDisplay value={subtotal} className="text-sm font-medium" />
+                  : <span className="text-sm font-medium">—</span>}
               </div>
 
               <div className="overflow-x-auto">

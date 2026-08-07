@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { cn, formatCurrency, formatDate, formatPercent, localeFromLanguage, parseDate, todayLabel } from './utils'
 
 describe('cn', () => {
@@ -53,6 +53,28 @@ describe('formatDate', () => {
     const result = formatDate('2025-03-15', 'fr-FR')
     expect(result).toBeTruthy()
     expect(typeof result).toBe('string')
+  })
+
+  describe('west of UTC', () => {
+    // A date-only value denotes a calendar day, not an instant: `new Date('2026-07-31')` is
+    // specified to parse as UTC midnight, so behind UTC every LocalDate the backend sends —
+    // priceAsOf, transaction dates, goal deadlines — used to render as the day before. The
+    // runner's own zone is UTC, where the bug is invisible, hence forcing one here.
+    // stubEnv rather than touching process.env: it is typed by vitest, so the app tsconfig keeps
+    // its node-free `types: ["vite/client"]`, and the restore is handled for us.
+    beforeEach(() => { vi.stubEnv('TZ', 'America/New_York') })
+    afterEach(() => { vi.unstubAllEnvs() })
+
+    it('keeps a date-only value on its own day', () => {
+      expect(formatDate('2026-07-31', 'fr-FR', 'iso')).toBe('31-07-2026')
+      expect(formatDate('2026-07-31', 'fr-FR', 'locale')).toBe('31/07/2026')
+    })
+
+    it('still honours the offset of a value that carries a time', () => {
+      // 02:00 UTC is the previous day at 22:00 in New York, and that shift is real information
+      // rather than a parsing artefact — the date-only rule must not swallow it.
+      expect(formatDate('2026-07-31T02:00:00Z', 'fr-FR', 'iso')).toBe('30-07-2026')
+    })
   })
 })
 

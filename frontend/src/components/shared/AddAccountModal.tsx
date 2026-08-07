@@ -15,7 +15,12 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { AccountForm } from '@/components/shared/AccountForm'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { BourseDirectPanel } from '@/components/sync/BourseDirectPanel'
-import { ACCOUNT_COLORS, TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
+import {
+  ACCOUNT_COLORS,
+  EXCHANGE_API_KEY_MAX_LENGTH,
+  EXCHANGE_API_SECRET_MAX_LENGTH,
+  TR_VERIFICATION_CODE_LENGTH,
+} from '@/lib/constants'
 import { extractErrorMessage, formatTrAuthError, getErrorStatus, getErrorDetail } from '@/lib/errors'
 import { useCreateAccount, useUpdateDebtMetadata } from '@/features/accounts/hooks'
 import {
@@ -417,7 +422,11 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
       {
         onSuccess: () => setDone(true),
         onError: (err: unknown) => {
-          setError(getErrorDetail(err) || (err as { message?: string })?.message || t('sync.exchanges.connectError'))
+          // The fallback names only the credentials this exchange actually takes — a Meria user
+          // told to check a secret goes looking for a field the form never showed them.
+          const fallback = requiresSecret
+            ? 'sync.exchanges.connectError' : 'sync.exchanges.connectErrorKeyOnly'
+          setError(getErrorDetail(err) || (err as { message?: string })?.message || t(fallback))
         },
       },
     )
@@ -469,6 +478,7 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={t('sync.exchanges.apiKey')}
             required
+            maxLength={EXCHANGE_API_KEY_MAX_LENGTH}
           />
           {!requiresSecret && (
             <p className="text-xs text-muted-foreground">{t('sync.exchanges.apiKeyOnly')}</p>
@@ -486,11 +496,13 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
                 onChange={(e) => setApiSecret(e.target.value)}
                 placeholder={t('sync.exchanges.apiSecret')}
                 required
+                maxLength={EXCHANGE_API_SECRET_MAX_LENGTH}
                 className="pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowSecret((p) => !p)}
+                aria-label={t(showSecret ? 'sync.exchanges.hideSecret' : 'sync.exchanges.showSecret')}
                 className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
