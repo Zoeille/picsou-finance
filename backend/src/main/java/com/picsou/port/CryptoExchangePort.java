@@ -64,7 +64,10 @@ public interface CryptoExchangePort {
      *                  or {@code null} when the exchange does not distinguish the two
      * @param interest  yield already included in {@code quantity} — a decomposition of it, never
      *                  something to add on top (Meria's cumulative {@code reward} is exactly this,
-     *                  and adding it shipped once as a double count)
+     *                  and adding it shipped once as a double count). Null exactly when
+     *                  {@code principal} is: the pair only means anything together, so a yield
+     *                  the exchange reports outside {@code [0, quantity]} must be dropped whole
+     *                  rather than published without the principal to read it against
      */
     record ExchangePosition(
         Product product,

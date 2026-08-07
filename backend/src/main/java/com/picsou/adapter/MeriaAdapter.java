@@ -155,10 +155,16 @@ public class MeriaAdapter implements CryptoExchangePort {
             String symbol = symbolOf(contract.currencyCode());
             BigDecimal quantity = contract.quantity();
             if (symbol == null || quantity.signum() <= 0) continue;
-            BigDecimal interest = nz(contract.reward());
-            // A contract cannot have earned more than it holds; if Meria ever says so, report the
-            // quantity and no decomposition rather than a negative principal.
-            BigDecimal principal = interest.compareTo(quantity) <= 0 ? quantity.subtract(interest) : null;
+            // interest is a decomposition of quantity, so it only means anything inside
+            // [0, quantity]: a contract cannot have earned more than it holds, and a negative
+            // reward would make principal exceed the quantity. Outside that range both halves are
+            // dropped — reporting the quantity with no decomposition. Keeping the reward while
+            // blanking the principal, as this did, published the impossible figure on its own,
+            // where a reader has nothing left to judge it against.
+            BigDecimal reward = nz(contract.reward());
+            boolean decomposable = reward.signum() >= 0 && reward.compareTo(quantity) <= 0;
+            BigDecimal interest = decomposable ? reward : null;
+            BigDecimal principal = decomposable ? quantity.subtract(reward) : null;
             byCurrency.merge(symbol,
                 new ExchangePosition(product, symbol, quantity, principal, interest),
                 MeriaAdapter::mergePositions);
@@ -166,13 +172,20 @@ public class MeriaAdapter implements CryptoExchangePort {
         return List.copyOf(byCurrency.values());
     }
 
-    /** Two contracts on the same currency and product read as one position. */
+    /**
+     * Two contracts on the same currency and product read as one position.
+     *
+     * <p>A merged position is decomposed only if both sides were: summing a known interest with an
+     * unknown one would report a total the principal cannot be reconciled against, which is the
+     * same half-stated figure the range check above exists to avoid.
+     */
     private static ExchangePosition mergePositions(ExchangePosition a, ExchangePosition b) {
-        BigDecimal principal = a.principal() == null || b.principal() == null
-            ? null
-            : a.principal().add(b.principal());
-        return new ExchangePosition(a.product(), a.symbol(), a.quantity().add(b.quantity()),
-            principal, nz(a.interest()).add(nz(b.interest())));
+        BigDecimal quantity = a.quantity().add(b.quantity());
+        if (a.principal() == null || b.principal() == null) {
+            return new ExchangePosition(a.product(), a.symbol(), quantity, null, null);
+        }
+        return new ExchangePosition(a.product(), a.symbol(), quantity,
+            a.principal().add(b.principal()), nz(a.interest()).add(nz(b.interest())));
     }
 
     @Override

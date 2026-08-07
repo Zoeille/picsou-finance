@@ -365,17 +365,23 @@ public class AccountService {
                 // what reported an untouched account as an 85% loss: the whole cost of the
                 // positions that failed to price stayed in the denominator.
                 continue;
+            } else if (h.getProviderValueEur() != null) {
+                // No ticker to price, but the connector reported the line's EUR value itself
+                // (Bourse Direct is the only one that does). That is a valuation, so count it and
+                // its cost basis below, and treat the account as priced: there was no lookup to
+                // fail here, and leaving the flag false turned dailySnapshots' one-outage refusal
+                // into a permanent one — such an account simply stopped receiving snapshots.
+                liveValue = liveValue.add(h.getProviderValueEur());
+                anyHoldingPriced = true;
+            } else {
+                // No ticker *and* no reported value: nothing can put a number on this line. Drop
+                // it from both sides, exactly as for a ticker the providers could not price —
+                // keeping its cost while its value is missing is the asymmetry that reported an
+                // untouched account as an 85% loss, and calling the account priced anyway would
+                // let dailySnapshots engrave that gap.
+                allHoldingsPriced = false;
+                continue;
             }
-            // Falls through with no quote only for a holding that has no ticker to price. Its
-            // cost basis is still counted, as it always was: the value it lacks comes from the
-            // provider's own figures, not from a lookup we could have made and failed.
-            //
-            // It counts as priced for the same reason. anyPriced answers "could anything here be
-            // valued at all", and dailySnapshots skips the day when the answer is no — a refusal
-            // meant for a transient provider outage. A holding with nothing to look up is not an
-            // outage and never becomes one, so leaving the flag false froze such an account's
-            // net-worth history permanently.
-            anyHoldingPriced = true;
 
             BigDecimal costBasis = providerCostBasisEur(h);
             if (costBasis == null && h.getAverageBuyIn() != null) {

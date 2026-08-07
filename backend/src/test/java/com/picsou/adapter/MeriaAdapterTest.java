@@ -128,6 +128,52 @@ class MeriaAdapterTest {
     }
 
     @Test
+    void fetchPositions_reportsNoDecompositionWhenTheRewardCannotBeOne() {
+        // interest decomposes the quantity, so a reward above it or below zero describes nothing
+        // real. The quantity is still counted — it is what the balance is built from — but both
+        // halves are dropped rather than publishing the impossible figure with the principal
+        // blanked out beside it, which left the reader nothing to judge it against.
+        MeriaAdapter adapter = adapterWith(EMPTY,
+            """
+            {"success":true,"data":[
+              {"currencyCode":"ATOM","amount":10,"reward":12,"lockedReward":0},
+              {"currencyCode":"KAVA","amount":10,"reward":-2,"lockedReward":0}
+            ]}""",
+            EMPTY);
+
+        List<ExchangePosition> positions = adapter.fetchPositions(API_KEY, null);
+
+        ExchangePosition atom = positionOf(positions, Product.STAKING, "ATOM");
+        assertThat(atom.quantity()).isEqualByComparingTo("10");
+        assertThat(atom.interest()).isNull();
+        assertThat(atom.principal()).isNull();
+
+        ExchangePosition kava = positionOf(positions, Product.STAKING, "KAVA");
+        assertThat(kava.quantity()).isEqualByComparingTo("10");
+        assertThat(kava.interest()).isNull();
+        assertThat(kava.principal()).isNull();
+    }
+
+    @Test
+    void fetchPositions_mergesTwoContractsAsUndecomposedWhenEitherIsUnusable() {
+        // Summing a known interest with an unknown one reports a total the principal cannot be
+        // reconciled against — the same half-stated figure, rebuilt by the merge.
+        MeriaAdapter adapter = adapterWith(EMPTY,
+            """
+            {"success":true,"data":[
+              {"currencyCode":"ATOM","amount":10,"reward":2,"lockedReward":0},
+              {"currencyCode":"ATOM","amount":10,"reward":12,"lockedReward":0}
+            ]}""",
+            EMPTY);
+
+        ExchangePosition atom = positionOf(adapter.fetchPositions(API_KEY, null), Product.STAKING, "ATOM");
+
+        assertThat(atom.quantity()).isEqualByComparingTo("20");
+        assertThat(atom.interest()).isNull();
+        assertThat(atom.principal()).isNull();
+    }
+
+    @Test
     void fetchPositions_countsAContractWithNoRewardFieldsAtAll() {
         MeriaAdapter adapter = adapterWith(EMPTY,
             "{\"success\":true,\"data\":[{\"currencyCode\":\"XTZ\",\"amount\":42}]}",

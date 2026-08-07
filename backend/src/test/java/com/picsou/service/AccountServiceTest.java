@@ -370,15 +370,18 @@ class AccountServiceTest {
     }
 
     @Test
-    void holdingsWithNoTickerToPriceCountAsValued() {
-        // A holding with no ticker is not an unpriced one: there is no lookup to fail, its value
-        // comes from the provider's own figures. Reporting anyPriced() == false for it made
+    void aHoldingTheProviderValuedItselfCountsAsPriced() {
+        // No ticker means no lookup to fail, so this is not an unpriced holding: the provider
+        // reported its EUR value directly. Reporting anyPriced() == false for it made
         // SchedulerService.dailySnapshots skip such an account *every* day — a refusal meant for
         // a transient outage, applied to a condition that never changes, so the account's
         // net-worth history simply stopped.
         Account account = ownedAccount();
         AccountHolding holding = AccountHolding.builder()
-            .quantity(new BigDecimal("3")).averageBuyIn(new BigDecimal("120")).build();
+            .quantity(new BigDecimal("3"))
+            .providerValueEur(new BigDecimal("500"))
+            .providerPnlEur(new BigDecimal("100"))
+            .build();
         // No price stub at all, deliberately: with nothing to look up there is no provider call
         // to make, which is the whole reason this holding is not an unpriced one.
         when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
@@ -387,7 +390,29 @@ class AccountServiceTest {
 
         assertThat(valuation.anyPriced()).isTrue();
         assertThat(valuation.allPriced()).isTrue();
-        assertThat(valuation.investedEur()).isEqualByComparingTo("360"); // 3 × 120, as before
+        // The flag must never outrun the figure: a snapshot taken on anyPriced() alone would
+        // otherwise record cash-only for an account holding 500 EUR of assets.
+        assertThat(valuation.liveEur()).isEqualByComparingTo("500");
+        assertThat(valuation.investedEur()).isEqualByComparingTo("400"); // 500 - 100 of gain
+    }
+
+    @Test
+    void aHoldingWithNoTickerAndNoProviderValueLeavesBothSidesAlone() {
+        // Nothing can value this line — no ticker to look up, no figure from the provider — so it
+        // must leave the account unpriced rather than contribute a cost with no value. Counting
+        // one side without the other is the -85% disagreement, and claiming the account is priced
+        // would let dailySnapshots engrave it.
+        Account account = ownedAccount();
+        AccountHolding holding = AccountHolding.builder()
+            .quantity(new BigDecimal("3")).averageBuyIn(new BigDecimal("120")).build();
+        when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
+
+        AccountService.Valuation valuation = accountService.valuation(account);
+
+        assertThat(valuation.anyPriced()).isFalse();
+        assertThat(valuation.allPriced()).isFalse();
+        assertThat(valuation.liveEur()).isEqualByComparingTo("0");
+        assertThat(valuation.investedEur()).isEqualByComparingTo("0");
     }
 
     @Test
