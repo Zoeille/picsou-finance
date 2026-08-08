@@ -276,6 +276,20 @@ class YahooFinancePriceProviderTest {
     }
 
     @Test
+    void getPricesEur_keysTheResultWithLocaleRootUppercase() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            var provider = providerWith(url -> url.toUpperCase(Locale.ROOT).contains("/IWDA.AS")
+                ? ASML_EUR : null, null);
+
+            assertThat(provider.getPricesEur(Set.of("iwda.as"))).containsKey("IWDA.AS");
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
     void historicalIntradayAndInstrumentType_neverCallYahoo_forNonSymbolTickers() {
         AtomicInteger calls = new AtomicInteger();
         var provider = providerWith(url -> null, calls);

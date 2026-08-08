@@ -91,6 +91,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
     public Map<String, BigDecimal> getPricesEur(Set<String> tickers) {
         Set<String> supported = tickers.stream()
             .filter(this::supports)
+            .map(ticker -> ticker.toUpperCase(Locale.ROOT))
             .collect(Collectors.toSet());
 
         if (supported.isEmpty()) return Map.of();
@@ -101,7 +102,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
         for (String ticker : supported) {
             try {
                 BigDecimal price = fetchSinglePrice(ticker);
-                if (price != null) result.put(ticker.toUpperCase(), price);
+                if (price != null) result.put(ticker, price);
             } catch (Exception ex) {
                 log.warn("Yahoo Finance price fetch failed for {}: {}", ticker, ex.getMessage());
             }
