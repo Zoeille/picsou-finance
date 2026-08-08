@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -381,12 +382,24 @@ public class TradeRepublicSyncService {
                     .quantity(agg.quantity())
                     .averageBuyIn(agg.averageBuyIn())
                     .currentPrice(agg.currentPrice())
+                    .quoteCurrency("EUR")
+                    .providerValueEur(providerValueEur(agg))
                     .lastSyncedAt(Instant.now())
                     .build());
             }
         }
 
         return Optional.of(accountService.toResponse(account));
+    }
+
+    private static BigDecimal providerValueEur(HoldingDedup.HoldingAgg agg) {
+        BigDecimal price = agg.currentPrice() != null && agg.currentPrice().signum() > 0
+            ? agg.currentPrice()
+            : agg.averageBuyIn();
+        if (price == null || price.signum() <= 0) {
+            return null;
+        }
+        return price.multiply(agg.quantity()).setScale(8, RoundingMode.HALF_UP);
     }
 
     private String colorFor(AccountType type) {

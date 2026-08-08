@@ -57,6 +57,28 @@ holdings for a TR account are deleted and recreated on every WebSocket sync; if 
 portfolio is returned with an empty position list, stale holdings are cleared. The
 CSV fallback imports balances only and therefore does not replace holdings.
 
+### Broker valuation fallback (`provider_value_eur`)
+
+Each persisted holding also stores TR's own EUR valuation of the position in
+`provider_value_eur`, with `quote_currency = "EUR"`. The value is
+`currentPrice × quantity`, falling back to `averageBuyIn × quantity` when TR's
+ticker stream returned no live price — mirroring exactly how `TradeRepublicAdapter`
+already builds the account-level `TrAccountData.balanceEur`, so the sum of the
+holdings agrees with the account total by construction.
+
+This exists because `AccountService.liveBalanceEur` re-values holdings from Yahoo
+and **drops** any it cannot price, while the invested side keeps their full cost
+basis — an asymmetry that fabricates a loss (GH issue #76). TR positions Yahoo
+cannot resolve (unmappable ISINs, thin US OTC listings for Irish/Luxembourg UCITS
+ETFs — see [ISIN_TO_TICKER_CONVERSION.md](./ISIN_TO_TICKER_CONVERSION.md) and GH
+issue #78) now fall back to this broker figure instead of vanishing.
+
+Treating TR quotes as EUR is not a new assumption: the adapter already sums them
+unconverted into `balanceEur`. Writing `quote_currency` makes that assumption
+explicit in the schema rather than implicit in the adapter, which is what the
+[FX-conversion ADR](../decisions/2026-05-19-yahoo-fx-conversion.md) asked for when
+it rejected using the untagged `current_price` column as a fallback.
+
 ### CSV import fallback
 
 `TradeRepublicSyncService.importCsv()` parses a CSV file with columns `name,type,balance`. Accounts are deduplicated via a stable external ID derived from the name (`tr_csv_` prefix + slugified name).

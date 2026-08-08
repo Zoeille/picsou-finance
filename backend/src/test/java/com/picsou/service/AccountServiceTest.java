@@ -224,6 +224,23 @@ class AccountServiceTest {
     }
 
     @Test
+    void liveBalanceEur_usesBrokerPositionValue_whenLivePriceIsUnavailable() {
+        Account account = ownedAccount();
+        AccountHolding priced = AccountHolding.builder()
+            .ticker("AAPL").quantity(new BigDecimal("5")).build();
+        AccountHolding brokerValued = AccountHolding.builder()
+            .ticker("PHYMF").quantity(new BigDecimal("10"))
+            .providerValueEur(new BigDecimal("840")).build();
+        when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(priced, brokerValued));
+        when(priceService.getPriceEur("AAPL")).thenReturn(new BigDecimal("200"));
+        when(priceService.getPriceEur("PHYMF")).thenReturn(null);
+
+        BigDecimal result = accountService.liveBalanceEur(account);
+
+        assertThat(result).isEqualByComparingTo("1840"); // 5 × 200 + broker's 840
+    }
+
+    @Test
     void liveBalanceEur_cashAccount_convertsStoredBalance() {
         Account cash = Account.builder()
             .id(2L)

@@ -301,6 +301,11 @@ public class AccountService {
             BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
             if (livePrice == null) {
                 allHoldingsPriced = false;
+                BigDecimal providerValue = h.getProviderValueEur();
+                if (providerValue != null) {
+                    liveValue = liveValue.add(providerValue);
+                    continue;
+                }
                 // Skipping is deliberate -- a held-but-unpriced asset must not be valued at a
                 // guess -- but it is not free: during a price-provider outage the balance (and
                 // any snapshot taken from it) silently shrinks by whatever those holdings were
