@@ -36,6 +36,9 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final Duration FX_CACHE_TTL = Duration.ofMinutes(15);
 
+    private static final java.util.regex.Pattern SYMBOL_PATTERN =
+        java.util.regex.Pattern.compile("\\^?[A-Z0-9][A-Z0-9.=-]{0,19}");
+
     // Tickers that are handled by CoinGecko — we skip those
     private static final Set<String> CRYPTO_TICKERS = Set.of(
         "BTC", "ETH", "SOL", "BNB", "ADA", "XRP", "DOGE", "DOT", "MATIC", "AVAX"
@@ -73,6 +76,11 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
         // ISIN format: AA########X (2 letters, 9 digits, 1 check digit)
         if (upper.length() == 12 && upper.matches("[A-Z]{2}[A-Z0-9]{9}[A-Z0-9]")) {
             log.debug("Rejecting unsupported ISIN: {}", ticker);
+            return false;
+        }
+
+        if (!SYMBOL_PATTERN.matcher(upper).matches()) {
+            log.debug("Rejecting non-symbol ticker: {}", ticker);
             return false;
         }
 

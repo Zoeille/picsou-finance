@@ -34,6 +34,9 @@ public class OpenFigiIsinConverter {
     private static final java.util.regex.Pattern ISIN_PATTERN =
         java.util.regex.Pattern.compile("[A-Z]{2}[A-Z0-9]{9}[A-Z0-9]");
 
+    private static final java.util.regex.Pattern SYMBOL_PATTERN =
+        java.util.regex.Pattern.compile("[A-Z0-9][A-Z0-9.-]{0,14}");
+
     /**
      * Whether {@code s} looks like an ISIN (2-letter country code + 9 alphanumerics
      * + 1 check digit = 12 chars). Case-insensitive; trims surrounding whitespace.
@@ -254,7 +257,7 @@ public class OpenFigiIsinConverter {
      * 3. EU exchanges — EUR pricing
      * 4. Any known exchange
      */
-    private TickerResult pickBest(String isin, List<Map<String, Object>> entries) {
+    TickerResult pickBest(String isin, List<Map<String, Object>> entries) {
         // Build a map: exchCode → (yahooTicker, name)
         Map<String, String[]> byExchange = new java.util.LinkedHashMap<>();
         for (Map<String, Object> entry : entries) {
@@ -262,6 +265,7 @@ public class OpenFigiIsinConverter {
             String exchCode = (String) entry.get("exchCode");
             String name = (String) entry.get("name");
             if (ticker == null || ticker.isBlank() || exchCode == null) continue;
+            if (!isPlausibleSymbol(ticker)) continue;
 
             String suffix = EXCHANGE_SUFFIX.get(exchCode);
             if (suffix != null && !byExchange.containsKey(exchCode)) {
@@ -306,12 +310,16 @@ public class OpenFigiIsinConverter {
         for (Map<String, Object> entry : entries) {
             String ticker = (String) entry.get("ticker");
             String name = (String) entry.get("name");
-            if (ticker != null && !ticker.isBlank()) {
+            if (ticker != null && !ticker.isBlank() && isPlausibleSymbol(ticker)) {
                 return new TickerResult(ticker, name);
             }
         }
 
         return null;
+    }
+
+    private static boolean isPlausibleSymbol(String ticker) {
+        return SYMBOL_PATTERN.matcher(ticker.trim().toUpperCase(Locale.ROOT)).matches();
     }
 
     record MappingJob(

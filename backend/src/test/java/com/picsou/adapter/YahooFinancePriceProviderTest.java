@@ -236,4 +236,38 @@ class YahooFinancePriceProviderTest {
         assertThat(prices.values().stream().map(BigDecimal::doubleValue).toList())
             .anySatisfy(v -> assertThat(v).isCloseTo(18.0, within(0.01)));
     }
+
+    @Test
+    void supports_rejectsStringsThatAreNotSymbols() {
+        var provider = new YahooFinancePriceProvider();
+
+        assertThat(provider.supports("AIRBAL 14.5 08/14/29 REGS")).isFalse();
+        assertThat(provider.supports("AIR BALTIC")).isFalse();
+        assertThat(provider.supports("A/B")).isFalse();
+        assertThat(provider.supports("THIS_IS_NOT_A_TICKER_AT_ALL")).isFalse();
+    }
+
+    @Test
+    void supports_acceptsRealYahooSymbolShapes() {
+        var provider = new YahooFinancePriceProvider();
+
+        assertThat(provider.supports("PHYMF")).isTrue();
+        assertThat(provider.supports("IWDA.AS")).isTrue();
+        assertThat(provider.supports("MC.PA")).isTrue();
+        assertThat(provider.supports("BRK-B")).isTrue();
+        assertThat(provider.supports("1810.HK")).isTrue();
+        assertThat(provider.supports("USDEUR=X")).isTrue();
+        assertThat(provider.supports("^GSPC")).isTrue();
+    }
+
+    @Test
+    void getPricesEur_neverCallsYahoo_forNonSymbolTickers() {
+        AtomicInteger calls = new AtomicInteger();
+        var provider = providerWith(url -> null, calls);
+
+        Map<String, BigDecimal> prices = provider.getPricesEur(Set.of("AIRBAL 14.5 08/14/29 REGS"));
+
+        assertThat(prices).isEmpty();
+        assertThat(calls.get()).isZero();
+    }
 }

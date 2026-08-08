@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +110,29 @@ class PriceServiceTest {
         when(priceSnapshotRepository.findByTickerAndDate(any(), any())).thenReturn(Optional.empty());
 
         assertThat(priceService.backfillHistoricalPrices(Set.of("AAPL"), from)).isEqualTo(1);
+    }
+
+    @Test
+    void getPriceEur_cachesAMiss_soAnUnresolvableTickerIsFetchedOnce() {
+        when(coinGecko.supports("MWRDF")).thenReturn(false);
+        when(yahoo.getPricesEur(Set.of("MWRDF"))).thenReturn(Map.of());
+
+        assertThat(priceService.getPriceEur("MWRDF")).isNull();
+        assertThat(priceService.getPriceEur("MWRDF")).isNull();
+        assertThat(priceService.getPriceEur("MWRDF")).isNull();
+
+        verify(yahoo, times(1)).getPricesEur(Set.of("MWRDF"));
+    }
+
+    @Test
+    void getPriceEur_stillCachesAndReturnsHits() {
+        when(coinGecko.supports("AAPL")).thenReturn(false);
+        when(yahoo.getPricesEur(Set.of("AAPL"))).thenReturn(Map.of("AAPL", new BigDecimal("200")));
+
+        assertThat(priceService.getPriceEur("AAPL")).isEqualByComparingTo("200");
+        assertThat(priceService.getPriceEur("AAPL")).isEqualByComparingTo("200");
+
+        verify(yahoo, times(1)).getPricesEur(Set.of("AAPL"));
     }
 
     /** Runs the backfill and fails loudly if it throws — the ApplicationRunner contract. */
