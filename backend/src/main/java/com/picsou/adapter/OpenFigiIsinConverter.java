@@ -261,11 +261,10 @@ public class OpenFigiIsinConverter {
         // Build a map: exchCode → (yahooTicker, name)
         Map<String, String[]> byExchange = new java.util.LinkedHashMap<>();
         for (Map<String, Object> entry : entries) {
-            String ticker = (String) entry.get("ticker");
+            String ticker = normalizeSymbol((String) entry.get("ticker"));
             String exchCode = (String) entry.get("exchCode");
             String name = (String) entry.get("name");
-            if (ticker == null || ticker.isBlank() || exchCode == null) continue;
-            if (!isPlausibleSymbol(ticker)) continue;
+            if (ticker == null || exchCode == null) continue;
 
             String suffix = EXCHANGE_SUFFIX.get(exchCode);
             if (suffix != null && !byExchange.containsKey(exchCode)) {
@@ -308,9 +307,9 @@ public class OpenFigiIsinConverter {
 
         // 5. Raw ticker from first entry
         for (Map<String, Object> entry : entries) {
-            String ticker = (String) entry.get("ticker");
+            String ticker = normalizeSymbol((String) entry.get("ticker"));
             String name = (String) entry.get("name");
-            if (ticker != null && !ticker.isBlank() && isPlausibleSymbol(ticker)) {
+            if (ticker != null) {
                 return new TickerResult(ticker, name);
             }
         }
@@ -318,8 +317,12 @@ public class OpenFigiIsinConverter {
         return null;
     }
 
-    private static boolean isPlausibleSymbol(String ticker) {
-        return SYMBOL_PATTERN.matcher(ticker.trim().toUpperCase(Locale.ROOT)).matches();
+    private static String normalizeSymbol(String ticker) {
+        if (ticker == null) {
+            return null;
+        }
+        String normalized = ticker.trim().toUpperCase(Locale.ROOT);
+        return SYMBOL_PATTERN.matcher(normalized).matches() ? normalized : null;
     }
 
     record MappingJob(

@@ -64,7 +64,11 @@ Each persisted holding also stores TR's own EUR valuation of the position in
 `currentPrice × quantity`, falling back to `averageBuyIn × quantity` when TR's
 ticker stream returned no live price — mirroring exactly how `TradeRepublicAdapter`
 already builds the account-level `TrAccountData.balanceEur`, so the sum of the
-holdings agrees with the account total by construction.
+holdings agrees with the **securities subtotal** of that figure by construction.
+For a compte-titres that subtotal *is* the account total; for a PEA the total also
+includes a scoped cash amount Picsou never persists, so the holdings sum falls
+short of `current_balance` by exactly that cash. This is why `V64` can only
+backfill accounts that reconcile, and why PEAs are left to self-heal on sync.
 
 This exists because `AccountService.liveBalanceEur` re-values holdings from Yahoo
 and **drops** any it cannot price, while the invested side keeps their full cost

@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -258,6 +259,37 @@ class YahooFinancePriceProviderTest {
         assertThat(provider.supports("1810.HK")).isTrue();
         assertThat(provider.supports("USDEUR=X")).isTrue();
         assertThat(provider.supports("^GSPC")).isTrue();
+    }
+
+    @Test
+    void supports_normalizesWithLocaleRoot_soATurkishDefaultLocaleDoesNotBreakTickers() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            var provider = new YahooFinancePriceProvider();
+
+            assertThat(provider.supports("iwda.as")).isTrue();
+            assertThat(provider.supports("isin")).isTrue();
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
+    void historicalIntradayAndInstrumentType_neverCallYahoo_forNonSymbolTickers() {
+        AtomicInteger calls = new AtomicInteger();
+        var provider = providerWith(url -> null, calls);
+        String bond = "AIRBAL 14.5 08/14/29 REGS";
+
+        assertThat(provider.getHistoricalPricesEur(bond, LocalDate.now().minusDays(7), LocalDate.now()))
+            .isEmpty();
+        assertThat(provider.getIntradayPricesEur(bond,
+            java.time.LocalDateTime.now().minusDays(1), java.time.LocalDateTime.now())).isEmpty();
+        assertThat(provider.getInstrumentType(bond)).isEmpty();
+        assertThat(provider.getHistoricalPricesEur("LU3170240538",
+            LocalDate.now().minusDays(7), LocalDate.now())).isEmpty();
+
+        assertThat(calls.get()).isZero();
     }
 
     @Test

@@ -120,4 +120,23 @@ class OpenFigiIsinConverterTest {
         assertThat(equity).isNotNull();
         assertThat(equity.ticker()).isEqualTo("MBG.DE");
     }
+
+    @Test
+    void pickBest_returnsTheNormalizedSymbol_notTheRawOpenFigiValue() {
+        OpenFigiIsinConverter converter = new OpenFigiIsinConverter(new CoinGeckoPriceProvider());
+
+        List<Map<String, Object>> padded = List.of(Map.of(
+            "ticker", " mbg ",
+            "exchCode", "GY",
+            "name", "MERCEDES-BENZ GROUP AG"));
+
+        assertThat(converter.pickBest("DE0007100000", padded).ticker()).isEqualTo("MBG.DE");
+
+        List<Map<String, Object>> unknownExchange = List.of(Map.of(
+            "ticker", " aapl ",
+            "exchCode", "NOT LISTED",
+            "name", "APPLE INC"));
+
+        assertThat(converter.pickBest("US0378331005", unknownExchange).ticker()).isEqualTo("AAPL");
+    }
 }

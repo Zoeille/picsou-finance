@@ -65,7 +65,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
         if (ticker == null || ticker.isBlank()) {
             return false;
         }
-        String upper = ticker.toUpperCase();
+        String upper = ticker.toUpperCase(Locale.ROOT);
 
         // Don't support crypto tickers
         if (CRYPTO_TICKERS.contains(upper)) {
@@ -138,7 +138,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
      * chart endpoint already used for prices. Empty if unavailable.
      */
     public Optional<String> getInstrumentType(String ticker) {
-        if (ticker == null || ticker.isBlank()) return Optional.empty();
+        if (!supports(ticker)) return Optional.empty();
         try {
             YahooResponse response = webClient.get()
                 .uri("/v8/finance/chart/{ticker}?range=1d&interval=1d", ticker)
@@ -194,7 +194,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
             return gbpRate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP);
         }
 
-        String upper = currency.toUpperCase();
+        String upper = currency.toUpperCase(Locale.ROOT);
         CachedFx cached = fxCache.get(upper);
         if (cached != null && cached.isFresh()) {
             return cached.rate();
@@ -258,6 +258,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
      * Uses interval=1h for intraday granularity.
      */
     public Map<LocalDateTime, BigDecimal> getIntradayPricesEur(String ticker, LocalDateTime from, LocalDateTime to) {
+        if (!supports(ticker)) return Map.of();
         try {
             YahooResponse response = webClient.get()
                 .uri("/v8/finance/chart/{ticker}?range=1d&interval=1h", ticker)
@@ -317,6 +318,8 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
      * Returns a map of date -> priceEur.
      */
     public Map<LocalDate, BigDecimal> getHistoricalPricesEur(String ticker, LocalDate from, LocalDate to) {
+        if (!supports(ticker)) return Map.of();
+
         long days = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
         String range = days <= 7 ? "5d" : days <= 30 ? "1mo" : days <= 90 ? "3mo" : days <= 365 ? "1y" : "5y";
 
