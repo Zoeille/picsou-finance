@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -333,11 +334,18 @@ public class SyncService {
                 .findFirst());
     }
 
-    /** Drops the PSU-type segment so old and new institution ids compare equal. */
+    /**
+     * Drops the PSU-type segment so old and new institution ids compare equal, and
+     * normalizes what is left: a stored id was written from the catalog name of the
+     * day, so a later casing change on the provider side would otherwise miss this
+     * tier and fall through to the name-only one, losing the country preference.
+     */
     private static String institutionKey(String institutionId) {
         if (institutionId == null) return "";
         String[] parts = institutionId.split("::");
-        return parts.length > 1 ? parts[0] + "::" + parts[1] : institutionId;
+        return parts.length > 1
+            ? parts[0].trim().toLowerCase(Locale.ROOT) + "::" + parts[1].trim().toUpperCase(Locale.ROOT)
+            : institutionId.trim().toLowerCase(Locale.ROOT);
     }
 
     /** institutionId format: "BankName::FR::personal" (name::country::psuType) — see EnableBankingBankConnector. */

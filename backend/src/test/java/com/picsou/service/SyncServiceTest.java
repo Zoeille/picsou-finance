@@ -264,6 +264,43 @@ class SyncServiceTest {
         assertThat(requisition.getLogoUrl()).isEqualTo("https://logos.example/revolut-fr.png");
     }
 
+    /**
+     * Same tier as the test above, with the stored name in a different case than the
+     * catalog now returns. A stored id was written from the catalog name of the day, so
+     * casing drift on the provider side is ordinary; matching it case-sensitively drops
+     * to the name-only tier, which takes the first result and so can hand back a logo
+     * from another country -- LT here, for an FR requisition.
+     */
+    @Test
+    void resyncAll_backfillMatchesLegacyIdWhoseNameCaseDrifted() {
+        Long memberId = 24L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        Requisition requisition = Requisition.builder()
+            .id(24L)
+            .member(member)
+            .requisitionId("session-24")
+            .institutionId("revolut::FR")
+            .institutionName("Revolut")
+            .logoUrl(null)
+            .status(RequisitionStatus.LINKED)
+            .build();
+
+        when(requisitionRepository.findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId))
+            .thenReturn(List.of(requisition));
+
+        InstitutionData wrongCountry = new InstitutionData("Revolut::LT::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-lt.png", "LT", "personal");
+        InstitutionData rightCountry = new InstitutionData("Revolut::FR::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-fr.png", "FR", "personal");
+        when(bankConnector.searchInstitutions("Revolut", "FR")).thenReturn(List.of(wrongCountry, rightCountry));
+        when(bankConnector.fetchBalances("session-24")).thenReturn(List.of());
+
+        syncService.resyncAll(memberId);
+
+        assertThat(requisition.getLogoUrl()).isEqualTo("https://logos.example/revolut-fr.png");
+    }
+
     /** A failed institution search during backfill must not break the resync loop. */
     @Test
     void resyncAll_backfillFailureDoesNotBreakSync() {

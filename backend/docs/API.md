@@ -518,7 +518,7 @@ consent step.
 **Request body:**
 | Field | Type | Description |
 |-------|------|-------------|
-| `institutionId` | `string` | Bank identifier from `/institutions`, passed back verbatim — it encodes the country and PSU type |
+| `institutionId` | `string` | Bank identifier from `/institutions`, passed back verbatim — it encodes the bank name, country, and PSU type |
 | `institutionName` | `string` | Display name |
 
 **Response `200` — `InitiateResponse`:**

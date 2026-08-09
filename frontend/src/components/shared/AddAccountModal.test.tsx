@@ -178,6 +178,21 @@ describe('AddAccountModal bank wizard', () => {
     expect(screen.getByText('BNP Paribas')).toBeInTheDocument()
     expect(screen.queryByText('sync.banks.proBadge')).not.toBeInTheDocument()
   })
+
+  /**
+   * resolvePsuType falls through to the provider's own first value when it offers
+   * neither personal nor business, and a requisition written before PSU types were
+   * modelled carries none at all. The badge claims a specific thing about a bank --
+   * an unrecognised value is not evidence for it, so it stays off.
+   */
+  it('leaves an institution with an unknown PSU type unbadged', () => {
+    openBankWizardWith([
+      { id: 'Swan::FR::corporate', name: 'Swan', bic: 'SWNBFR22', logoUrl: null, country: 'FR', psuType: 'corporate' },
+    ])
+
+    expect(screen.getByText('Swan')).toBeInTheDocument()
+    expect(screen.queryByText('sync.banks.proBadge')).not.toBeInTheDocument()
+  })
 })
 
 describe('AddAccountModal Bourse Direct wizard', () => {

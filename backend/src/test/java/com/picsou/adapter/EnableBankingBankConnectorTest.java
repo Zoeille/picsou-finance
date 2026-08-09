@@ -109,6 +109,24 @@ class EnableBankingBankConnectorTest {
         assertThat(results.get(0).logoUrl()).isEqualTo("https://logos.example/swan.png");
     }
 
+    /**
+     * The reverse order of the test above: keeping the first entry unconditionally would
+     * publish a null logo for a bank whose second listing carries one, and the picker has
+     * no second chance -- it renders whatever this returns.
+     */
+    @Test
+    void toInstitutions_keepsTheLogoWhenOnlyTheLaterDuplicateCarriesOne() {
+        var logoless = new EnableBankingBankConnector.AspspResponse(
+            "Swan", "SWNBFR22", null, "FR", List.of("business"));
+        var withLogo = new EnableBankingBankConnector.AspspResponse(
+            "Swan", "SWNBFR22", "https://logos.example/swan.png", "FR", List.of("business"));
+
+        var results = EnableBankingBankConnector.toInstitutions(List.of(logoless, withLogo), "swan", "FR");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).logoUrl()).isEqualTo("https://logos.example/swan.png");
+    }
+
     @Test
     void toInstitutions_fallsBackToTheRequestedCountryWhenTheAspspOmitsIt() {
         var noCountry = new EnableBankingBankConnector.AspspResponse(

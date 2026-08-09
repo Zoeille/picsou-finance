@@ -360,7 +360,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
                 <div className="flex min-w-0 items-center gap-2">
                   <InstitutionLogo logoUrl={inst.logoUrl} />
                   <span className="min-w-0 text-sm font-medium leading-5">{inst.name}</span>
-                  {inst.psuType !== 'personal' && (
+                  {inst.psuType === 'business' && (
                     <Badge variant="outline" title={t('sync.banks.proBadgeTitle')}>
                       {t('sync.banks.proBadge')}
                     </Badge>

@@ -42,7 +42,10 @@ offers it — so every retail bank behaves exactly as before — otherwise the
 bank's first declared type, passed through verbatim rather than coerced to
 `business`, so an unrecognised provider value can't turn into an `/auth` the API
 rejects. The resolved type is carried on `InstitutionData.psuType`, surfaced in
-both bank pickers as a **Pro** badge, and echoed back on `/auth`.
+both bank pickers as a **Pro** badge, and echoed back on `/auth`. The badge is
+keyed on `business` exactly, not on "not `personal`": the pass-through above means
+an unrecognised value can reach the picker, and it is not evidence that the bank is
+a professional one — so it renders unbadged.
 
 **Institution id format.** The id is an opaque round-trip token the client never
 parses, so the PSU type rides along inside it rather than as a second field the
@@ -173,7 +176,7 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 ## Tests
 
 - `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow, and logo matching for both the current and the legacy institution id format
-- `AddAccountModal.test.tsx` -- the Pro badge shows for a business-only institution and not for a retail one
+- `AddAccountModal.test.tsx` -- the Pro badge shows for a business-only institution, and not for a retail one nor for an unrecognised PSU type
 - `EnableBankingConfigProviderTest` -- DB/env resolution precedence, and `keyId()` falling back to the Application ID vs honoring an explicitly-configured value
 - `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider, plus the pure catalog helpers: `resolvePsuType` (business-only banks, the Swan regression), `toInstitutions` (composite id, de-duplication, country fallback) and `parseInstitutionId` (three-segment, legacy two-segment, unexpected PSU segment)
 - `AdminControllerTest` -- `getSettings` reads the resolved provider; `updateEnableBanking` delegates the 2-arg writer

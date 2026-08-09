@@ -311,7 +311,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             String psuType = resolvePsuType(a.psuTypes());
             String id = buildInstitutionId(a.name(), country, psuType);
 
-            byId.putIfAbsent(id, new InstitutionData(id, a.name(), a.bic(), a.logo(), country, psuType));
+            InstitutionData candidate = new InstitutionData(id, a.name(), a.bic(), a.logo(), country, psuType);
+            byId.merge(id, candidate, (existing, duplicate) ->
+                existing.logoUrl() == null && duplicate.logoUrl() != null ? duplicate : existing);
             if (byId.size() == MAX_INSTITUTION_RESULTS) break;
         }
 
