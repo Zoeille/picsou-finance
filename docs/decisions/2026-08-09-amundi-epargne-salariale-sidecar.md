@@ -11,10 +11,16 @@ Banking cannot reach it, and the disabled Powens adapter collapses PERCO into a
 lineless `savings` product. Amundi is the largest provider in that market.
 
 Amundi exposes no public API. Its espace épargnant is a SPA calling endpoints
-that return exactly what is needed, but reaching them means getting past a login
-that is **reCAPTCHA v2-gated** and, since July 2024, protected by a **mandatory
-second factor on every login** — an app push or an SMS code. There is no
-long-lived credential a user can paste, and no unattended path at all.
+that return exactly what is needed, but reaching them means getting past a
+two-screen login carrying an anti-robot check and, since July 2024, a
+**mandatory second factor on every login** — an app push or an SMS code. There
+is no long-lived credential a user can paste, and no unattended path at all.
+
+The anti-robot check turned out to be **FriendlyCaptcha**, a proof-of-work
+widget that solves itself in about a second under headless Chromium. That is a
+materially easier problem than the reCAPTCHA v2 the woob module documents, which
+would have needed a paid solving service; the portals differ, and the live site
+was checked rather than trusted.
 
 That last point is the one that decides the design. Every earlier connector ADR
 in this repo has preferred whatever survives unattended operation; here nothing
@@ -32,11 +38,11 @@ least fragile way to run an inherently interactive sign-in".
 3. The bearer is harvested by watching the requests the SPA itself makes, not by
    reading an Amundi-internal storage key. Amundi keeps it in memory, so storage
    state alone does not re-authenticate.
-4. The browser is launched with `--disable-blink-features=AutomationControlled`
-   and a realistic user agent, and does *not* block images. A default Playwright
-   launch advertises `HeadlessChrome` and reliably escalates to an image
-   challenge. When the challenge appears anyway, it surfaces as its own
-   `CAPTCHA_BLOCKED` code rather than as bad credentials.
+4. Credentials are entered as real keystrokes, never `fill()`: the inputs are
+   masked and register per keystroke, so a bulk fill leaves the form invalid and
+   the submit button disabled. The consent overlay is answered first, because it
+   intercepts pointer events. Should the captcha ever stop producing a token, it
+   surfaces as its own `CAPTCHA_BLOCKED` code rather than as bad credentials.
 5. Authentication only *queues* the import. The job state
    (`IDLE → QUEUED → RUNNING → SUCCESS/FAILED`) is persisted, jobs are fenced by
    session id, and jobs interrupted by a restart are failed at startup.
@@ -57,10 +63,11 @@ least fragile way to run an inherently interactive sign-in".
   the 2FA prompt it avoids, and it asks a non-technical user to open devtools.
 
 ### Plain HTTP client plus a captcha-solving service
-- **Pros**: no browser; this is what woob does.
+- **Pros**: no browser; this is what woob does for the portal it targets.
 - **Cons**: sends credentials-adjacent traffic through a third party, costs money
   per solve, and puts a paid external dependency in the path of a self-hosted app.
-  Non-starter for this project.
+  Non-starter for this project — and moot here, since FriendlyCaptcha needs no
+  solver at all.
 
 ### Import the downloadable "relevé de situation"
 - **Pros**: no automation against Amundi at all; nothing to break when they
@@ -93,8 +100,9 @@ implementation cost for the only user experience that is actually repeatable.
 - An unofficial integration that will need maintenance whenever Amundi ships a
   front-end change; selector lists are redundant and failures are typed to make
   that diagnosable rather than mysterious.
-- The captcha may harden further and lock the connector out entirely. That risk
-  is not eliminable, only reported honestly through `CAPTCHA_BLOCKED`.
+- Amundi could swap FriendlyCaptcha for something interactive and lock the
+  connector out entirely. That risk is not eliminable, only reported honestly
+  through `CAPTCHA_BLOCKED`.
 - One more container, and a single replica, because pending authentication
   attempts live in the sidecar's process memory.
 - No unattended first sync: the daily scheduler can only refresh a session that

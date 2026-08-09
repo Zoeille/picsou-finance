@@ -16,12 +16,19 @@ units, unit value and valuation. It is unofficial, read-only, and fails closed.
 
 ## How it works
 
-Authentication is interactive and cannot be otherwise: Amundi gates its login
-behind reCAPTCHA v2 and, since July 2024, a mandatory second factor on **every**
-login — a push validation in the "Mon Épargne" app, or an SMS code. There is no
-token to paste and no unattended path. A Playwright sidecar therefore drives a
-real Chromium through the login, and the resulting session is persisted
+Authentication is interactive and cannot be otherwise: Amundi runs an anti-robot
+check on the password screen and, since July 2024, a mandatory second factor on
+**every** login — a push validation in the "Mon Épargne" app, or an SMS code.
+There is no token to paste and no unattended path. A Playwright sidecar therefore
+drives a real Chromium through the login, and the resulting session is persisted
 encrypted so later syncs skip the second factor until Amundi invalidates it.
+
+Sign-in is two screens on an Angular SPA at `/#/connexion`: the account number
+with a "Suivant" button, then the password with "Connexion". The anti-robot
+check is **FriendlyCaptcha**, a proof-of-work widget that starts by itself and
+drops its token into a hidden `input[name=captcha]` — no image grid, and it
+settles in about a second under headless Chromium. Verified against the live
+site on 2026-08-09.
 
 Everything the connector needs comes from one upstream call,
 `GET /api/individu/positionsFonds`, authenticated with the `X-noee-authorization`
@@ -90,7 +97,7 @@ executor
 
 | Choice | Why | Rejected alternative |
 |---|---|---|
-| Playwright sidecar | reCAPTCHA v2 on every login makes a raw HTTP client a non-starter; a real browser is the only way through | Backend HTTP client with a user-pasted bearer — short-lived, so every sync would need a fresh paste |
+| Playwright sidecar | A mandatory second factor on every login leaves nothing to paste, and the anti-robot token is computed in-page | Backend HTTP client with a user-pasted bearer — short-lived, so every sync would need a fresh paste |
 | Harvest the bearer off the SPA's own traffic | Amundi keeps it in memory, so storage state alone does not re-authenticate; watching requests survives their front-end refactors | Reading a hard-coded localStorage key |
 | One account per dispositif, new `EMPLOYEE_SAVINGS` type | Each plan has its own balance and lock-up regime; folding them into `SAVINGS` or `COMPTE_TITRES` would misreport both | Single Amundi account with grouped positions |
 | Valuation comes from Amundi | Yahoo cannot quote an FCPE, ever | Deriving value from a live price feed |
@@ -101,13 +108,23 @@ See [the ADR](../decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 
 ## Gotchas / Pitfalls
 
-- **The captcha is the whole risk.** `LAUNCH_ARGS` disables the
-  `AutomationControlled` blink feature and a realistic user agent is set,
-  because a default Playwright launch advertises `HeadlessChrome` and reliably
-  escalates to an image challenge no unattended browser can solve. Images are
-  deliberately *not* blocked for the same reason. If Amundi tightens scoring
-  this surfaces as `CAPTCHA_BLOCKED`, which is a distinct, translated error
-  rather than a wrong-credentials accusation.
+- **Fields must be typed, not filled.** `_type_into` sends real keystrokes.
+  The inputs are masked and only register per keystroke: a bulk `fill()` lands
+  as a *single* character, so the form stays invalid and the "Connexion" button
+  stays disabled with nothing on screen to explain why. This cost an afternoon
+  to find; do not "simplify" it back to `fill()`.
+- **The consent overlay swallows clicks.** TrustCommander renders
+  `#privacy-overlay` *after* the form paints, and it intercepts pointer events.
+  It must be waited for and answered before anything is typed, or Playwright
+  burns its entire timeout retrying a click that can never land.
+- **The SPA paints after `domcontentloaded`.** A single glance at `#identifiant`
+  is too early; `_wait_for_visible` polls instead. The same applies to the
+  consent banner, which lands later still.
+- **The captcha is proof-of-work, not a challenge.** It needs no interaction and
+  no solving service. If it ever fails to produce a token — a network block to
+  `friendlycaptcha.eu`, or Amundi swapping providers — that surfaces as
+  `CAPTCHA_BLOCKED`, a distinct translated error rather than a
+  wrong-credentials accusation.
 - **An app push waits on a human.** The sidecar holds `/complete` open for up
   to 120 s while the page polls Amundi; `AmundiAdapter`'s validation timeout is
   150 s so it always outlives the sidecar's, and the frontend shows a waiting
@@ -173,6 +190,14 @@ See [the ADR](../decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 **CI cannot prove the live login.** No public runner can hold Amundi credentials
 or approve a push notification, so the browser navigation itself is only ever
 exercised by hand. The parser, the contract and every failure mapping are covered.
+
+**Verified against the live site (2026-08-09):** the SPA route, the consent
+overlay, the two-step form, keystroke entry, the FriendlyCaptcha solve (~1 s,
+627-char token) and the "Connexion" button enabling. A deliberately invalid
+account number is correctly reported as `INVALID_CREDENTIALS`. **Not yet
+observed:** the second-factor screen itself and the `positionsFonds` payload,
+both of which need a real account — so `_otp_inputs` and `_app_validation_visible`
+remain informed guesses.
 
 ## Links
 
