@@ -55,6 +55,7 @@ MFA_PROMPT_TIMEOUT_SECONDS = 20
 LOGIN_FORM_TIMEOUT_SECONDS = 25
 CONSENT_TIMEOUT_SECONDS = 8
 PASSWORD_STEP_TIMEOUT_SECONDS = 20
+OTP_INPUT_TIMEOUT_SECONDS = 10
 # FriendlyCaptcha is proof-of-work and starts on its own; it settles in about a
 # second on this hardware. The generous ceiling is for a loaded host.
 CAPTCHA_SOLUTION_TIMEOUT_SECONDS = 45
@@ -70,6 +71,29 @@ POSITIONS_TIMEOUT_SECONDS = 30
 
 _pending: dict[str, dict[str, Any]] = {}
 _pending_lock = asyncio.Lock()
+
+# Every /initiate starts a Playwright driver and a Chromium process, and a
+# pending second factor keeps its browser alive for PENDING_TTL_SECONDS. The
+# backend throttles per IP, which does not bound this service in aggregate, so
+# a handful of parallel callers could otherwise exhaust host memory.
+MAX_CONCURRENT_BROWSERS = 4
+_browsers = 0
+_browser_lock = asyncio.Lock()
+
+
+async def _acquire_browser_slot() -> None:
+    global _browsers
+    async with _browser_lock:
+        if _browsers >= MAX_CONCURRENT_BROWSERS:
+            log.warning("Amundi browser capacity reached (%d)", _browsers)
+            raise HTTPException(status_code=503, detail="UPSTREAM_UNAVAILABLE")
+        _browsers += 1
+
+
+async def _release_browser_slot() -> None:
+    global _browsers
+    async with _browser_lock:
+        _browsers = max(0, _browsers - 1)
 
 
 async def _pending_sweeper() -> None:
@@ -102,11 +126,17 @@ async def log_request_duration(request: Request, call_next):
         return await call_next(request)
     finally:
         if request.url.path != "/health":
+            # Uvicorn percent-decodes the path, so a caller can plant CR/LF in
+            # it and forge log lines. Strip controls and bound the length.
             log.info(
                 "Amundi request completed (path=%s; duration=%.2fs)",
-                request.url.path,
+                _log_safe(request.url.path),
                 time.monotonic() - started_at,
             )
+
+
+def _log_safe(value: str) -> str:
+    return "".join(ch for ch in value if ch.isprintable())[:200]
 
 
 class InitiateRequest(BaseModel):
@@ -224,6 +254,16 @@ async def _close_resources(
     browser: Browser | None,
     playwright: Playwright | None,
 ) -> None:
+    """Also frees the browser slot.
+
+    Keyed on `browser`, not `playwright`: `_new_browser` guarantees it either
+    returns with a slot held and a live browser, or raises having released. A
+    refused slot therefore leaves `playwright` set but nothing to give back.
+    Every open path closes through here exactly once -- directly, or via
+    `_dispose_pending_state` once the second factor resolves or expires.
+    """
+    if browser is not None:
+        await _release_browser_slot()
     for resource, close_method in (
         (context, "close"),
         (browser, "close"),
@@ -442,7 +482,12 @@ async def _new_browser(
     pw: Playwright,
     storage_state: dict[str, Any] | None = None,
 ) -> tuple[Browser, BrowserContext, TokenCollector]:
-    browser = await pw.chromium.launch(headless=True, args=LAUNCH_ARGS)
+    await _acquire_browser_slot()
+    try:
+        browser = await pw.chromium.launch(headless=True, args=LAUNCH_ARGS)
+    except BaseException:
+        await _release_browser_slot()
+        raise
     context = await browser.new_context(
         locale="fr-FR",
         timezone_id="Europe/Paris",
@@ -594,7 +639,14 @@ async def complete(req: CompleteRequest) -> dict:
         if mfa_type == "SMS":
             if req.code is None:
                 raise HTTPException(status_code=400, detail="INVALID_OTP")
-            inputs = await _otp_inputs(page)
+            # `is_visible`'s timeout is ignored in this Playwright version, so a
+            # single glance can miss inputs that render a beat late.
+            inputs = None
+            for _ in range(OTP_INPUT_TIMEOUT_SECONDS * 4):
+                inputs = await _otp_inputs(page)
+                if inputs is not None:
+                    break
+                await asyncio.sleep(0.25)
             if inputs is None:
                 raise HTTPException(status_code=502, detail="UPSTREAM_FORMAT_CHANGED")
             count = await inputs.count()
@@ -660,7 +712,10 @@ async def positions(req: PositionsRequest) -> list[PlanPayload]:
             log.warning("Amundi positions request failed (status=%d)", response.status)
             if response.status == 429 or response.status >= 500:
                 raise HTTPException(status_code=502, detail="UPSTREAM_UNAVAILABLE")
-            raise HTTPException(status_code=502, detail="PORTFOLIO_INCOMPLETE")
+            # A 404/400 means the endpoint moved or the query contract changed --
+            # exactly how `positionsFonds` failed before it was corrected. Calling
+            # that "incomplete plans" points the operator at the wrong cause.
+            raise HTTPException(status_code=502, detail="UPSTREAM_FORMAT_CHANGED")
         try:
             payload = await response.json()
         except Exception as exc:  # noqa: BLE001 - an HTML error page lands here

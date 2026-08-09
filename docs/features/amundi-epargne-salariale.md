@@ -35,7 +35,7 @@ Everything the connector needs comes from one upstream call,
 authenticated with the `X-noee-authorization` bearer. (`positionsFonds`, which
 woob calls, belongs to the employee-shareholding portal and 404s here.)
 
-```
+```text
 listPositionsSalarieDispositifsDto[]          one entry per plan (dispositif)
   ├─ codeDispositif / idDispositif            stable external id
   ├─ libelleDispositif, typeDispositif        "PEG", "PERCO", "PER", …
@@ -77,7 +77,7 @@ Reuses: `CryptoEncryption`, `AccountService.upsertSnapshot`,
 
 ### Flow
 
-```
+```text
 POST /api/amundi/auth/initiate
   └─ sidecar: Chromium → login form → detect second factor
        └─ {processId, mfaRequired, mfaType: APP_PUSH | SMS}

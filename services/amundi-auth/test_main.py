@@ -47,6 +47,18 @@ class DecimalTest(unittest.TestCase):
         self.assertIsNone(decimal_value("not-a-number"))
         self.assertIsNone(decimal_value(True))
 
+    def test_non_finite_values_are_refused(self):
+        """`json.loads` accepts a bare NaN, and comparing one raises
+        InvalidOperation -- which would escape as an opaque INTERNAL_ERROR."""
+        for raw in ("NaN", "Infinity", "-Infinity", float("nan"), float("inf"),
+                    Decimal("NaN"), Decimal("Infinity")):
+            self.assertIsNone(decimal_value(raw), raw)
+
+    def test_a_non_finite_amount_is_a_typed_format_failure(self):
+        with self.assertRaises(PositionsFormatError) as raised:
+            parse_plans(payload(plan(positionsSalarieFondsDto=[fund(mtBrut=float("nan"))])))
+        self.assertEqual(raised.exception.code, "UPSTREAM_FORMAT_CHANGED")
+
 
 class PlanKindTest(unittest.TestCase):
     def test_known_kinds_are_normalised(self):

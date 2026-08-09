@@ -1020,7 +1020,7 @@ created per *dispositif* (PEE/PEG, PERCO, PER…), typed `EMPLOYEE_SAVINGS`.
 #### `POST /api/amundi/auth/initiate`
 
 - **Auth:** Required
-- **Rate limit:** Per IP
+- **Rate limit:** 5 attempts per IP per 15 minutes
 
 **Request body:**
 ```json
@@ -1040,7 +1040,7 @@ or `SMS` when a code is texted.
 #### `POST /api/amundi/auth/complete`
 
 - **Auth:** Required
-- **Rate limit:** Per IP
+- **Rate limit:** 5 attempts per IP per 15 minutes
 
 **Request body** — `code` is omitted for an app push, since there is nothing
 for the user to type:
@@ -1057,6 +1057,7 @@ approves on their phone, or fails with `APP_VALIDATION_TIMEOUT`.
 #### `POST /api/amundi/sync`
 
 - **Auth:** Required
+- **Rate limit:** 10 requests per IP per minute (shared `syncBuckets`)
 - **Body:** none
 
 **Response `202` — `AmundiSessionStatus`.** An already queued or running job is

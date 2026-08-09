@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Amundi Épargne Salariale sync.** Connect an Amundi account and import every
-  employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own account,
+  funded employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own
+  account, leaving emptied and closed dispositifs out,
   with each FCPE line's units, unit value, valuation and unrealized gain. A
   dedicated read-only Playwright sidecar handles the captcha-gated login and the
   mandatory second factor, either an approval in the "Mon Épargne" app or an SMS

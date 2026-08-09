@@ -146,6 +146,47 @@ class AmundiSyncServiceTest {
         );
     }
 
+    /**
+     * A contribution credited before it was converted into units arrives with
+     * zero parts and a real amount. The sidecar counts it toward the plan total,
+     * so dropping it here would make the plan permanently unreconcilable.
+     */
+    @Test
+    void queueSync_keepsAZeroQuantityLineThatStillCarriesValue() {
+        arrangeCommittableSync(plan("1234.56",
+            position("FR0010405035", "Amundi Label Actions Solidaires",
+                "12.3456", "100", "1200", "34.56"),
+            position("FR0000000000", "Versement en cours", "0", null, "34.56", "0")
+        ));
+
+        AmundiSyncService.SessionStatusResponse result = service.queueSync(7L);
+
+        assertThat(result.syncStatus()).isEqualTo(AmundiSyncStatus.SUCCESS);
+        verify(holdingRepository).saveAll(holdingsCaptor.capture());
+        assertThat(holdingsCaptor.getValue()).hasSize(2);
+        assertThat(holdingsCaptor.getValue())
+            .filteredOn(holding -> holding.getQuantity().signum() == 0)
+            .singleElement()
+            .satisfies(pending -> {
+                assertThat(pending.getProviderValueEur()).isEqualByComparingTo("34.56");
+                assertThat(pending.getAverageBuyIn()).isNull();
+            });
+    }
+
+    @Test
+    void queueSync_stillDropsALineWithNeitherUnitsNorValue() {
+        arrangeCommittableSync(plan("1234.56",
+            position("FR0010405035", "Amundi Label Actions Solidaires",
+                "12.3456", "100", "1234.56", "34.56"),
+            position("FR0000000000", "Fonds soldé", "0", null, "0", "0")
+        ));
+
+        service.queueSync(7L);
+
+        verify(holdingRepository).saveAll(holdingsCaptor.capture());
+        assertThat(holdingsCaptor.getValue()).hasSize(1);
+    }
+
     @Test
     void queueSync_replacesHoldingsAtomicallyBeforeSnapshotting() {
         arrangeCommittableSync(completePlan());

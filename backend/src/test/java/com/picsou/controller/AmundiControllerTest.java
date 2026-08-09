@@ -42,12 +42,14 @@ class AmundiControllerTest {
 
     private AmundiController controller;
     private ConcurrentHashMap<String, Bucket> authBuckets;
+    private ConcurrentHashMap<String, Bucket> syncBuckets;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         authBuckets = new ConcurrentHashMap<>();
-        controller = new AmundiController(service, userContext, authBuckets);
+        syncBuckets = new ConcurrentHashMap<>();
+        controller = new AmundiController(service, userContext, authBuckets, syncBuckets);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
@@ -199,14 +201,46 @@ class AmundiControllerTest {
 
     @Test
     void syncReturnsAcceptedAndTheObservableQueueStatus() {
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
         var queued = sessionStatus(AmundiSyncStatus.QUEUED);
         when(service.queueSync(MEMBER_ID)).thenReturn(queued);
 
-        var response = controller.sync();
+        var response = controller.sync(request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(response.getBody()).isSameAs(queued);
         verify(service).queueSync(MEMBER_ID);
+    }
+
+    /**
+     * Queueing takes a row lock, decrypts the session and can start a browser
+     * job, so it is throttled like every other sync entry point.
+     */
+    @Test
+    void eleventhSyncFromTheSameIpIsRateLimited() {
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(service.queueSync(MEMBER_ID)).thenReturn(sessionStatus(AmundiSyncStatus.QUEUED));
+
+        for (int attempt = 0; attempt < 10; attempt++) {
+            assertThat(controller.sync(request).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        }
+
+        assertThat(controller.sync(request).getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        verify(service, times(10)).queueSync(MEMBER_ID);
+    }
+
+    @Test
+    void syncAndAuthenticationDrawOnSeparateBudgets() {
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(service.queueSync(MEMBER_ID)).thenReturn(sessionStatus(AmundiSyncStatus.QUEUED));
+        when(service.initiateAuth("login", "password", MEMBER_ID))
+            .thenReturn(new AmundiSyncService.AuthInitResponse("process", true, "SMS"));
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            controller.initiate(new AmundiController.InitiateRequest("login", "password"), request);
+        }
+
+        assertThat(controller.sync(request).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     }
 
     @Test

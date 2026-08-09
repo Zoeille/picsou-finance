@@ -6,7 +6,11 @@ from fastapi.testclient import TestClient
 
 from positions_parser import parse_plans
 from main import (
+    MAX_CONCURRENT_BROWSERS,
     PlanPayload,
+    _acquire_browser_slot,
+    _log_safe,
+    _release_browser_slot,
     PENDING_TTL_SECONDS,
     TokenCollector,
     _cleanup_expired,
@@ -125,6 +129,45 @@ class ResponseModelTest(unittest.TestCase):
         self.assertTrue(plans[0].snapshotComplete)
         self.assertEqual(len(plans[0].positions), 1)
         self.assertEqual(plans[0].positions[0].isin, "FR0010405035")
+
+
+class LogSafetyTest(unittest.TestCase):
+    def test_control_characters_cannot_forge_a_log_line(self):
+        forged = _log_safe("/positions\r\nINFO:amundi-auth:all clear")
+        self.assertNotIn("\n", forged)
+        self.assertNotIn("\r", forged)
+        self.assertTrue(forged.startswith("/positions"))
+
+    def test_the_logged_path_is_bounded(self):
+        self.assertEqual(len(_log_safe("/" + "a" * 5000)), 200)
+
+
+class BrowserSlotTest(unittest.IsolatedAsyncioTestCase):
+    """A refused slot must not be given back, or capacity leaks upward."""
+
+    async def test_capacity_is_bounded_and_returned(self):
+        for _ in range(MAX_CONCURRENT_BROWSERS):
+            await _acquire_browser_slot()
+
+        with self.assertRaises(HTTPException) as raised:
+            await _acquire_browser_slot()
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(raised.exception.detail, "UPSTREAM_UNAVAILABLE")
+
+        for _ in range(MAX_CONCURRENT_BROWSERS):
+            await _release_browser_slot()
+        await _acquire_browser_slot()
+        await _release_browser_slot()
+
+    async def test_releasing_more_than_was_taken_does_not_create_capacity(self):
+        for _ in range(MAX_CONCURRENT_BROWSERS + 3):
+            await _release_browser_slot()
+        for _ in range(MAX_CONCURRENT_BROWSERS):
+            await _acquire_browser_slot()
+        with self.assertRaises(HTTPException):
+            await _acquire_browser_slot()
+        for _ in range(MAX_CONCURRENT_BROWSERS):
+            await _release_browser_slot()
 
 
 class PendingAuthenticationLifecycleTest(unittest.IsolatedAsyncioTestCase):

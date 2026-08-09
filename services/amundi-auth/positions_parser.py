@@ -55,24 +55,34 @@ class PositionsFormatError(Exception):
 
 
 def decimal_value(value: Any) -> Decimal | None:
-    """Amundi sends money as JSON numbers; go through str to avoid float drift."""
+    """Amundi sends money as JSON numbers; go through str to avoid float drift.
+
+    Non-finite values are refused rather than passed on: `json.loads` accepts a
+    bare `NaN`/`Infinity`, and an ordered comparison against one raises
+    `InvalidOperation`, which would escape `PositionsFormatError` handling and
+    surface as an opaque INTERNAL_ERROR instead of a typed format failure.
+    """
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, Decimal):
-        return value
+        return _finite(value)
     if isinstance(value, int):
         return Decimal(value)
     if isinstance(value, float):
-        return Decimal(str(value))
+        return _finite(Decimal(str(value)))
     if isinstance(value, str):
-        cleaned = value.strip().replace(" ", "").replace(" ", "").replace(",", ".")
+        cleaned = value.strip().replace("\u00a0", "").replace(" ", "").replace(",", ".")
         if not cleaned:
             return None
         try:
-            return Decimal(cleaned)
+            return _finite(Decimal(cleaned))
         except InvalidOperation:
             return None
     return None
+
+
+def _finite(value: Decimal) -> Decimal | None:
+    return value if value.is_finite() else None
 
 
 def text_value(value: Any, limit: int) -> str | None:

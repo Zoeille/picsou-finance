@@ -285,7 +285,12 @@ public class AmundiSyncService {
             if (position == null || position.quantity() == null || position.valueEur() == null) {
                 throw error(AmundiErrorCode.INVALID_DATA, "Amundi returned an incomplete position", null);
             }
-            if (position.quantity().signum() == 0) {
+            // The sidecar keeps a line whose units are zero but which still carries a
+            // valuation -- a contribution credited before it was converted into units.
+            // Dropping it here would leave the plan total unreconcilable against its
+            // lines, failing every sync for the same payload. Skip only what the
+            // parser skips: nothing held and nothing owed.
+            if (position.quantity().signum() == 0 && position.valueEur().signum() == 0) {
                 continue;
             }
             String ticker = resolveTicker(position);
@@ -301,7 +306,7 @@ public class AmundiSyncService {
             positions.merge(ticker, resolved, this::mergePositions);
         }
         return positions.values().stream()
-            .filter(position -> position.quantity().signum() != 0)
+            .filter(position -> position.quantity().signum() != 0 || position.valueEur().signum() != 0)
             .toList();
     }
 
