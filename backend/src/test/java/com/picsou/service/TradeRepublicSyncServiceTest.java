@@ -54,7 +54,8 @@ class TradeRepublicSyncServiceTest {
      * must be the VWAP -- not whichever position HashMap iteration happens to yield first.
      *
      * Scenario: ISIN_A (qty=2, avg=10) and ISIN_B (qty=3, avg=20) both resolve to "RKLB".
-     * Expected merged holding: quantity=5, averageBuyIn = (2*10 + 3*20)/5 = 16.
+     * Expected merged holding: quantity=5, averageBuyIn = (2*10 + 3*20)/5 = 16,
+     * provider value = 2*100 + 3*110 = 530.
      */
     @Test
     void sync_mergesDuplicateTickersWithVwap() {
@@ -72,7 +73,7 @@ class TradeRepublicSyncServiceTest {
         TrPosition pos1 = new TrPosition("IE00ISIN_A", bd("2"), bd("10"), bd("100"));
         TrPosition pos2 = new TrPosition("IE00ISIN_B", bd("3"), bd("20"), bd("110"));
         TrAccountData accountData = new TrAccountData(
-            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("1000"), List.of(pos1, pos2));
+            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("530"), List.of(pos1, pos2));
         when(trPort.fetchAccounts("plain-session")).thenReturn(List.of(accountData));
 
         when(isinConverter.resolve("IE00ISIN_A")).thenReturn(new TickerResult("RKLB", "Rocket Lab"));
@@ -89,7 +90,7 @@ class TradeRepublicSyncServiceTest {
             return a;
         });
         lenient().when(accountService.toResponse(any(Account.class)))
-            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("1000")));
+            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("530")));
 
         service.sync(memberId);
 
@@ -101,6 +102,7 @@ class TradeRepublicSyncServiceTest {
         assertThat(saved.getQuantity()).isEqualByComparingTo("5");
         // VWAP: (2*10 + 3*20) / 5 = 16  -- scale-8 representation 16.00000000
         assertThat(saved.getAverageBuyIn()).isEqualByComparingTo("16.00000000");
+        assertThat(saved.getProviderValueEur()).isEqualByComparingTo("530");
     }
 
     @Test

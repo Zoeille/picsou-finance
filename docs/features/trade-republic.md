@@ -1,6 +1,6 @@
 # Feature: Trade Republic Sync
 
-> Last updated: 2026-07-07
+> Last updated: 2026-08-09
 
 ## Context
 
@@ -65,6 +65,10 @@ Each persisted holding also stores TR's own EUR valuation of the position in
 ticker stream returned no live price — mirroring exactly how `TradeRepublicAdapter`
 already builds the account-level `TrAccountData.balanceEur`, so the sum of the
 holdings agrees with the **securities subtotal** of that figure by construction.
+When several ISINs deduplicate to one ticker, this value is the sum of their
+individually rounded broker values rather than the aggregate quantity multiplied
+by the first position's price. This preserves the broker subtotal even when the
+merged positions carry different live prices.
 For a compte-titres that subtotal *is* the account total; for a PEA the total also
 includes a scoped cash amount Picsou never persists, so the holdings sum falls
 short of `current_balance` by exactly that cash. This is why `V64` can only
