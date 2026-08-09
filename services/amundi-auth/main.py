@@ -39,7 +39,9 @@ BASE_URL = "https://epargnant.amundi-ee.com"
 # Angular SPA with hash routing; "/" redirects here anyway, but going straight
 # to the route avoids a redirect race on a cold load.
 LOGIN_URL = f"{BASE_URL}/#/connexion"
-POSITIONS_PATH = "/api/individu/positionsFonds?inclurePositionVide=false&flagUrlFicheFonds=true"
+# dispositifsMulti is the espace-épargnant (EE) endpoint. `positionsFonds`,
+# which woob uses, is the employee-shareholding portal and 404s here.
+POSITIONS_PATH = "/api/individu/dispositifsMulti?flagUrlFicheFonds=true&codeLangueIso2=fr"
 AUTHENTICATED_API_PREFIX = "/api/individu/"
 TOKEN_HEADER = "x-noee-authorization"
 

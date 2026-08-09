@@ -31,8 +31,9 @@ settles in about a second under headless Chromium. Verified against the live
 site on 2026-08-09.
 
 Everything the connector needs comes from one upstream call,
-`GET /api/individu/positionsFonds`, authenticated with the `X-noee-authorization`
-bearer:
+`GET /api/individu/dispositifsMulti?flagUrlFicheFonds=true&codeLangueIso2=fr`,
+authenticated with the `X-noee-authorization` bearer. (`positionsFonds`, which
+woob calls, belongs to the employee-shareholding portal and 404s here.)
 
 ```
 listPositionsSalarieDispositifsDto[]          one entry per plan (dispositif)
@@ -40,11 +41,11 @@ listPositionsSalarieDispositifsDto[]          one entry per plan (dispositif)
   ├─ libelleDispositif, typeDispositif        "PEG", "PERCO", "PER", …
   ├─ nomEntreprise                            employer
   ├─ mtBrut                                   plan total, EUR
-  └─ positionsSalarieFondsDto[]               one entry per FCPE line
-       ├─ libelleFonds, codeIsin
-       ├─ nbParts, vl                         units, unit value
-       ├─ mtBrut                              line valuation, EUR
-       └─ mtPMV                               unrealized P&L, EUR
+  └─ positionsSalarieFondsDto[]               the plan's FUND CATALOGUE
+       ├─ libelleFonds, codeIsin              (always present)
+       ├─ nbParts, vl                         units, unit value  ─┐ null unless
+       ├─ mtBrut                              line valuation      ├ the fund is
+       └─ mtPMV                               unrealized P&L     ─┘ actually held
 ```
 
 ### Key files
@@ -142,8 +143,22 @@ See [the ADR](../decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 - **Employer share funds sometimes have no ISIN.** Those fall back to a ticker
   derived from the label. Two different funds whose labels collide on that
   fallback are refused (`INVALID_DATA`) instead of being merged into one.
-- **A plan with a balance but no lines is a partial read, not an empty plan** —
+- **`positionsSalarieFondsDto` is a catalogue, not a portfolio.** It lists every
+  fund the dispositif *offers*; one the employee does not hold carries nulls
+  throughout. On the validation account 275 of 283 lines were catalogue entries,
+  so treating them as holdings rejects the entire payload. A line with neither a
+  valuation nor units is skipped — but a line with units and *no* valuation still
+  fails hard, because that is a partial read and silently dropping it would
+  understate the account. Do not collapse those two cases.
+- **A plan with a balance but no held lines is a partial read, not an empty plan** —
   it fails the sync. A plan with neither is simply skipped: the employee emptied it.
+- **Accounts carry a long tail of dead plans.** The account this was validated
+  against returned 33 dispositifs, nearly all closed and empty. `MAX_PLANS`
+  therefore counts *funded* plans, after the empty ones are dropped; capping the
+  raw list rejected the whole sync outright.
+- **`mtBrut` (gross) is the valuation, not `mtNet`.** Net is after prélèvements
+  sociaux on the gains; gross is the conventional portfolio value and is what
+  reconciles against the plan total.
 - **Single replica.** Pending authentication attempts live in the sidecar's
   process memory with a 600 s TTL, exactly as for Bourse Direct.
 
@@ -191,13 +206,21 @@ See [the ADR](../decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 or approve a push notification, so the browser navigation itself is only ever
 exercised by hand. The parser, the contract and every failure mapping are covered.
 
-**Verified against the live site (2026-08-09):** the SPA route, the consent
-overlay, the two-step form, keystroke entry, the FriendlyCaptcha solve (~1 s,
-627-char token) and the "Connexion" button enabling. A deliberately invalid
-account number is correctly reported as `INVALID_CREDENTIALS`. **Not yet
-observed:** the second-factor screen itself and the `positionsFonds` payload,
-both of which need a real account — so `_otp_inputs` and `_app_validation_visible`
-remain informed guesses.
+**Validated against a live Amundi account (2026-08-09).** End to end: the SPA
+route, the consent overlay, the two-step form, keystroke entry, the
+FriendlyCaptcha solve (~1 s, 627-char token), the app-push second factor, bearer
+capture, and `dispositifsMulti` parsed into accounts. The account held 33
+dispositifs of which **2 were funded** (a PEG and a PERCO), across 283 fund lines
+of which **8 were held**. Plan totals reconciled against their held lines
+**exactly** — `rel_diff = 0.0000000000` on both. A deliberately invalid account
+number is correctly reported as `INVALID_CREDENTIALS`.
+
+**Not observed, still defensive rather than proven:**
+- the **SMS** second factor — that account uses app validation, so `_otp_inputs`
+  remains an informed guess;
+- the **ISIN-less fallback** and the **null-`mtPMV`** cost-basis path — every
+  *held* line on that account had an ISIN, a unit value and a gain. The lines
+  missing `codeIsin`/`vl` were all catalogue entries, which never become holdings.
 
 ## Links
 

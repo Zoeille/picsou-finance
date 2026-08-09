@@ -1,4 +1,9 @@
-"""Normalises Amundi's `positionsFonds` payload into the sidecar's contract.
+"""Normalises Amundi's `dispositifsMulti` payload into the sidecar's contract.
+
+`positionsSalarieFondsDto` is the *fund catalogue* a dispositif offers, not the
+employee's holdings: a fund that is merely available carries nulls throughout.
+On a real account 275 of 283 lines were catalogue entries, so treating them as
+holdings rejects the whole payload.
 
 Kept free of FastAPI and Playwright so the parsing rules -- which are the part
 that silently breaks when Amundi reshapes a response -- can be tested on their
@@ -13,7 +18,10 @@ from typing import Any
 # read is partial and must not overwrite known-good data.
 MONEY_ABSOLUTE_TOLERANCE = Decimal("0.05")
 MONEY_RELATIVE_TOLERANCE = Decimal("0.001")
-MAX_PLANS = 30
+# Counted against *funded* plans, not the raw list: a real account carried 33
+# dispositifs, nearly all of them long-closed and empty. Capping the raw list
+# would have rejected it outright.
+MAX_PLANS = 50
 
 # typeDispositif -> the plan family shown next to the account name. Unknown
 # values are passed through verbatim rather than dropped: a plan Picsou cannot
@@ -96,10 +104,16 @@ def _parse_position(raw: Any) -> dict[str, Any] | None:
 
     value_eur = decimal_value(raw.get("mtBrut"))
     quantity = decimal_value(raw.get("nbParts"))
+
+    # An offered-but-unheld fund: no valuation, no units, no gain. Skipping it
+    # is not the same as tolerating a missing valuation on a fund that IS held,
+    # which still fails below -- that would be a partial read.
+    if value_eur is None and quantity is None:
+        return None
+
     label = text_value(raw.get("libelleFonds"), 200)
     if value_eur is None or quantity is None or label is None:
-        raise PositionsFormatError(FORMAT_CHANGED, "Fund line is missing a required field")
-    # inclurePositionVide=false should already drop these; belt and braces.
+        raise PositionsFormatError(FORMAT_CHANGED, "Held fund line is missing a required field")
     if quantity == 0 and value_eur == 0:
         return None
 
@@ -153,16 +167,15 @@ def _parse_plan(raw: Any) -> dict[str, Any] | None:
 
 
 def parse_plans(payload: Any) -> list[dict[str, Any]]:
-    """Turn a positionsFonds response into plan dicts, or raise."""
+    """Turn a dispositifsMulti response into plan dicts, or raise."""
     if not isinstance(payload, dict):
         raise PositionsFormatError(FORMAT_CHANGED, "Response is not an object")
     raw_plans = payload.get("listPositionsSalarieDispositifsDto")
     if not isinstance(raw_plans, list):
         raise PositionsFormatError(FORMAT_CHANGED, "Response is missing the plan list")
-    if len(raw_plans) > MAX_PLANS:
-        raise PositionsFormatError(INCOMPLETE, "Response holds more plans than supported")
-
     plans = [parsed for parsed in (_parse_plan(plan) for plan in raw_plans) if parsed]
     if not plans:
         raise PositionsFormatError(INCOMPLETE, "Response holds no usable plan")
+    if len(plans) > MAX_PLANS:
+        raise PositionsFormatError(INCOMPLETE, "Response holds more funded plans than supported")
     return plans

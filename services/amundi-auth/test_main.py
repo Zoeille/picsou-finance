@@ -101,7 +101,24 @@ class ParsePlansTest(unittest.TestCase):
         ))
         self.assertEqual([entry["externalId"] for entry in parsed], ["PEG001"])
 
-    def test_a_missing_valuation_is_reported_as_a_format_change(self):
+    def test_offered_but_unheld_funds_are_skipped_not_treated_as_holdings(self):
+        """dispositifsMulti lists the whole catalogue; unheld funds are all nulls."""
+        catalogue = fund(mtBrut=None, nbParts=None, vl=None, mtPMV=None,
+                         libelleFonds="Fonds proposé non détenu")
+        [parsed] = parse_plans(payload(plan(positionsSalarieFondsDto=[catalogue, fund()])))
+        self.assertEqual(len(parsed["positions"]), 1)
+        self.assertEqual(parsed["positions"][0]["valueEur"], Decimal("1234.56"))
+
+    def test_a_plan_offering_funds_but_holding_none_is_skipped(self):
+        catalogue = fund(mtBrut=None, nbParts=None, vl=None, mtPMV=None)
+        parsed = parse_plans(payload(
+            plan(codeDispositif="EMPTY", mtBrut=0, positionsSalarieFondsDto=[catalogue]),
+            plan(),
+        ))
+        self.assertEqual([entry["externalId"] for entry in parsed], ["PEG001"])
+
+    def test_a_half_filled_line_is_still_a_format_change(self):
+        """Units without a valuation is a partial read, not an unheld fund."""
         with self.assertRaises(PositionsFormatError) as raised:
             parse_plans(payload(plan(positionsSalarieFondsDto=[fund(mtBrut=None)])))
         self.assertEqual(raised.exception.code, "UPSTREAM_FORMAT_CHANGED")
@@ -111,6 +128,13 @@ class ParsePlansTest(unittest.TestCase):
             with self.assertRaises(PositionsFormatError) as raised:
                 parse_plans(broken)
             self.assertEqual(raised.exception.code, "UPSTREAM_FORMAT_CHANGED")
+
+    def test_a_long_tail_of_closed_plans_does_not_reject_the_account(self):
+        """A real account carried 33 dispositifs, nearly all emptied years ago."""
+        closed = [plan(codeDispositif=f"OLD{n}", mtBrut=0, positionsSalarieFondsDto=[])
+                  for n in range(32)]
+        parsed = parse_plans(payload(*closed, plan()))
+        self.assertEqual([entry["externalId"] for entry in parsed], ["PEG001"])
 
     def test_an_account_holding_nothing_anywhere_is_rejected(self):
         with self.assertRaises(PositionsFormatError) as raised:

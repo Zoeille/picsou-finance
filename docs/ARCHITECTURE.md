@@ -138,7 +138,7 @@ Client -> AmundiController -> AmundiSyncService -> AmundiPort
 
 Same shape as Bourse Direct, for a login that is captcha-gated and always
 second-factor protected. The sidecar owns the browser login, the app-push or SMS
-step, and normalization of the `positionsFonds` payload; it returns only strict,
+step, and normalization of the `dispositifsMulti` payload; it returns only strict,
 reconciled snapshots. The Java service queues imports, calls upstream outside
 database transactions, then atomically replaces each plan's holdings and writes
 the daily snapshot. One Picsou account per *dispositif*, typed `EMPLOYEE_SAVINGS`.

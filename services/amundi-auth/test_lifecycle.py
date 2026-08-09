@@ -4,7 +4,9 @@ import unittest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from positions_parser import parse_plans
 from main import (
+    PlanPayload,
     PENDING_TTL_SECONDS,
     TokenCollector,
     _cleanup_expired,
@@ -64,7 +66,7 @@ class TokenCollectorTest(unittest.TestCase):
     def test_captures_the_bearer_off_an_authenticated_call(self):
         collector = TokenCollector()
         collector._on_request(FakeRequest(
-            "https://epargnant.amundi-ee.com/api/individu/positionsFonds",
+            "https://epargnant.amundi-ee.com/api/individu/dispositifsMulti",
             {"x-noee-authorization": "noeprd token"},
         ))
         self.assertEqual(collector.token, "noeprd token")
@@ -83,10 +85,46 @@ class TokenCollectorTest(unittest.TestCase):
         collector = TokenCollector()
         for value in ("first", "second"):
             collector._on_request(FakeRequest(
-                "https://epargnant.amundi-ee.com/api/individu/positionsFonds",
+                "https://epargnant.amundi-ee.com/api/individu/dispositifsMulti",
                 {"x-noee-authorization": value},
             ))
         self.assertEqual(collector.token, "first")
+
+
+class ResponseModelTest(unittest.TestCase):
+    """The parser feeds PlanPayload directly, so its output must validate.
+
+    Shaped like a real dispositifsMulti response: most fund lines are catalogue
+    entries the employee does not hold, carrying nulls throughout.
+    """
+
+    def test_parser_output_satisfies_the_response_model(self):
+        held = {
+            "libelleFonds": "Amundi Label Actions Solidaires ESR",
+            "codeIsin": "FR0010405035", "nbParts": 12.3456, "vl": 100.0,
+            "mtBrut": 1234.56, "mtPMV": 34.56,
+        }
+        catalogue = {
+            "libelleFonds": "Fonds proposé non détenu", "codeIsin": None,
+            "nbParts": None, "vl": None, "mtBrut": None, "mtPMV": None,
+        }
+        payload = {"count": 2, "listPositionsSalarieDispositifsDto": [
+            {"codeDispositif": "PEG001", "libelleDispositif": "Plan d'Épargne Groupe",
+             "typeDispositif": "PEG", "nomEntreprise": "ACME SA", "mtBrut": 1234.56,
+             "positionsSalarieFondsDto": [catalogue, held, catalogue]},
+            {"codeDispositif": "OLD", "libelleDispositif": "PERCO ancien",
+             "typeDispositif": "PERCO", "nomEntreprise": "OLDCO", "mtBrut": 0,
+             "positionsSalarieFondsDto": [catalogue]},
+        ]}
+
+        plans = [PlanPayload.model_validate(plan) for plan in parse_plans(payload)]
+
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].externalId, "PEG001")
+        self.assertEqual(plans[0].planKind, "PEG")
+        self.assertTrue(plans[0].snapshotComplete)
+        self.assertEqual(len(plans[0].positions), 1)
+        self.assertEqual(plans[0].positions[0].isin, "FR0010405035")
 
 
 class PendingAuthenticationLifecycleTest(unittest.IsolatedAsyncioTestCase):
