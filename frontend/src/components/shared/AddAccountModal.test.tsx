@@ -45,6 +45,12 @@ vi.mock('@/components/sync/BourseDirectPanel', () => ({
   ),
 }))
 
+vi.mock('@/components/sync/AmundiPanel', () => ({
+  AmundiPanel: ({ onConnected }: { onConnected?: () => void }) => (
+    <button onClick={onConnected}>amundi-wizard</button>
+  ),
+}))
+
 vi.stubGlobal('ResizeObserver', class {
   observe() {}
   unobserve() {}
@@ -138,6 +144,18 @@ describe('AddAccountModal Bourse Direct wizard', () => {
 
     fireEvent.click(screen.getByText('sync.bourseDirect.title'))
     fireEvent.click(screen.getByRole('button', { name: 'bourse-direct-wizard' }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('AddAccountModal Amundi wizard', () => {
+  it('opens the connector and closes after authentication', () => {
+    const onOpenChange = vi.fn()
+    render(<AddAccountModal open onOpenChange={onOpenChange} />)
+
+    fireEvent.click(screen.getByText('sync.amundi.title'))
+    fireEvent.click(screen.getByRole('button', { name: 'amundi-wizard' }))
 
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })

@@ -9,6 +9,7 @@ import { TradeRepublicTab } from './TradeRepublicTab'
 import { IbkrTab } from './IbkrTab'
 import { FinaryTab } from './FinaryTab'
 import { BourseDirectTab } from './BourseDirectTab'
+import { AmundiTab } from './AmundiTab'
 // BoursoTab hidden for 1.0.0 — sidecar integration not finished.
 
 export function SyncPage() {
@@ -27,6 +28,7 @@ export function SyncPage() {
           <TabsTrigger value="tr">{t('sync.tr.title')}</TabsTrigger>
           <TabsTrigger value="bourse-direct">{t('sync.bourseDirect.title')}</TabsTrigger>
           <TabsTrigger value="ibkr">{t('sync.ibkr.title')}</TabsTrigger>
+          <TabsTrigger value="amundi">{t('sync.amundi.title')}</TabsTrigger>
           <TabsTrigger value="finary">{t('sync.finary.title')}</TabsTrigger>
         </TabsList>
         <TabsContent value="banks" className="mt-6">
@@ -46,6 +48,9 @@ export function SyncPage() {
         </TabsContent>
         <TabsContent value="ibkr" className="mt-6">
           <IbkrTab />
+        </TabsContent>
+        <TabsContent value="amundi" className="mt-6">
+          <AmundiTab />
         </TabsContent>
         <TabsContent value="finary" className="mt-6">
           <FinaryTab />

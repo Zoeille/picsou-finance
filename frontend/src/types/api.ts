@@ -1,6 +1,6 @@
 export type AccountType =
   | 'LEP' | 'PEA' | 'COMPTE_TITRES' | 'CRYPTO' | 'CHECKING' | 'SAVINGS'
-  | 'REAL_ESTATE' | 'LOAN' | 'OTHER'
+  | 'REAL_ESTATE' | 'LOAN' | 'EMPLOYEE_SAVINGS' | 'OTHER'
 
 export interface RealEstateMetadata {
   purchasePrice: number
@@ -308,6 +308,42 @@ export interface BourseDirectAuthInitResponse {
   processId: string | null
   mfaRequired: boolean
   mfaType: string | null
+}
+
+interface AmundiSessionStatusBase {
+  isActive: boolean
+  lastSyncStartedAt: string | null
+  lastSyncCompletedAt: string | null
+}
+
+export type AmundiSessionStatus =
+  | (AmundiSessionStatusBase & {
+      syncStatus: 'FAILED'
+      lastSyncError: AmundiErrorCode
+    })
+  | (AmundiSessionStatusBase & {
+      syncStatus: 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCESS'
+      lastSyncError: null
+    })
+
+export type AmundiErrorCode =
+  | 'INVALID_CREDENTIALS'
+  | 'CAPTCHA_BLOCKED'
+  | 'INVALID_OTP'
+  | 'APP_VALIDATION_TIMEOUT'
+  | 'AUTH_ATTEMPT_EXPIRED'
+  | 'SESSION_EXPIRED'
+  | 'PORTFOLIO_INCOMPLETE'
+  | 'UPSTREAM_FORMAT_CHANGED'
+  | 'UPSTREAM_UNAVAILABLE'
+  | 'INVALID_DATA'
+  | 'INTERNAL_ERROR'
+
+/** `mfaType` is `APP_PUSH` when the user must approve in the Mon Épargne app, `SMS` otherwise. */
+export interface AmundiAuthInitResponse {
+  processId: string | null
+  mfaRequired: boolean
+  mfaType: 'APP_PUSH' | 'SMS' | null
 }
 
 export interface FinaryAccountPreview {

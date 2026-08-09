@@ -345,6 +345,25 @@ handlers.set(key('POST', '/ibkr/connect'), () => null)
 handlers.set(key('POST', '/ibkr/sync'), () => [])
 handlers.set(key('DELETE', '/ibkr/connection'), () => null)
 
+// Amundi Épargne Salariale — same demo convention: reads report a disconnected
+// session, mutations fake-succeed with the real response shapes. Bourse Direct
+// has no handlers at all, which leaves its panel reading `isActive: undefined`
+// in demo mode; do not copy that gap here.
+const demoAmundiStatus = {
+  isActive: false,
+  syncStatus: 'IDLE',
+  lastSyncStartedAt: null,
+  lastSyncCompletedAt: null,
+  lastSyncError: null,
+}
+handlers.set(key('GET', '/amundi/status'), () => demoAmundiStatus)
+handlers.set(key('POST', '/amundi/auth/initiate'), () => ({
+  processId: null, mfaRequired: false, mfaType: null,
+}))
+handlers.set(key('POST', '/amundi/auth/complete'), () => demoAmundiStatus)
+handlers.set(key('POST', '/amundi/sync'), () => demoAmundiStatus)
+handlers.set(key('DELETE', '/amundi/session'), () => null)
+
 // Trade Republic - session status
 handlers.set(key('GET', '/tr/status'), () => ({ isActive: false, expiresAt: null }))
 

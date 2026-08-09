@@ -1,0 +1,181 @@
+# Feature: Amundi Épargne Salariale sync
+
+> Last updated: 2026-08-09
+
+## Context
+
+French employee savings — PEE/PEG, PERCO, PER Collectif — was a total blind
+spot. Enable Banking cannot reach it (it is not a payment account under PSD2),
+and the Powens adapter flattens PERCO into a generic `savings` product with no
+lines and ships disabled. For anyone with an employer plan that is routinely a
+five-figure hole in net worth.
+
+This connector signs in to the Amundi espace épargnant and imports, per plan:
+the plan itself with its total valuation, and every FCPE line it holds with
+units, unit value and valuation. It is unofficial, read-only, and fails closed.
+
+## How it works
+
+Authentication is interactive and cannot be otherwise: Amundi gates its login
+behind reCAPTCHA v2 and, since July 2024, a mandatory second factor on **every**
+login — a push validation in the "Mon Épargne" app, or an SMS code. There is no
+token to paste and no unattended path. A Playwright sidecar therefore drives a
+real Chromium through the login, and the resulting session is persisted
+encrypted so later syncs skip the second factor until Amundi invalidates it.
+
+Everything the connector needs comes from one upstream call,
+`GET /api/individu/positionsFonds`, authenticated with the `X-noee-authorization`
+bearer:
+
+```
+listPositionsSalarieDispositifsDto[]          one entry per plan (dispositif)
+  ├─ codeDispositif / idDispositif            stable external id
+  ├─ libelleDispositif, typeDispositif        "PEG", "PERCO", "PER", …
+  ├─ nomEntreprise                            employer
+  ├─ mtBrut                                   plan total, EUR
+  └─ positionsSalarieFondsDto[]               one entry per FCPE line
+       ├─ libelleFonds, codeIsin
+       ├─ nbParts, vl                         units, unit value
+       ├─ mtBrut                              line valuation, EUR
+       └─ mtPMV                               unrealized P&L, EUR
+```
+
+### Key files
+
+- `services/amundi-auth/main.py` — FastAPI + Playwright sidecar: `/initiate`,
+  `/complete`, `/positions`, `/health`
+- `services/amundi-auth/positions_parser.py` — payload normalisation, kept free
+  of FastAPI and Playwright so the rules that silently break are unit-testable
+- `backend/.../port/AmundiPort.java` — typed contract (`InitiateResult`,
+  `PlanData`, `Position`) and `AmundiErrorCode.java` — stable failure codes
+- `backend/.../adapter/AmundiAdapter.java` — WebClient onto the sidecar, maps
+  its `detail` onto `AmundiErrorCode`, wraps everything in `SyncException`
+- `backend/.../service/AmundiSyncService.java` — job state machine, validation,
+  reconciliation, atomic persistence
+- `backend/.../controller/AmundiController.java` — `/api/amundi/*`
+- `backend/.../model/AmundiSession.java`, `AmundiSyncStatus.java`
+- `backend/.../config/AmundiSyncConfig.java` (single-thread executor),
+  `AmundiSyncRecovery.java` (fails interrupted jobs at boot)
+- `backend/src/main/resources/db/migration/V69__account_type_employee_savings.sql`,
+  `V70__amundi_session.sql`
+- `frontend/src/components/sync/AmundiPanel.tsx` (serves both the Sync tab and
+  the Add-account modal), `frontend/src/pages/sync/AmundiTab.tsx`
+- `frontend/src/features/sync/{api,hooks}.ts` — `amundiApi`, `useAmundi*`
+- i18n namespace `sync.amundi.*` in all four locales
+
+Reuses: `CryptoEncryption`, `AccountService.upsertSnapshot`,
+`AccountHolding.providerValueEur` / `providerPnlEur` (added by Bourse Direct),
+`SyncException` + `GlobalExceptionHandler`, `RateLimitConfig`, `SchedulerService`.
+
+### Flow
+
+```
+POST /api/amundi/auth/initiate
+  └─ sidecar: Chromium → login form → detect second factor
+       └─ {processId, mfaRequired, mfaType: APP_PUSH | SMS}
+
+POST /api/amundi/auth/complete   (code omitted for APP_PUSH)
+  └─ sidecar: submit SMS code, or hold while the user approves on their phone
+       └─ sessionState = {storageState, bearer}
+            └─ encrypt → persist → markQueued → 202
+
+executor
+  └─ markRunning ──▶ POST sidecar /positions   (outside any transaction)
+       └─ validate + reconcile
+            └─ one short tx: re-lock session, replace holdings, snapshot,
+               markSuccessful
+```
+
+## Technical choices
+
+| Choice | Why | Rejected alternative |
+|---|---|---|
+| Playwright sidecar | reCAPTCHA v2 on every login makes a raw HTTP client a non-starter; a real browser is the only way through | Backend HTTP client with a user-pasted bearer — short-lived, so every sync would need a fresh paste |
+| Harvest the bearer off the SPA's own traffic | Amundi keeps it in memory, so storage state alone does not re-authenticate; watching requests survives their front-end refactors | Reading a hard-coded localStorage key |
+| One account per dispositif, new `EMPLOYEE_SAVINGS` type | Each plan has its own balance and lock-up regime; folding them into `SAVINGS` or `COMPTE_TITRES` would misreport both | Single Amundi account with grouped positions |
+| Valuation comes from Amundi | Yahoo cannot quote an FCPE, ever | Deriving value from a live price feed |
+| No OpenFIGI lookup | FCPEs are not in its universe; a call would burn requests and risk a wrong match | Resolving ISIN → ticker like Bourse Direct does |
+| Reconcile in both sidecar and service | A total that disagrees with its lines means a partial read; overwriting good data with it erases real money | Trusting the payload |
+
+See [the ADR](../decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
+
+## Gotchas / Pitfalls
+
+- **The captcha is the whole risk.** `LAUNCH_ARGS` disables the
+  `AutomationControlled` blink feature and a realistic user agent is set,
+  because a default Playwright launch advertises `HeadlessChrome` and reliably
+  escalates to an image challenge no unattended browser can solve. Images are
+  deliberately *not* blocked for the same reason. If Amundi tightens scoring
+  this surfaces as `CAPTCHA_BLOCKED`, which is a distinct, translated error
+  rather than a wrong-credentials accusation.
+- **An app push waits on a human.** The sidecar holds `/complete` open for up
+  to 120 s while the page polls Amundi; `AmundiAdapter`'s validation timeout is
+  150 s so it always outlives the sidecar's, and the frontend shows a waiting
+  card rather than a form. Cutting this shorter would fail validations that
+  were about to succeed.
+- **`liveBalanceEur` needs the provider-valued fallback.** FCPEs are never
+  Yahoo-priceable, so without `AccountService.PROVIDER_VALUED` every Amundi
+  account reads as 0 € and the dashboard books the whole plan as a loss. That
+  check is null-safe on purpose — `Set.of(...).contains(null)` throws, and most
+  accounts have no provider.
+- **FCPE units have no purchase price.** The cost basis is derived as
+  `(mtBrut − mtPMV) / nbParts`. When Amundi reports no `mtPMV` the average buy-in
+  is left null and the invested amount falls back to the plan total, rather than
+  inventing a gain out of a missing field.
+- **Employer share funds sometimes have no ISIN.** Those fall back to a ticker
+  derived from the label. Two different funds whose labels collide on that
+  fallback are refused (`INVALID_DATA`) instead of being merged into one.
+- **A plan with a balance but no lines is a partial read, not an empty plan** —
+  it fails the sync. A plan with neither is simply skipped: the employee emptied it.
+- **Single replica.** Pending authentication attempts live in the sidecar's
+  process memory with a 600 s TTL, exactly as for Bourse Direct.
+
+## Deliberately out of scope
+
+- **Transaction history** (`api/individu/operations` — versements, abondement,
+  intéressement, participation).
+- **Lock-up / déblocage dates.** `positionSalarieFondsEchDto[].dtEcheance` is
+  available upstream but `AccountHolding` has no column for it. Same for the VL
+  date (`dtVl`): the valuation date is not the sync date, and FCPE unit values
+  refresh weekly, so surfacing it properly needs a schema change. Both are the
+  natural follow-up.
+- **Manual transactions and CSV import** on Amundi accounts — the holdings-capable
+  allowlists in `ManualTransactionService` and `TransactionImportService` are
+  intentionally untouched, because snapshots are replaced atomically and manual
+  edits would fight them.
+- **Portals other than Amundi EE** (`epargnant.amundi-ee.com`). The same API
+  serves `amundi-tc.com` and the partner-branded fronts; only the base URL differs.
+- **Deliberately skipped:** the setup-wizard and admin-toggle registry
+  (`SetupService.INTEGRATIONS`, `IntegrationsService`, `SetupStepIntegrations`,
+  `setup-flow-store`, `IntegrationsSection`), following the IBKR precedent. The
+  connector is reachable from the Sync page and the Add-account modal.
+
+## Tests
+
+- `AmundiSyncServiceTest` — 21 cases: job state machine, stale-session fencing,
+  atomic replacement, reconciliation rejection keeping the last good snapshot,
+  cost-basis derivation, ISIN-less fallback and its collision refusal, soft-deleted
+  accounts not resurrected
+- `AmundiAdapterTest` — 13 cases over a fake `ExchangeFunction`: the strict
+  sidecar contract, every error-code mapping, the explicit null `code` for an
+  app push, and that the validation timeout outlives the auth timeout
+- `AmundiAdapterWiringTest` — Spring picks the production constructor
+- `AmundiControllerTest` — member scoping, 202 on sync, rate limiting, an app
+  push accepted without a code
+- `AccountServiceTest` — an Amundi account with unpriceable FCPEs falls back to
+  the provider total instead of collapsing to zero
+- `services/amundi-auth/test_main.py`, `test_lifecycle.py` — 26 cases run inside
+  the built image in CI: parser rules, session encoding, bearer capture, pending
+  TTL, and the HTTP contract
+- `frontend/src/pages/sync/AmundiTab.test.tsx` — SMS and app-push paths, error-code
+  translation, background failure reporting
+
+**CI cannot prove the live login.** No public runner can hold Amundi credentials
+or approve a push notification, so the browser navigation itself is only ever
+exercised by hand. The parser, the contract and every failure mapping are covered.
+
+## Links
+
+- ADR: [2026-08-09 — Amundi via an isolated sidecar](../decisions/2026-08-09-amundi-epargne-salariale-sidecar.md)
+- Related: [bourse-direct.md](./bourse-direct.md) — the precedent this follows
+- Upstream reference: the `amundi` module in [woob](https://gitlab.com/woob/woob/-/tree/master/modules/amundi)
