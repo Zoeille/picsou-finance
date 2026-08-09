@@ -1,6 +1,6 @@
 # Feature: Price Service
 
-> Last updated: 2026-05-19
+> Last updated: 2026-08-09
 
 ## Context
 
@@ -97,7 +97,7 @@ Bulk fetch, update cache
 
 ## Gotchas / Pitfalls
 
-- **`supports()` enforces a symbol shape**: beyond rejecting 12-char ISINs, `YahooFinancePriceProvider.supports()` requires the ticker to match `\^?[A-Z0-9][A-Z0-9.=-]{0,19}` — an optional leading `^` for indices, then alphanumerics and the separators Yahoo uses for exchange suffixes, share classes and FX pairs (`IWDA.AS`, `BRK-B`, `USDEUR=X`). Anything containing whitespace or a slash is not a symbol. This matters because OpenFIGI returns Bloomberg *bond descriptions* in its `ticker` field (`AIRBAL 14.5 08/14/29 REGS`): WebClient percent-encodes the spaces but **not** the slashes, so the request lands on `/v8/finance/chart/AIRBAL%2014.5%2008/14/29%20REGS` — a different API path entirely — and 404s forever.
+- **`supports()` enforces a symbol shape**: beyond rejecting 12-char ISINs, `YahooFinancePriceProvider.supports()` accepts an optional leading `^` for indices, then alphanumerics and the separators Yahoo uses for exchange suffixes, share classes and FX pairs (`IWDA.AS`, `BRK-B`, `USDEUR=X`), with a 20-character limit for the complete symbol. Anything containing whitespace or a slash is not a symbol. This matters because OpenFIGI returns Bloomberg *bond descriptions* in its `ticker` field (`AIRBAL 14.5 08/14/29 REGS`): WebClient percent-encodes the spaces but **not** the slashes, so the request lands on `/v8/finance/chart/AIRBAL%2014.5%2008/14/29%20REGS` — a different API path entirely — and 404s forever.
 - **`GET /api/prices` bypasses the cache**: `PriceController` calls `refreshPrices()`, which on `main` always hits the providers regardless of TTL. The negative cache only covers the `getPriceEur` path. PR #33 makes `refreshPrices` honor the TTL; this was left alone here to avoid a conflict.
 - **Yahoo Finance is unofficial**: The Yahoo Finance API is undocumented and can break or get rate-limited without notice. FX conversion is now applied inside `YahooFinancePriceProvider` using the `{CURRENCY}EUR=X` chart endpoint; `GBp`/`GBX` is treated as `GBP / 100`. If the FX call fails the ticker is omitted from the result map (no fabricated rate) — downstream consumers must tolerate a missing key.
 - **CoinGecko rate limits**: The free tier has rate limits (~30 requests/minute). The batch endpoint mitigates this, but individual cache misses could accumulate. The 15-minute cache is essential.

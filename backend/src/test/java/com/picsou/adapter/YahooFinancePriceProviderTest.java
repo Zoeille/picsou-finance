@@ -1,6 +1,8 @@
 package com.picsou.adapter;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientRequest;
@@ -262,6 +264,17 @@ class YahooFinancePriceProviderTest {
     }
 
     @Test
+    void supports_enforcesTwentyCharacterLimitIncludingIndexPrefix() {
+        var provider = new YahooFinancePriceProvider();
+
+        assertThat(provider.supports("A".repeat(20))).isTrue();
+        assertThat(provider.supports("A".repeat(21))).isFalse();
+        assertThat(provider.supports("^" + "A".repeat(19))).isTrue();
+        assertThat(provider.supports("^" + "A".repeat(20))).isFalse();
+    }
+
+    @Test
+    @ResourceLock(Resources.LOCALE)
     void supports_normalizesWithLocaleRoot_soATurkishDefaultLocaleDoesNotBreakTickers() {
         Locale previous = Locale.getDefault();
         try {
@@ -276,6 +289,7 @@ class YahooFinancePriceProviderTest {
     }
 
     @Test
+    @ResourceLock(Resources.LOCALE)
     void getPricesEur_keysTheResultWithLocaleRootUppercase() {
         Locale previous = Locale.getDefault();
         try {

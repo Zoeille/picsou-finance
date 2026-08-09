@@ -37,7 +37,7 @@ public class YahooFinancePriceProvider implements PriceProviderPort {
     private static final Duration FX_CACHE_TTL = Duration.ofMinutes(15);
 
     private static final java.util.regex.Pattern SYMBOL_PATTERN =
-        java.util.regex.Pattern.compile("\\^?[A-Z0-9][A-Z0-9.=-]{0,19}");
+        java.util.regex.Pattern.compile("(?:\\^[A-Z0-9][A-Z0-9.=-]{0,18}|[A-Z0-9][A-Z0-9.=-]{0,19})");
 
     // Tickers that are handled by CoinGecko — we skip those
     private static final Set<String> CRYPTO_TICKERS = Set.of(
