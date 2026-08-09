@@ -15,22 +15,26 @@ vi.mock('react-i18next', () => ({
  * Radix's Avatar detects load failure via a synthetic `new Image()` instance,
  * not the rendered <img> element -- stub the global so tests can drive both
  * the success and failure paths deterministically.
+ *
+ * Its `load` handler reads `event.currentTarget` and re-derives the status from
+ * `complete`/`naturalWidth`, so listeners must be called with an event-shaped
+ * argument -- calling them bare throws inside Radix instead of failing the assertion.
  */
 class MockImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
   complete = false
   naturalWidth = 0
-  private listeners = new Map<string, Set<() => void>>()
+  private listeners = new Map<string, Set<(event: { currentTarget: MockImage }) => void>>()
   private _src = ''
 
-  addEventListener(type: string, listener: () => void) {
+  addEventListener(type: string, listener: (event: { currentTarget: MockImage }) => void) {
     const listeners = this.listeners.get(type) ?? new Set()
     listeners.add(listener)
     this.listeners.set(type, listeners)
   }
 
-  removeEventListener(type: string, listener: () => void) {
+  removeEventListener(type: string, listener: (event: { currentTarget: MockImage }) => void) {
     this.listeners.get(type)?.delete(listener)
   }
 
@@ -43,11 +47,11 @@ class MockImage {
       if (value.includes('broken')) {
         this.naturalWidth = 0
         this.onerror?.()
-        this.listeners.get('error')?.forEach(listener => listener())
+        this.listeners.get('error')?.forEach(listener => listener({ currentTarget: this }))
       } else {
         this.naturalWidth = 1
         this.onload?.()
-        this.listeners.get('load')?.forEach(listener => listener())
+        this.listeners.get('load')?.forEach(listener => listener({ currentTarget: this }))
       }
     })
   }
@@ -90,6 +94,30 @@ describe('AccountCard', () => {
 
   it('renders the bank logo image when logoUrl loads successfully', async () => {
     const account = { ...baseAccount, logoUrl: 'https://logos.example/bnp.png' }
+    const { container } = render(<AccountCard account={account} />)
+
+    await waitFor(() => {
+      const img = container.querySelector('img') as HTMLImageElement
+      expect(img).toHaveAttribute('src', 'https://logos.example/bnp.png')
+    })
+  })
+
+  it('renders the bundled logo for a provider the connector gives no logoUrl for', async () => {
+    const account = { ...baseAccount, provider: 'Amundi Épargne Salariale', logoUrl: null }
+    const { container } = render(<AccountCard account={account} />)
+
+    await waitFor(() => {
+      const img = container.querySelector('img') as HTMLImageElement
+      expect(img).toHaveAttribute('src', '/providers/amundi.png')
+    })
+  })
+
+  it('prefers the connector-supplied logoUrl over a bundled one', async () => {
+    const account = {
+      ...baseAccount,
+      provider: 'Amundi Épargne Salariale',
+      logoUrl: 'https://logos.example/bnp.png',
+    }
     const { container } = render(<AccountCard account={account} />)
 
     await waitFor(() => {

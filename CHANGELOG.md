@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on Yahoo. Imports expose queued/running/success/failure progress, reject plans
   whose total does not reconcile with their lines, and preserve the last valid
   holdings on failure. Reachable from the Sync page and the Add-account modal, in
-  all four locales. See [feature notes](docs/features/amundi-epargne-salariale.md)
+  all four locales, and its accounts carry the Amundi logo rather than a color
+  circle. See [feature notes](docs/features/amundi-epargne-salariale.md)
   and the [ADR](docs/decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 - **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
   handles login and the six-digit security code, then imports PEA/CTO positions,
