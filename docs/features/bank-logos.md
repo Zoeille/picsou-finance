@@ -36,7 +36,7 @@ The backfill is bounded to a single attempt per requisition via `Requisition.log
 
 ### Bundled provider logos
 
-`PROVIDER_LOGOS` (`frontend/src/lib/provider-logos.ts`) maps a `provider` string to an asset path, and `providerLogoUrl()` resolves it case-insensitively. `AccountAvatar` uses `logoUrl ?? providerLogoUrl(provider)`, so a real connector logo always wins over a bundled one and nothing changes for accounts that already had one.
+`PROVIDER_LOGOS` (`frontend/src/lib/provider-logos.ts`) maps a `provider` string to an asset path, and `providerLogoUrl()` resolves it case-insensitively. For an account with no `logoKey` of its own, `AccountAvatar` falls back to `logoUrl ?? providerLogoUrl(provider)`, so a real connector logo always wins over a bundled one and nothing changes for accounts that already had one. The full order, key included, is in [Rendering](#rendering) below.
 
 The key is the exact string the backend writes as `provider`. For crypto exchanges that is `ExchangeType.name()` (`CryptoExchangeSyncService.resolveAccount()`), hence `MERIA` rather than `Meria`; for Amundi it is `AmundiSyncService.PROVIDER`, i.e. `Amundi Épargne Salariale`, accent included; for Trade Republic it is the `"Trade Republic"` literal inlined in `TradeRepublicSyncService.upsertAccount()`. `provider-logos.test.ts` pins all three literals, so an accidental edit to the map — or an accent that drifts between Unicode normalisations on the frontend side — fails loudly instead of silently reverting to the color circle. It cannot see the backend, though: renaming what the connector writes is caught by nothing (see Gotchas).
 
