@@ -102,18 +102,28 @@ describe('AccountCard', () => {
     })
   })
 
-  it('renders the bundled logo for a provider the connector gives no logoUrl for', async () => {
-    const account = { ...baseAccount, provider: 'MERIA', logoUrl: null }
-    const { container } = render(<AccountCard account={account} />)
+  it.each([
+    ['Amundi Épargne Salariale', '/providers/amundi.png'],
+    ['MERIA', '/exchanges/meria.svg'],
+  ])(
+    'renders the bundled logo for %s, which the connector gives no logoUrl for',
+    async (provider, expected) => {
+      const account = { ...baseAccount, provider, logoUrl: null }
+      const { container } = render(<AccountCard account={account} />)
 
-    await waitFor(() => {
-      const img = container.querySelector('img') as HTMLImageElement
-      expect(img).toHaveAttribute('src', '/exchanges/meria.svg')
-    })
-  })
+      await waitFor(() => {
+        const img = container.querySelector('img') as HTMLImageElement
+        expect(img).toHaveAttribute('src', expected)
+      })
+    },
+  )
 
   it('prefers the connector-supplied logoUrl over a bundled one', async () => {
-    const account = { ...baseAccount, provider: 'MERIA', logoUrl: 'https://logos.example/bnp.png' }
+    const account = {
+      ...baseAccount,
+      provider: 'Amundi Épargne Salariale',
+      logoUrl: 'https://logos.example/bnp.png',
+    }
     const { container } = render(<AccountCard account={account} />)
 
     await waitFor(() => {

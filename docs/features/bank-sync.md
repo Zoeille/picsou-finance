@@ -1,6 +1,6 @@
 # Feature: Bank Sync
 
-> Last updated: 2026-07-19 (HTTPS callback is mandatory — Docker TLS profile)
+> Last updated: 2026-08-01 (PSU types — business banks are listed too)
 
 > **Status (1.0.0).** Enable Banking is the only enabled provider. The Powens
 > adapter ships in the codebase but is **experimental and untested** —
@@ -22,6 +22,45 @@ Both providers implement the `BankConnectorPort` interface with four operations:
 **Enable Banking** (`EnableBankingBankConnector`): Uses the PSD2 Bank Account Data API. Auth is JWT-based (RS256 signed with an RSA private key). Sessions are created via OAuth redirect. After the user authorizes, accounts are linked asynchronously and polled up to 3 times with 1.5-second delays (≤ 4.5 s total). If the session still has no accounts, the adapter returns an empty list rather than throwing; `SyncService` keeps the requisition in `FAILED` so the user can retry from the UI without losing the session id. The previous 24 s blocking poll caused 502 errors at the reverse proxy.
 
 **Powens** (`PowensBankConnector`) — ⚠ experimental, disabled in 1.0.0. Uses screen scraping via the Budget Insight API. Auth is an OAuth webview that handles bank selection and credential entry. The OAuth code is exchanged for a permanent access token. Gated behind `@ConditionalOnExpression` (so it only registers when `POWENS_CLIENT_ID` is set), but `@Primary` was removed for 1.0.0, so Enable Banking remains injected even when the bean is registered.
+
+### PSU types (retail vs business banks)
+
+Enable Banking partitions its ASPSP catalog by **PSU type** — `personal` for
+retail customers, `business` for professionals. `GET /aspsps` takes it as an
+optional filter and returns each ASPSP's own `psu_types` array; `POST /auth`
+takes it as a required field that decides which login page the bank presents.
+
+Picsou originally hardcoded `personal` in both places, which made every
+business-oriented institution invisible in the bank picker — a user with a
+Swan.io account searched "Swan", got nothing, and had no way to tell that from a
+misconfiguration. Swan, like other BaaS providers, is published under `business`
+only.
+
+The catalog is now fetched **unfiltered** and `EnableBankingBankConnector`
+resolves one PSU type per ASPSP (`resolvePsuType`): `personal` whenever the bank
+offers it — so every retail bank behaves exactly as before — otherwise the
+bank's first declared type, passed through verbatim rather than coerced to
+`business`, so an unrecognised provider value can't turn into an `/auth` the API
+rejects. The resolved type is carried on `InstitutionData.psuType`, surfaced in
+both bank pickers as a **Pro** badge, and echoed back on `/auth`. The badge is
+keyed on `business` exactly, not on "not `personal`": the pass-through above means
+an unrecognised value can reach the picker, and it is not evidence that the bank is
+a professional one — so it renders unbadged.
+
+**Institution id format.** The id is an opaque round-trip token the client never
+parses, so the PSU type rides along inside it rather than as a second field the
+client would have to remember to send back:
+
+```
+"Swan::FR::business"     name::country::psuType   (current)
+"BoursoBank::FR"         name::country            (written before this change)
+```
+
+`parseInstitutionId` and `SyncService.findInstitution` both accept the legacy
+two-segment form — existing requisitions predate business support and are
+therefore `personal`. `findInstitution` gained a middle matching tier
+(name+country, ignoring the PSU segment) so those rows keep their country
+preference instead of degrading to a bare name match.
 
 ### Requisition lifecycle
 
@@ -84,6 +123,8 @@ SchedulerService.dailyBankSync() --> SyncService.resyncAll()
 | Keyword-based type detection | Banks rarely expose a standardized type field; product name is the most reliable signal | Hardcoded institution-to-type mapping |
 | Async polling for Enable Banking accounts | EB links accounts asynchronously after OAuth; polling (8x3s) handles the delay | Webhook (EB does not provide one) |
 | Permanent access token for Powens | Powens tokens do not expire; stored directly as the requisition ID | Refresh token rotation (not needed) |
+| PSU type encoded in the composite institution id | The id is already an opaque token the client round-trips untouched, so no new request field, no DTO change — and legacy two-segment ids stay parseable | A separate `psuType` field on `POST /sync/initiate` (one more thing the client must send back, plus a nullable column on `requisition`) |
+| One PSU type resolved per bank, `personal` preferred | A personal-finance app should not ask retail users to pick a login flavour; only business-only banks need the other one | A Particulier/Pro toggle in the search UI |
 
 ## Enable Banking onboarding caveats
 
@@ -122,13 +163,22 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 - **ALREADY_AUTHORIZED**: If the OAuth code is reused (e.g. browser back button), `SyncService.completeConnection()` catches the error and falls back to refreshing the latest linked session instead of failing.
 - **Type upgrade on resync**: If the user has not customized an account's type, `upsertAccount()` will upgrade it from CHECKING to the detected type on the next sync. Manual user changes are preserved (only CHECKING is auto-upgraded).
 - **Both providers are optional**: The app starts fine without either. No `BankConnectorPort` bean is required at startup.
+- **A business bank in the list can still fail at authorization**: Enable Banking
+  lets an ASPSP declare `required_psu_headers` that must accompany `/auth`.
+  Picsou does not send them, so a business bank may now be *findable* yet fail
+  when connecting. That is a different failure from "the bank isn't listed" —
+  don't re-diagnose the search path for it.
+- **`IntegrationsHealthService` queries `/aspsps` unfiltered too**, deliberately:
+  it is a JWT/connectivity probe (`toBodilessEntity()`), and leaving a lone
+  `psu_type=personal` there would read as an oversight.
 - **Bank logos**: `InstitutionData.logoUrl` (Enable Banking only — Powens hardcodes `null`) is captured at connection time and copied onto each `Account`. See [bank-logos.md](./bank-logos.md) for the capture/backfill flow and the account card fallback to `color`.
 
 ## Tests
 
-- `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow
+- `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow, and logo matching for both the current and the legacy institution id format
+- `AddAccountModal.test.tsx` -- the Pro badge shows for a business-only institution, and not for a retail one nor for an unrecognised PSU type
 - `EnableBankingConfigProviderTest` -- DB/env resolution precedence, and `keyId()` falling back to the Application ID vs honoring an explicitly-configured value
-- `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider
+- `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider, plus the pure catalog helpers: `resolvePsuType` (business-only banks, the Swan regression), `toInstitutions` (composite id, de-duplication, country fallback) and `parseInstitutionId` (three-segment, legacy two-segment, unexpected PSU segment)
 - `AdminControllerTest` -- `getSettings` reads the resolved provider; `updateEnableBanking` delegates the 2-arg writer
 - `IntegrationsServiceTest` -- `isEffectivelyEnabled` = stored flag OR detected config (env/DB/session presence)
 - Manual integration testing against real provider APIs

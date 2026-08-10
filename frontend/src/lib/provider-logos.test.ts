@@ -3,12 +3,14 @@ import { PROVIDER_LOGOS, providerLogoUrl } from './provider-logos'
 
 /**
  * Vite expands this glob against the filesystem at transform time, so the keys are exactly
- * the SVGs that exist under `public/`. The loaders are never called — matching the paths is
+ * the image assets under `public/`. The loaders are never called — matching the paths is
  * the whole point, and it keeps the app's `node`-free tsconfig (`types: ["vite/client"]`)
  * as-is instead of pulling `node:fs` into a test that lives under `src/`.
  */
 const bundledAssets = new Set(
-  Object.keys(import.meta.glob('../../public/**/*.svg')).map((p) => p.replace('../../public', '')),
+  Object.keys(import.meta.glob('../../public/**/*.{svg,png}')).map((p) =>
+    p.replace('../../public', ''),
+  ),
 )
 
 describe('PROVIDER_LOGOS', () => {
@@ -22,15 +24,24 @@ describe('PROVIDER_LOGOS', () => {
 })
 
 describe('providerLogoUrl', () => {
+  // Copied verbatim from AmundiSyncService.PROVIDER. If either side is renamed — or the
+  // accent drifts between Unicode normalisations — this fails instead of quietly showing
+  // the color circle again.
+  it('resolves the provider string the Amundi connector writes', () => {
+    expect(providerLogoUrl('Amundi Épargne Salariale')).toBe('/providers/amundi.png')
+  })
+
   it('resolves the exchange name the backend writes as provider', () => {
     expect(providerLogoUrl('MERIA')).toBe('/exchanges/meria.svg')
   })
 
   it('matches case-insensitively', () => {
+    expect(providerLogoUrl('AMUNDI ÉPARGNE SALARIALE')).toBe('/providers/amundi.png')
     expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
   })
 
   it('returns null for a provider with no bundled logo', () => {
+    expect(providerLogoUrl('Bourse Direct')).toBeNull()
     expect(providerLogoUrl('BNP Paribas')).toBeNull()
     expect(providerLogoUrl(null)).toBeNull()
     expect(providerLogoUrl('')).toBeNull()

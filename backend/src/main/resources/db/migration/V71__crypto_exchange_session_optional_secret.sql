@@ -1,4 +1,4 @@
--- V64: Meria authenticates with a single read-only API key (header API-KEY, no secret and no
+-- V71: Meria authenticates with a single read-only API key (header API-KEY, no secret and no
 -- HMAC signing), so api_secret becomes optional.
 --
 -- Existing BINANCE/KRAKEN rows are unaffected: dropping NOT NULL never rejects data that is

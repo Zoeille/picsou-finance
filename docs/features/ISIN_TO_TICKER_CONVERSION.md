@@ -81,6 +81,7 @@ OpenFIGI `exchCode` is mapped to Yahoo suffix (e.g., `GY`→`.DE`, `NA`→`.AS`,
 - **Yahoo Finance rejects ISIN-format strings**. `YahooFinancePriceProvider.supports()` uses regex `[A-Z]{2}[A-Z0-9]{9}[A-Z0-9]` to detect 12-char ISINs and returns false. Unconverted ISINs never get price data.
 - **Deduplication aggregates by ticker**. Multiple ISINs mapping to the same ticker are merged in `TradeRepublicSyncService` via `Map.merge()`. The name from the first ISIN wins.
 - **Some tickers may not exist on Yahoo Finance**. German-listed tickers like `6RJ0.DE` (internal Bloomberg ID) may not resolve. The home-exchange-first strategy mitigates this.
+- **OpenFIGI's `ticker` field is not always a symbol**. For bonds it holds the Bloomberg *description*: querying `XS2657412201` (airBaltic 14.5% 2029) returns `ticker: "AIRBAL 14.5 08/14/29 REGS"` on `exchCode: "EURONEXT-DUBLIN"`, which is absent from `EXCHANGE_SUFFIX` — so `byExchange` stayed empty and step 5 ("raw ticker from first entry") emitted that description verbatim as the holding's ticker. `pickBest()` now filters every candidate through `SYMBOL_PATTERN` (`[A-Z0-9][A-Z0-9.-]{0,14}`, checked before the exchange suffix is appended) and returns `null` when nothing plausible remains. `resolve()` then falls back to the ISIN, which `YahooFinancePriceProvider.supports()` already rejects — so an unmappable bond costs zero HTTP requests instead of one 404 per price lookup (GH issue #76).
 
 ## Tests
 

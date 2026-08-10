@@ -193,6 +193,7 @@
     "compteTitres": "Cuenta de valores",
     "crypto": "Cripto",
     "realEstate": "Inmobiliario",
+    "employeeSavings": "Ahorro salarial",
     "loan": "Préstamo",
     "other": "Otro"
   },
@@ -408,6 +409,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
+      "amundi": "PEE, PEG, PERCO, PER en Amundi",
       "finary": "Importar desde Finary",
       "manual": "Crear una cuenta manualmente"
     }
@@ -419,6 +421,8 @@
       "search": "Buscar un banco",
       "searchPlaceholder": "p. ej. BNP Paribas...",
       "searchError": "No se pueden buscar bancos en este momento.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Cuenta de empresa — este banco solo atiende a clientes profesionales",
       "connected": "Conexiones activas",
       "noConnections": "Sin conexiones bancarias",
       "connect": "Conectar",
@@ -586,6 +590,40 @@
         "invalidMfaCode": "Código MFA no válido o caducado.",
         "sessionExpired": "Sesión caducada. Vuelve a conectarte.",
         "serverError": "Error del servidor de BoursoBank. Inténtalo de nuevo."
+      }
+    },
+    "amundi": {
+      "title": "Amundi",
+      "login": "Identificador",
+      "password": "Contraseña",
+      "otpCode": "Código de seguridad de 6 dígitos",
+      "otpPrompt": "Introduzca el código que Amundi le ha enviado por SMS.",
+      "appValidationPrompt": "Abra la aplicación Mon Épargne y valide la conexión.",
+      "appValidationHint": "Esta página se actualiza sola en cuanto lo valide.",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "validate": "Validar código",
+      "validating": "Validando…",
+      "sync": "Sincronizar",
+      "queued": "Sincronización en cola…",
+      "syncing": "Sincronizando…",
+      "syncSuccess": "Planes de ahorro sincronizados.",
+      "clearSession": "Desconectar",
+      "noSession": "Ninguna sesión activa",
+      "sessionActive": "Sesión activa",
+      "scope": "Sincroniza sus planes de ahorro salarial (PEE, PEG, PERCO, PER) y las líneas de FCPE que contienen, con su valoración.",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espere antes de reintentar.",
+        "invalidCredentials": "Credenciales de Amundi no válidas.",
+        "captchaBlocked": "Amundi pide un captcha que Picsou no puede resolver. Inténtelo más tarde.",
+        "invalidCode": "Código de seguridad no válido o caducado. Vuelva a empezar.",
+        "appValidationTimeout": "La validación en la aplicación no se confirmó a tiempo. Vuelva a empezar.",
+        "authAttemptExpired": "El intento de autenticación ha caducado. Vuelva a empezar.",
+        "sessionExpired": "La sesión de Amundi ha caducado. Vuelva a conectarse.",
+        "portfolioIncomplete": "Amundi devolvió planes incompletos. Se han conservado sus datos existentes.",
+        "formatChanged": "El formato del sitio de Amundi ha cambiado. Se han conservado sus datos existentes.",
+        "invalidData": "Amundi devolvió datos incoherentes. Se han conservado sus datos existentes.",
+        "serverError": "No se puede contactar con Amundi. Inténtelo de nuevo."
       }
     },
     "bourseDirect": {

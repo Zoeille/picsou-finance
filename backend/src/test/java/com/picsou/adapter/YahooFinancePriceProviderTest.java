@@ -1,6 +1,8 @@
 package com.picsou.adapter;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientRequest;
@@ -13,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -235,5 +238,96 @@ class YahooFinancePriceProviderTest {
         // 3000 JPY × 0.006 = 18; 3100 JPY × 0.006 = 18.6 — both must be present
         assertThat(prices.values().stream().map(BigDecimal::doubleValue).toList())
             .anySatisfy(v -> assertThat(v).isCloseTo(18.0, within(0.01)));
+    }
+
+    @Test
+    void supports_rejectsStringsThatAreNotSymbols() {
+        var provider = new YahooFinancePriceProvider();
+
+        assertThat(provider.supports("AIRBAL 14.5 08/14/29 REGS")).isFalse();
+        assertThat(provider.supports("AIR BALTIC")).isFalse();
+        assertThat(provider.supports("A/B")).isFalse();
+        assertThat(provider.supports("THIS_IS_NOT_A_TICKER_AT_ALL")).isFalse();
+    }
+
+    @Test
+    void supports_acceptsRealYahooSymbolShapes() {
+        var provider = new YahooFinancePriceProvider();
+
+        assertThat(provider.supports("PHYMF")).isTrue();
+        assertThat(provider.supports("IWDA.AS")).isTrue();
+        assertThat(provider.supports("MC.PA")).isTrue();
+        assertThat(provider.supports("BRK-B")).isTrue();
+        assertThat(provider.supports("1810.HK")).isTrue();
+        assertThat(provider.supports("USDEUR=X")).isTrue();
+        assertThat(provider.supports("^GSPC")).isTrue();
+    }
+
+    @Test
+    void supports_enforcesTwentyCharacterLimitIncludingIndexPrefix() {
+        var provider = new YahooFinancePriceProvider();
+
+        assertThat(provider.supports("A".repeat(20))).isTrue();
+        assertThat(provider.supports("A".repeat(21))).isFalse();
+        assertThat(provider.supports("^" + "A".repeat(19))).isTrue();
+        assertThat(provider.supports("^" + "A".repeat(20))).isFalse();
+    }
+
+    @Test
+    @ResourceLock(Resources.LOCALE)
+    void supports_normalizesWithLocaleRoot_soATurkishDefaultLocaleDoesNotBreakTickers() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            var provider = new YahooFinancePriceProvider();
+
+            assertThat(provider.supports("iwda.as")).isTrue();
+            assertThat(provider.supports("isin")).isTrue();
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
+    @ResourceLock(Resources.LOCALE)
+    void getPricesEur_keysTheResultWithLocaleRootUppercase() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            var provider = providerWith(url -> url.toUpperCase(Locale.ROOT).contains("/IWDA.AS")
+                ? ASML_EUR : null, null);
+
+            assertThat(provider.getPricesEur(Set.of("iwda.as"))).containsKey("IWDA.AS");
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
+    void historicalIntradayAndInstrumentType_neverCallYahoo_forNonSymbolTickers() {
+        AtomicInteger calls = new AtomicInteger();
+        var provider = providerWith(url -> null, calls);
+        String bond = "AIRBAL 14.5 08/14/29 REGS";
+
+        assertThat(provider.getHistoricalPricesEur(bond, LocalDate.now().minusDays(7), LocalDate.now()))
+            .isEmpty();
+        assertThat(provider.getIntradayPricesEur(bond,
+            java.time.LocalDateTime.now().minusDays(1), java.time.LocalDateTime.now())).isEmpty();
+        assertThat(provider.getInstrumentType(bond)).isEmpty();
+        assertThat(provider.getHistoricalPricesEur("LU3170240538",
+            LocalDate.now().minusDays(7), LocalDate.now())).isEmpty();
+
+        assertThat(calls.get()).isZero();
+    }
+
+    @Test
+    void getPricesEur_neverCallsYahoo_forNonSymbolTickers() {
+        AtomicInteger calls = new AtomicInteger();
+        var provider = providerWith(url -> null, calls);
+
+        Map<String, BigDecimal> prices = provider.getPricesEur(Set.of("AIRBAL 14.5 08/14/29 REGS"));
+
+        assertThat(prices).isEmpty();
+        assertThat(calls.get()).isZero();
     }
 }

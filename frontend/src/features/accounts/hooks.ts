@@ -26,7 +26,7 @@ export interface PortfolioLine {
   priceUpdatedAt: string | null
 }
 
-const HOLDING_ACCOUNT_TYPES: Account['type'][] = ['PEA', 'COMPTE_TITRES', 'CRYPTO']
+const HOLDING_ACCOUNT_TYPES: Account['type'][] = ['PEA', 'COMPTE_TITRES', 'CRYPTO', 'EMPLOYEE_SAVINGS']
 
 // Single source of truth: recompute the (value, cost, pnl, pct) trio from a live price.
 // Keeps all four derived numbers consistent with the same price snapshot.

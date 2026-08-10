@@ -44,6 +44,17 @@ public class AccountService {
 
     private static final Logger log = LoggerFactory.getLogger(AccountService.class);
 
+    /**
+     * Providers that report an authoritative EUR valuation for every holding.
+     * Yahoo cannot quote some of their instruments -- and never quotes Amundi's
+     * FCPE units -- so a partial live total would understate these accounts,
+     * for épargne salariale all the way down to zero. See {@link #liveBalanceEur}.
+     */
+    private static final Set<String> PROVIDER_VALUED = Set.of(
+        BourseDirectSyncService.PROVIDER,
+        AmundiSyncService.PROVIDER
+    );
+
     private final AccountRepository accountRepository;
     private final BalanceSnapshotRepository snapshotRepository;
     private final AccountHoldingRepository holdingRepository;
@@ -323,7 +334,7 @@ public class AccountService {
             ? account.getCashBalance() : BigDecimal.ZERO;
         BigDecimal liveValue = cashBalance;
         BigDecimal invested = cashBalance;
-        // Cost basis over *every* holding, priced or not. Only the Bourse Direct override below
+        // Cost basis over *every* holding, priced or not. Only the provider-valued override below
         // uses it, and only because that override replaces the value with a total covering every
         // holding too — pairing it with the partial basis would invent a gain the size of the
         // positions Yahoo failed to price.
@@ -345,6 +356,17 @@ public class AccountService {
                 anyHoldingPriced = true;
                 if (!quote.live()) anyStale = true;
                 liveValue = liveValue.add(qty.multiply(quote.price()));
+            } else if (hasTicker && h.getProviderValueEur() != null) {
+                // A ticker we could not price at any age, but the connector reported this line's
+                // own EUR value (Trade Republic, Bourse Direct). Use it rather than dropping the
+                // line. The lookup did fail, so allHoldingsPriced goes false — that is what makes
+                // the provider-valued override below prefer the provider's own total. But the
+                // line itself is valued, so it counts as priced and its cost basis is counted
+                // below: adding the value while dropping the cost is the mismatch that reports a
+                // gain the size of the position, the -85% incident with the sign flipped.
+                allHoldingsPriced = false;
+                liveValue = liveValue.add(h.getProviderValueEur());
+                anyHoldingPriced = true;
             } else if (hasTicker) {
                 allHoldingsPriced = false;
                 // Skipping is deliberate -- a held-but-unpriced asset must not be valued at a
@@ -400,17 +422,17 @@ public class AccountService {
             invested = account.getCurrentBalance();
             investedOverAllHoldings = account.getCurrentBalance();
         }
-        // Bourse Direct reports an authoritative total in EUR. If Yahoo/OpenFIGI cannot
-        // price even one instrument, prefer that last successful broker valuation over a
+        // Some providers report an authoritative total in EUR. If Yahoo/OpenFIGI cannot
+        // price even one instrument, prefer that last successful provider valuation over a
         // misleading partial total (cash + only the symbols Yahoo happened to resolve).
-        if ("Bourse Direct".equals(account.getProvider()) && !allHoldingsPriced) {
-            // Both sides move together. The broker's total covers every position, so the cost
+        if (!allHoldingsPriced && isProviderValued(account)) {
+            // Both sides move together. The provider's total covers every position, so the cost
             // basis must too: pairing it with the partial basis reports a gain the size of the
             // unpriced positions' cost — the same value/cost mismatch as the -85% incident, with
             // the sign flipped, and dailySnapshots would write it into balance_snapshot.
             liveValue = account.getCurrentBalance();
             invested = investedOverAllHoldings;
-            // The broker valued them; only our price lookup failed.
+            // The provider valued them; only our price lookup failed.
             anyHoldingPriced = true;
         }
         return new Valuation(liveValue, invested, allHoldingsPriced, anyHoldingPriced, anyStale);
@@ -449,6 +471,11 @@ public class AccountService {
         return account.getType() == AccountType.CRYPTO
             ? priceService.getCryptoQuotes(tickers)
             : priceService.getQuotes(tickers);
+    }
+
+    /** Null-safe: {@code Set.of(...)} throws on a null lookup, and most accounts have no provider. */
+    private boolean isProviderValued(Account account) {
+        return account.getProvider() != null && PROVIDER_VALUED.contains(account.getProvider());
     }
 
     /**

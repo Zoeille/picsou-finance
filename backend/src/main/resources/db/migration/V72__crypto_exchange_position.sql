@@ -1,4 +1,4 @@
--- V65: Per-product breakdown behind a crypto exchange account's holdings.
+-- V72: Per-product breakdown behind a crypto exchange account's holdings.
 --
 -- An exchange can hold the same asset under several products at once (spot, staked, lent), which
 -- account_holding cannot express: it is the valuation model shared by every connector and is

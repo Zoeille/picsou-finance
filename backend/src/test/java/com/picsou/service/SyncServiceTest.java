@@ -51,18 +51,18 @@ class SyncServiceTest {
         FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
         when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
 
-        when(bankConnector.initiateConnection("BNP_PARIBAS::FR"))
+        when(bankConnector.initiateConnection("BNP Paribas::FR::personal"))
             .thenReturn(new BankConnectorPort.InitiateResult("auth-1", "https://auth.example/link"));
 
-        InstitutionData wrongCountry = new InstitutionData("BNP_PARIBAS::BE", "BNP Paribas", "GEBABEBB",
-            "https://logos.example/bnp-be.png", "BE");
-        InstitutionData exact = new InstitutionData("BNP_PARIBAS::FR", "BNP Paribas", "BNPAFRPP",
-            "https://logos.example/bnp-fr.png", "FR");
+        InstitutionData wrongCountry = new InstitutionData("BNP Paribas::BE::personal", "BNP Paribas", "GEBABEBB",
+            "https://logos.example/bnp-be.png", "BE", "personal");
+        InstitutionData exact = new InstitutionData("BNP Paribas::FR::personal", "BNP Paribas", "BNPAFRPP",
+            "https://logos.example/bnp-fr.png", "FR", "personal");
         when(bankConnector.searchInstitutions("BNP Paribas", "FR")).thenReturn(List.of(wrongCountry, exact));
 
         when(requisitionRepository.save(any(Requisition.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        syncService.initiateConnection("BNP_PARIBAS::FR", "BNP Paribas", memberId);
+        syncService.initiateConnection("BNP Paribas::FR::personal", "BNP Paribas", memberId);
 
         ArgumentCaptor<Requisition> captor = ArgumentCaptor.forClass(Requisition.class);
         verify(requisitionRepository).save(captor.capture());
@@ -149,7 +149,7 @@ class SyncServiceTest {
             .id(20L)
             .member(member)
             .requisitionId("session-2")
-            .institutionId("BOURSOBANK::FR")
+            .institutionId("BoursoBank::FR::personal")
             .institutionName("BoursoBank")
             .logoUrl(null)
             .status(RequisitionStatus.LINKED)
@@ -158,8 +158,8 @@ class SyncServiceTest {
         when(requisitionRepository.findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId))
             .thenReturn(List.of(requisition));
 
-        InstitutionData match = new InstitutionData("BOURSOBANK::FR", "BoursoBank", "BNPAFRPP",
-            "https://logos.example/bourso.png", "FR");
+        InstitutionData match = new InstitutionData("BoursoBank::FR::personal", "BoursoBank", "BNPAFRPP",
+            "https://logos.example/bourso.png", "FR", "personal");
         when(bankConnector.searchInstitutions("BoursoBank", "FR")).thenReturn(List.of(match));
 
         when(bankConnector.fetchBalances("session-2")).thenReturn(List.of());
@@ -207,7 +207,7 @@ class SyncServiceTest {
             .id(22L)
             .member(member)
             .requisitionId("session-22")
-            .institutionId("REVOLUT::FR")
+            .institutionId("Revolut::FR::personal")
             .institutionName("Revolut")
             .logoUrl(null)
             .status(RequisitionStatus.LINKED)
@@ -216,12 +216,85 @@ class SyncServiceTest {
         when(requisitionRepository.findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId))
             .thenReturn(List.of(requisition));
 
-        InstitutionData wrongCountryMatch = new InstitutionData("REVOLUT::LT", "Revolut", "REVOLT21",
-            "https://logos.example/revolut-lt.png", "LT");
-        InstitutionData exactMatch = new InstitutionData("REVOLUT::FR", "Revolut", "REVOLT21",
-            "https://logos.example/revolut-fr.png", "FR");
+        InstitutionData wrongCountryMatch = new InstitutionData("Revolut::LT::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-lt.png", "LT", "personal");
+        InstitutionData exactMatch = new InstitutionData("Revolut::FR::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-fr.png", "FR", "personal");
         when(bankConnector.searchInstitutions("Revolut", "FR")).thenReturn(List.of(wrongCountryMatch, exactMatch));
         when(bankConnector.fetchBalances("session-22")).thenReturn(List.of());
+
+        syncService.resyncAll(memberId);
+
+        assertThat(requisition.getLogoUrl()).isEqualTo("https://logos.example/revolut-fr.png");
+    }
+
+    /**
+     * Requisitions linked before PSU types were modelled store the two-segment
+     * "Revolut::FR", while the catalog now returns three-segment ids. The country
+     * preference must survive that mismatch rather than degrading to a bare name
+     * match, which would pick whichever entry the provider happened to list first.
+     */
+    @Test
+    void resyncAll_backfillMatchesLegacyTwoSegmentIdOnNameAndCountry() {
+        Long memberId = 23L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        Requisition requisition = Requisition.builder()
+            .id(23L)
+            .member(member)
+            .requisitionId("session-23")
+            .institutionId("Revolut::FR")
+            .institutionName("Revolut")
+            .logoUrl(null)
+            .status(RequisitionStatus.LINKED)
+            .build();
+
+        when(requisitionRepository.findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId))
+            .thenReturn(List.of(requisition));
+
+        InstitutionData wrongCountry = new InstitutionData("Revolut::LT::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-lt.png", "LT", "personal");
+        InstitutionData rightCountry = new InstitutionData("Revolut::FR::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-fr.png", "FR", "personal");
+        when(bankConnector.searchInstitutions("Revolut", "FR")).thenReturn(List.of(wrongCountry, rightCountry));
+        when(bankConnector.fetchBalances("session-23")).thenReturn(List.of());
+
+        syncService.resyncAll(memberId);
+
+        assertThat(requisition.getLogoUrl()).isEqualTo("https://logos.example/revolut-fr.png");
+    }
+
+    /**
+     * Same tier as the test above, with the stored name in a different case than the
+     * catalog now returns. A stored id was written from the catalog name of the day, so
+     * casing drift on the provider side is ordinary; matching it case-sensitively drops
+     * to the name-only tier, which takes the first result and so can hand back a logo
+     * from another country -- LT here, for an FR requisition.
+     */
+    @Test
+    void resyncAll_backfillMatchesLegacyIdWhoseNameCaseDrifted() {
+        Long memberId = 24L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        Requisition requisition = Requisition.builder()
+            .id(24L)
+            .member(member)
+            .requisitionId("session-24")
+            .institutionId("revolut::FR")
+            .institutionName("Revolut")
+            .logoUrl(null)
+            .status(RequisitionStatus.LINKED)
+            .build();
+
+        when(requisitionRepository.findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId))
+            .thenReturn(List.of(requisition));
+
+        InstitutionData wrongCountry = new InstitutionData("Revolut::LT::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-lt.png", "LT", "personal");
+        InstitutionData rightCountry = new InstitutionData("Revolut::FR::personal", "Revolut", "REVOLT21",
+            "https://logos.example/revolut-fr.png", "FR", "personal");
+        when(bankConnector.searchInstitutions("Revolut", "FR")).thenReturn(List.of(wrongCountry, rightCountry));
+        when(bankConnector.fetchBalances("session-24")).thenReturn(List.of());
 
         syncService.resyncAll(memberId);
 
