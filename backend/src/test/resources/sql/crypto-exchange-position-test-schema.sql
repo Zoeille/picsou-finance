@@ -3,7 +3,7 @@
 -- The real schema comes from Flyway, which is PostgreSQL-flavoured and cannot run on H2 (see
 -- docs/conventions/testing.md). This stands up just enough for the delete-then-reinsert rewrite:
 -- an `account` row to satisfy the FK, and `crypto_exchange_position` with the same UNIQUE
--- constraint V72 creates — without it this test proves nothing, since the whole point is that the
+-- constraint V74 creates — without it this test proves nothing, since the whole point is that the
 -- constraint is what the old code tripped over.
 --
 -- `account` carries only `id` and `deleted_at`, for the same reason as the transaction-repository

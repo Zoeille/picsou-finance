@@ -18,7 +18,7 @@ Picsou tracks cryptocurrency holdings from two sources: centralized exchanges (B
 
 ### AES-256-GCM encryption
 
-`CryptoEncryption` handles encryption/decryption of API keys and secrets stored in the database. Both `apiKey` and `apiSecret` are encrypted; `apiSecret` is `NULL` for single-key exchanges (`encrypt(null)` and `decrypt(null)` both return `null`, and V71 dropped the column's `NOT NULL`). It uses `AES/GCM/NoPadding` with a 12-byte IV and 128-bit tag. The IV is prepended to the ciphertext before Base64 encoding. The encryption key is provided via the `CRYPTO_ENCRYPTION_KEY` environment variable (Base64-encoded 256-bit key). The app **refuses to start** if the key is not set. See [encryption-at-rest.md](./encryption-at-rest.md) for full details.
+`CryptoEncryption` handles encryption/decryption of API keys and secrets stored in the database. Both `apiKey` and `apiSecret` are encrypted; `apiSecret` is `NULL` for single-key exchanges (`encrypt(null)` and `decrypt(null)` both return `null`, and V73 dropped the column's `NOT NULL`). It uses `AES/GCM/NoPadding` with a 12-byte IV and 128-bit tag. The IV is prepended to the ciphertext before Base64 encoding. The encryption key is provided via the `CRYPTO_ENCRYPTION_KEY` environment variable (Base64-encoded 256-bit key). The app **refuses to start** if the key is not set. See [encryption-at-rest.md](./encryption-at-rest.md) for full details.
 
 ### Binance adapter
 
