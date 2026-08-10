@@ -277,6 +277,9 @@ public class PropertyAdjustments {
     private BigDecimal additiveSqm(RealEstateMetadata m, PropertyKind kind,
                                    List<Adjustment> applied, BigDecimal pricePerSqm) {
         BigDecimal total = BigDecimal.ZERO;
+        // Multiplicative corrections are already in `applied`; only what this method appends
+        // may be rescaled by the cap below.
+        int from = applied.size();
 
         if (m.getGarageCount() != null && m.getGarageCount() > 0) {
             BigDecimal sqm = GARAGE_SQM_EQUIVALENT.multiply(BigDecimal.valueOf(m.getGarageCount()));
@@ -296,7 +299,31 @@ public class PropertyAdjustments {
                 applied.add(additive("LAND_SURPLUS", sqm, pricePerSqm));
             }
         }
-        return total.min(ADDITIVE_CAP_SQM_EQUIVALENT);
+
+        // The cap has to reach the disclosed lines too, not just the total. The breakdown is
+        // load-bearing — the ADR leans on it to make a heuristic figure auditable — and lines
+        // recorded at full size while the total was capped added up to more than what actually
+        // went into the estimate, so the panel contradicted the number it was explaining.
+        // Scaling them keeps every line's share of the truth rather than dropping the last one,
+        // which would misattribute the cut to whichever feature happened to be entered last.
+        if (total.compareTo(ADDITIVE_CAP_SQM_EQUIVALENT) > 0) {
+            rescale(applied, from, ADDITIVE_CAP_SQM_EQUIVALENT.divide(total, 10, RoundingMode.HALF_UP),
+                pricePerSqm);
+            return ADDITIVE_CAP_SQM_EQUIVALENT;
+        }
+        return total;
+    }
+
+    /**
+     * Shrinks the additive lines recorded from index {@code from} onward by {@code ratio}, so
+     * their areas and euro amounts still sum to what the cap allowed.
+     */
+    private void rescale(List<Adjustment> applied, int from, BigDecimal ratio, BigDecimal pricePerSqm) {
+        for (int i = from; i < applied.size(); i++) {
+            Adjustment a = applied.get(i);
+            BigDecimal sqm = a.sqm().multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+            applied.set(i, additive(a.code(), sqm, pricePerSqm));
+        }
     }
 
     private BigDecimal record(List<Adjustment> applied, String code, BigDecimal factor, BigDecimal base) {

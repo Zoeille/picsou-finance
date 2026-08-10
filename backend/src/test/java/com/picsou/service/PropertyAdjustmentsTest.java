@@ -223,6 +223,41 @@ class PropertyAdjustmentsTest {
     }
 
     @Test
+    void cappedExtras_stillAddUpToWhatWasApplied() {
+        // The breakdown is what makes a heuristic figure auditable, so it has to reconcile with
+        // the number it explains. Recording each line at full size while capping only the total
+        // made the panel claim more than went in.
+        RealEstateMetadata hoarder = house()
+            .garageCount((short) 20).parkingCount((short) 20)
+            .landArea(new BigDecimal("100000"))
+            .build();
+        PropertyAdjustments.Result result = compute(hoarder);
+
+        BigDecimal disclosed = result.applied().stream()
+            .filter(a -> a.sqm() != null)
+            .map(PropertyAdjustments.Adjustment::amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        assertThat(disclosed).isEqualByComparingTo(result.addedAmount());
+        // And the cap still bites -- otherwise this would pass by never capping at all.
+        assertThat(result.addedAmount())
+            .isEqualByComparingTo(new BigDecimal("60").multiply(PRICE_PER_SQM));
+    }
+
+    @Test
+    void uncappedExtras_areReportedAtFullSize() {
+        RealEstateMetadata modest = house().garageCount((short) 1).build();
+        PropertyAdjustments.Result result = compute(modest);
+
+        assertThat(result.applied()).singleElement().satisfies(a -> {
+            assertThat(a.code()).isEqualTo("GARAGE");
+            assertThat(a.sqm()).isEqualByComparingTo("12");
+        });
+        assertThat(result.addedAmount())
+            .isEqualByComparingTo(new BigDecimal("12").multiply(PRICE_PER_SQM));
+    }
+
+    @Test
     void everyAppliedCorrectionIsReported() {
         RealEstateMetadata m = apartment()
             .floorNumber((short) 4).hasElevator(false)
