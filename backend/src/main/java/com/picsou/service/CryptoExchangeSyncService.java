@@ -302,6 +302,14 @@ public class CryptoExchangeSyncService {
         List<CryptoExchangePosition> positions =
             positionRepository.findByAccountIdOrderByProductAscTickerAsc(accountId);
 
+        // Spot-only exchanges report nothing the flat holdings table doesn't already show, so
+        // they keep it. Binance is one: its adapter emits a single SPOT line per asset, and
+        // returning those here would swap its account page over to the product view — which
+        // carries no per-holding edit or delete action — for a breakdown with one group.
+        if (positions.stream().allMatch(p -> p.getProduct() == CryptoExchangePort.Product.SPOT)) {
+            return List.of();
+        }
+
         // One resolution for the whole page. Per-position lookups meant an HTTP request per line
         // on every render, which is exactly the traffic that gets an instance rate-limited — and
         // then leaves it with nothing to display. Crypto-only, for the same reason the sync uses

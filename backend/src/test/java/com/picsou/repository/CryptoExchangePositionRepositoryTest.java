@@ -25,8 +25,8 @@ import static org.assertj.core.api.Assertions.tuple;
  * <p>The first shipped version used a derived {@code deleteByAccountId}. That only <em>queues</em>
  * removals, and Hibernate's action queue flushes inserts before deletes — so re-inserting the same
  * {@code (account, product, ticker)} in the same transaction hit the rows still in the table and
- * every sync after the first died on {@code uq_crypto_exchange_position}. The service test caught
- * nothing because its repository is a Mockito mock: no ORM, no constraint, no ordering.
+ * every sync after the first died on the account/product/ticker unique key. The service test
+ * caught nothing because its repository is a Mockito mock: no ORM, no constraint, no ordering.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)

@@ -386,6 +386,43 @@ class CryptoExchangeSyncServiceTest {
             .id(7L).exchangeType(type).apiKey(apiKey).apiSecret(apiSecret).status("CONNECTED").build();
     }
 
+    // ── The per-product view is only for exchanges that actually have products ────
+
+    /**
+     * Binance emits one SPOT line per asset, so the breakdown would be a single group that says
+     * nothing the flat holdings table doesn't. The account page switches on this list being
+     * non-empty, and the product view carries no per-holding edit or delete action — so
+     * returning spot-only rows silently takes those buttons away from every Binance account.
+     */
+    @Test
+    void getPositions_isEmptyForASpotOnlyExchange_soTheFlatTableKeepsItsEditAndDelete() {
+        when(positionRepository.findByAccountIdOrderByProductAscTickerAsc(9L)).thenReturn(List.of(
+            position(Product.SPOT, "BTC", "0.5"),
+            position(Product.SPOT, "ETH", "3")));
+
+        assertThat(serviceWith().getPositions(9L, MEMBER_ID)).isEmpty();
+        verifyNoInteractions(priceService);
+    }
+
+    @Test
+    void getPositions_returnsTheBreakdownAsSoonAsOneLineIsNotSpot() {
+        when(positionRepository.findByAccountIdOrderByProductAscTickerAsc(9L)).thenReturn(List.of(
+            position(Product.SPOT, "BTC", "0.5"),
+            position(Product.STAKING, "ETH", "3")));
+        when(holdingRepository.findByAccount_Id(9L)).thenReturn(List.of());
+        when(priceService.getCryptoQuotes(any())).thenReturn(Map.of());
+
+        assertThat(serviceWith().getPositions(9L, MEMBER_ID)).hasSize(2);
+    }
+
+    private CryptoExchangePosition position(Product product, String ticker, String quantity) {
+        CryptoExchangePosition position = new CryptoExchangePosition();
+        position.setProduct(product);
+        position.setTicker(ticker);
+        position.setQuantity(new BigDecimal(quantity));
+        return position;
+    }
+
     /** Everything addExchange needs to run all the way through its immediate sync. */
     private void arrangeSuccessfulSync(ExchangeType type) {
         when(familyMemberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(mock(FamilyMember.class)));

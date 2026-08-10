@@ -22,7 +22,7 @@ import java.time.Instant;
 // already creates this constraint. It is what makes the delete-then-insert rewrite in
 // CryptoExchangeSyncService.replacePositions a hard requirement rather than a style choice.
 @Table(name = "crypto_exchange_position", uniqueConstraints = @UniqueConstraint(
-    name = "uq_crypto_exchange_position",
+    name = "uk_crypto_exchange_position_account_product_ticker",
     columnNames = {"account_id", "product", "ticker"}))
 @Getter
 @Setter

@@ -20,7 +20,7 @@ CREATE TABLE crypto_exchange_position (
     last_synced_at TIMESTAMPTZ,
     created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_crypto_exchange_position UNIQUE (account_id, product, ticker)
+    CONSTRAINT uk_crypto_exchange_position_account_product_ticker UNIQUE (account_id, product, ticker)
 );
 
 CREATE INDEX idx_crypto_exchange_position_account ON crypto_exchange_position (account_id);

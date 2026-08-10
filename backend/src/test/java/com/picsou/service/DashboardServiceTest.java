@@ -45,7 +45,12 @@ class DashboardServiceTest {
             .build();
         when(accountRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(account));
         when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
-        when(accountService.liveBalanceEur(account)).thenReturn(new BigDecimal("5000"));
+        // Unpriced on both sides: valuation() drops the holding from the value *and* the cost
+        // basis, which is the whole point -- keeping its 1000 EUR cost while its value is gone
+        // is what booked an untouched account as a loss.
+        when(accountService.valuation(account))
+            .thenReturn(new AccountService.Valuation(
+                new BigDecimal("5000"), new BigDecimal("5000"), false, true, false));
         when(historyService.buildHistory(List.of(1L), 12, 42L)).thenReturn(List.of());
         when(goalRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of());
 
@@ -54,7 +59,9 @@ class DashboardServiceTest {
         assertThat(response.totalNetWorth()).isEqualByComparingTo("5000");
         assertThat(response.distribution()).hasSize(1);
         assertThat(response.distribution().getFirst().balanceEur()).isEqualByComparingTo("5000");
-        verify(accountService).liveBalanceEur(account);
+        // The dashboard must take both figures from one pass, not pair liveBalanceEur with its
+        // own cost-basis loop -- see docs/features/price-service.md.
+        verify(accountService).valuation(account);
     }
 
     @Test
@@ -69,7 +76,9 @@ class DashboardServiceTest {
             .build();
         when(accountRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(account));
         when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
-        when(accountService.liveBalanceEur(account)).thenReturn(new BigDecimal("2000"));
+        when(accountService.valuation(account))
+            .thenReturn(new AccountService.Valuation(
+                new BigDecimal("2000"), new BigDecimal("1000"), true, true, false));
         when(historyService.buildHistory(List.of(1L), 12, 42L)).thenReturn(List.of());
         when(goalRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of());
 
