@@ -423,6 +423,8 @@
     "banks": {
       "title": "Banken",
       "search": "Bank suchen",
+      "country": "Land",
+      "countriesLoadError": "Nicht alle Länder konnten geladen werden — nur Frankreich verfügbar.",
       "searchPlaceholder": "z. B. BNP Paribas...",
       "searchError": "Die Bankensuche ist derzeit nicht möglich.",
       "connected": "Aktive Verbindungen",

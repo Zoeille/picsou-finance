@@ -25,10 +25,12 @@ import type {
 // --- Bank Sync (Enable Banking) ---
 
 export const bankSyncApi = {
-  searchInstitutions: (query: string) =>
+  searchInstitutions: (query: string, country: string) =>
     api
-      .get<Institution[]>('/sync/institutions', { params: { query }, skipGlobalErrorRedirect: true })
+      .get<Institution[]>('/sync/institutions', { params: { query, country }, skipGlobalErrorRedirect: true })
       .then(r => r.data),
+
+  listCountries: () => api.get<string[]>('/sync/countries', { skipGlobalErrorRedirect: true }).then(r => r.data),
 
   initiate: (institutionId: string, institutionName: string) =>
     api

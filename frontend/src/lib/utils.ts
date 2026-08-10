@@ -51,6 +51,16 @@ export function formatCurrency(value: number, currency = 'EUR', locale = getLoca
   }
 }
 
+/** ISO 3166-1 alpha-2 code → localized country name (e.g. "EE" → "Estonia"). Falls back to the raw code for an unknown/invalid one. */
+export function formatCountryName(code: string, locale = getLocale()): string {
+  try {
+    const name = new Intl.DisplayNames([normalizeIntlLocale(locale)], { type: 'region' }).of(code)
+    return name && name !== code ? name : code
+  } catch {
+    return code
+  }
+}
+
 /**
  * Parses an API date, anchoring a date-only value at *local* midnight.
  *

@@ -3,10 +3,12 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
+import { useSearchInstitutions } from '@/features/sync/hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { BankCountrySelect, DEFAULT_BANK_COUNTRY } from '@/components/shared/BankCountrySelect'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import {
@@ -18,8 +20,7 @@ import {
   CheckCircle,
   AlertTriangle,
 } from 'lucide-react'
-import type { Institution } from '@/types/api'
-import { extractErrorMessage } from '@/lib/errors'
+import { extractErrorMessage, formatApiError } from '@/lib/errors'
 
 type CallbackStatus = 'completing' | 'done' | 'error'
 
@@ -63,6 +64,7 @@ export function BankSyncTab() {
   const [searchParams] = useSearchParams()
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [country, setCountry] = useState(DEFAULT_BANK_COUNTRY)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [callbackStatus, setCallbackStatus] = useState<CallbackStatus | null>(null)
   const [callbackError, setCallbackError] = useState<string | null>(null)
@@ -95,14 +97,12 @@ export function BankSyncTab() {
 
   const searchEnabled = searchQuery.trim().length >= 2
 
-  const { data: institutions, isLoading: searchLoading } = useQuery<Institution[]>({
-    queryKey: ['sync', 'institutions', searchQuery],
-    queryFn: () =>
-      api
-        .get<Institution[]>('/sync/institutions', { params: { query: searchQuery.trim() } })
-        .then(r => r.data),
-    enabled: searchEnabled,
-  })
+  const {
+    data: institutions,
+    isError: searchFailed,
+    isLoading: searchLoading,
+    error: searchError,
+  } = useSearchInstitutions(searchQuery.trim(), country)
 
   const { data: connections, isLoading: connectionsLoading } = useQuery<BankConnection[]>({
     queryKey: ['sync', 'connections'],
@@ -195,22 +195,31 @@ export function BankSyncTab() {
       {/* Search section */}
       <div className="space-y-3">
         <label className="text-sm font-medium">{t('sync.banks.search')}</label>
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground"
-          />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('sync.banks.searchPlaceholder')}
-            className="pl-10"
-          />
+        <div className="flex items-start gap-2">
+          <div className="relative flex-1">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground"
+            />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('sync.banks.searchPlaceholder')}
+              className="pl-10"
+            />
+          </div>
+          <BankCountrySelect value={country} onChange={setCountry} />
         </div>
 
         {/* Search results */}
         {searchLoading && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
 
-        {searchEnabled && institutions && institutions.length > 0 && (
+        {searchEnabled && searchFailed && !searchLoading && (
+          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <span className="flex-1">{formatApiError(searchError, t, 'sync.banks.searchError')}</span>
+          </div>
+        )}
+
+        {searchEnabled && !searchFailed && institutions && institutions.length > 0 && (
           <div className="space-y-2">
             {institutions.map(inst => (
               <Card key={inst.id} size="sm">
@@ -241,7 +250,7 @@ export function BankSyncTab() {
           </div>
         )}
 
-        {searchEnabled && institutions && institutions.length === 0 && !searchLoading && (
+        {searchEnabled && !searchFailed && institutions && institutions.length === 0 && !searchLoading && (
           <p className="text-sm text-muted-foreground">{t('sync.banks.noConnections')}</p>
         )}
       </div>

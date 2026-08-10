@@ -15,6 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { AccountForm } from '@/components/shared/AccountForm'
 import { AddPropertyModal } from '@/components/property/AddPropertyModal'
+import { BankCountrySelect, DEFAULT_BANK_COUNTRY } from '@/components/shared/BankCountrySelect'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { BourseDirectPanel } from '@/components/sync/BourseDirectPanel'
 import { DegiroPanel } from '@/components/sync/DegiroPanel'
@@ -330,6 +331,7 @@ function InstitutionLogo({ logoUrl }: { logoUrl?: string | null }) {
 function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
   const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
+  const [country, setCountry] = useState(DEFAULT_BANK_COUNTRY)
   const [error, setError] = useState<string | null>(null)
 
   const {
@@ -337,7 +339,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
     isError: searchFailed,
     isLoading: searchLoading,
     error: searchError,
-  } = useSearchInstitutions(searchQuery.trim())
+  } = useSearchInstitutions(searchQuery.trim(), country)
   const initiateMutation = useInitiateBankSync()
 
   const searchEnabled = searchQuery.trim().length >= 2
@@ -367,15 +369,18 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
             <Button variant="ghost" size="sm" onClick={() => setError(null)}>x</Button>
           </div>
         )}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('sync.banks.searchPlaceholder')}
-            className="pl-10"
-            autoFocus
-          />
+        <div className="flex items-start gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('sync.banks.searchPlaceholder')}
+              className="pl-10"
+              autoFocus
+            />
+          </div>
+          <BankCountrySelect value={country} onChange={setCountry} />
         </div>
 
         {searchLoading && (

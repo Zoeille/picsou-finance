@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -34,9 +35,13 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
     private static final Logger log = LoggerFactory.getLogger(EnableBankingBankConnector.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    // Bank coverage per country changes rarely; this avoids re-fetching the full
+    // ~2400-institution catalog (no country filter) on every "Add Account" open.
+    private static final long COUNTRIES_CACHE_TTL_SECONDS = 21_600; // 6 hours
 
     private final EnableBankingConfigProvider configProvider;
     private final WebClient webClient;
+    private volatile CachedCountries countriesCache;
 
     public EnableBankingBankConnector(
         EnableBankingConfigProvider configProvider,
@@ -47,6 +52,12 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             .baseUrl(baseUrl)
             .defaultHeader("Accept", "application/json")
             .defaultHeader("Content-Type", "application/json")
+            // WebClient's default in-memory buffer limit is 256 KB — too small for
+            // searchInstitutions() on a large single-country result (e.g. Germany alone is
+            // ~1.4 MB across ~1100 institutions), a latent bug independent of this change.
+            .exchangeStrategies(ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
+                .build())
             .build();
     }
 
@@ -288,7 +299,7 @@ public class EnableBankingBankConnector implements BankConnectorPort {
      */
     static InstitutionRef parseInstitutionId(String institutionId) {
         String[] parts = institutionId.split("::");
-        String country = parts.length > 1 && !parts[1].isBlank() ? parts[1] : "FR";
+        String country = parts.length > 1 && !parts[1].isBlank() ? parts[1] : DEFAULT_COUNTRY;
         String psuType = parts.length > 2 && !parts[2].isBlank() ? parts[2] : PSU_PERSONAL;
         if (!PSU_PERSONAL.equals(psuType) && !PSU_BUSINESS.equals(psuType)) psuType = PSU_PERSONAL;
         return new InstitutionRef(parts[0], country, psuType);
@@ -320,7 +331,57 @@ public class EnableBankingBankConnector implements BankConnectorPort {
         return List.copyOf(byId.values());
     }
 
+    /**
+     * {@code GET /application} returns the countries this application is actually
+     * registered/active for — a small, static-ish payload, and more correct than
+     * deriving coverage from the full ASPSP catalog (which could list countries this
+     * particular app isn't licensed for, or omit the distinction entirely).
+     */
+    @Override
+    public List<String> listCountries() {
+        CachedCountries cached = countriesCache;
+        if (cached != null && !cached.isExpired()) {
+            return cached.countries();
+        }
+
+        ApplicationResponse response = webClient.get()
+            .uri("/application")
+            .header("Authorization", "Bearer " + buildJwt())
+            .retrieve()
+            .bodyToMono(ApplicationResponse.class)
+            .timeout(TIMEOUT)
+            .onErrorMap(WebClientResponseException.class,
+                ex -> new SyncException("Failed to fetch application countries: [" + ex.getStatusCode() + "] " + ex.getResponseBodyAsString(), ex))
+            .onErrorMap(ex -> !(ex instanceof SyncException),
+                ex -> new SyncException("Failed to fetch application countries: " + ex.getMessage(), ex))
+            .block();
+
+        List<String> countries;
+        if (response == null || response.countries() == null) {
+            log.warn("Enable Banking /application returned {} — not caching this result",
+                response == null ? "an empty body" : "no countries field");
+            countries = List.of();
+        } else {
+            countries = response.countries().stream().sorted().toList();
+        }
+
+        // Don't cache a null/empty result for the full 6h TTL — a transient blip would
+        // otherwise silently pin the country picker to the France-only fallback for hours.
+        // Serve (and keep) the last good cached value a little longer instead, if we have one.
+        if (!countries.isEmpty()) {
+            countriesCache = new CachedCountries(countries, Instant.now());
+            return countries;
+        }
+        return cached != null ? cached.countries() : countries;
+    }
+
     // ─── Private helpers ──────────────────────────────────────────────────────
+
+    private record CachedCountries(List<String> countries, Instant cachedAt) {
+        boolean isExpired() {
+            return Instant.now().isAfter(cachedAt.plusSeconds(COUNTRIES_CACHE_TTL_SECONDS));
+        }
+    }
 
     private AccountData fetchAccountData(String accountId) {
         BalancesResponse balances = webClient.get()
@@ -408,6 +469,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record AspspsResponse(List<AspspResponse> aspsps) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ApplicationResponse(List<String> countries) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record AspspResponse(

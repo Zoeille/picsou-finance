@@ -25,7 +25,8 @@ import type {
 export const syncKeys = {
   all: ['sync'] as const,
   banks: () => [...syncKeys.all, 'banks'] as const,
-  institutions: (q: string) => [...syncKeys.all, 'institutions', q] as const,
+  institutions: (q: string, country: string) => [...syncKeys.all, 'institutions', q, country] as const,
+  countries: () => [...syncKeys.all, 'countries'] as const,
   tr: () => [...syncKeys.all, 'tr'] as const,
   bourso: () => [...syncKeys.all, 'bourso'] as const,
   bourseDirect: () => [...syncKeys.all, 'bourse-direct'] as const,
@@ -49,11 +50,20 @@ export function useBankSyncStatus() {
   })
 }
 
-export function useSearchInstitutions(query: string) {
+export function useSearchInstitutions(query: string, country: string) {
   return useQuery({
-    queryKey: syncKeys.institutions(query),
-    queryFn: () => bankSyncApi.searchInstitutions(query),
+    queryKey: syncKeys.institutions(query, country),
+    queryFn: () => bankSyncApi.searchInstitutions(query, country),
     enabled: query.length >= 2,
+  })
+}
+
+/** Countries the active bank-sync provider covers, for the country picker. staleTime mirrors the backend's own 6h cache TTL. */
+export function useBankCountries() {
+  return useQuery({
+    queryKey: syncKeys.countries(),
+    queryFn: bankSyncApi.listCountries,
+    staleTime: 6 * 60 * 60 * 1000,
   })
 }
 

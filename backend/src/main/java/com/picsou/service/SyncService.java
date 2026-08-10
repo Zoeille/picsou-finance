@@ -127,6 +127,12 @@ public class SyncService {
         return bankConnector.searchInstitutions(query, country);
     }
 
+    /** Countries the active provider has institutions for, for the "which country" selector. */
+    @Transactional(readOnly = true)
+    public List<String> listCountries() {
+        return bankConnector.listCountries();
+    }
+
     /** Get all requisitions for a member ordered by date. */
     @Transactional(readOnly = true)
     public List<Requisition> getAllRequisitions(Long memberId) {
@@ -348,11 +354,17 @@ public class SyncService {
             : institutionId.trim().toLowerCase(Locale.ROOT);
     }
 
-    /** institutionId format: "BankName::FR::personal" (name::country::psuType) — see EnableBankingBankConnector. */
+    /**
+     * institutionId format: "BankName::FR::personal" (name::country::psuType) — see
+     * {@link BankConnectorPort#parseInstitutionId}. Blank/absent country returns {@code null}
+     * (not {@link BankConnectorPort#DEFAULT_COUNTRY}) so the logo-backfill search below stays
+     * unfiltered across all countries when the country truly isn't known, rather than narrowing
+     * to France and possibly missing the real (non-French) institution.
+     */
     private static String parseCountry(String institutionId) {
         if (institutionId == null) return null;
-        String[] parts = institutionId.split("::");
-        return parts.length > 1 ? parts[1] : null;
+        String country = BankConnectorPort.parseInstitutionId(institutionId).country();
+        return country.isBlank() ? null : country;
     }
 
     /**

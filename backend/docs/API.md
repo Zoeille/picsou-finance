@@ -25,6 +25,7 @@
 |---------------|-------|
 | Login (`/api/auth/login`) | 5 requests / IP / 15 min |
 | Bank sync (`/api/sync/initiate`) | Throttled |
+| Bank sync (`/api/sync/countries`) | Throttled (own bucket, separate from `/initiate`) |
 | TR auth (`/api/tr/auth/initiate`) | Throttled |
 
 ## Shared Enums
@@ -639,6 +640,22 @@ consent step.
 
 ---
 
+#### `GET /api/sync/countries`
+
+- **Auth:** Required
+- **Rate limit:** Throttled (own bucket per IP, separate from `/initiate`'s)
+
+Countries the active bank-sync provider supports, for the "which country" search filter/UI selector above — sourced from the provider (Enable Banking: `GET /application`'s `countries` field) rather than a hardcoded list. Enable Banking's result is cached in-memory for up to 6 hours.
+
+**Response `200` — `string[]`** (ISO 3166-1 alpha-2 codes, ~29 entries for Enable Banking):
+```json
+["AT", "BE", "DE", "EE", "FR"]
+```
+
+**Errors:** 429, 502
+
+---
+
 #### `POST /api/sync/initiate`
 
 - **Auth:** Required
@@ -658,7 +675,7 @@ consent step.
 }
 ```
 
-**Errors:** 429, 502
+**Errors:** 422 (validation — both fields required), 429, 502
 
 ---
 

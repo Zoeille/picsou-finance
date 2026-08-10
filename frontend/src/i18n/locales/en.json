@@ -430,6 +430,8 @@
     "banks": {
       "title": "Banks",
       "search": "Search a bank",
+      "country": "Country",
+      "countriesLoadError": "Couldn't load all countries — showing France only.",
       "searchPlaceholder": "e.g. BNP Paribas...",
       "searchError": "Unable to search banks right now.",
       "connected": "Active connections",

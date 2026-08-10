@@ -442,12 +442,23 @@ handlers.set(key('DELETE', '/goals/2'), () => null)
 handlers.set(key('DELETE', '/goals/3'), () => null)
 
 // Sync
-handlers.set(key('GET', '/sync/status'), () => mockRequisitions)
-handlers.set(key('GET', '/sync/institutions'), () => [
+const DEMO_INSTITUTIONS = [
   { id: 'BNP Paribas::FR::personal', name: 'BNP Paribas', bic: 'BNPAFRPP', logoUrl: null, country: 'FR', psuType: 'personal' },
   { id: 'BoursoBank::FR::personal', name: 'BoursoBank', bic: 'BNPAFRPP', logoUrl: null, country: 'FR', psuType: 'personal' },
   { id: 'Swan::FR::business', name: 'Swan', bic: 'SWNBFR22', logoUrl: null, country: 'FR', psuType: 'business' },
-])
+  { id: 'Deutsche Bank::DE::personal', name: 'Deutsche Bank', bic: 'DEUTDEFF', logoUrl: null, country: 'DE', psuType: 'personal' },
+  { id: 'LHV Pank::EE::personal', name: 'LHV Pank', bic: 'LHVBEE22', logoUrl: null, country: 'EE', psuType: 'personal' },
+]
+handlers.set(key('GET', '/sync/status'), () => mockRequisitions)
+handlers.set(key('GET', '/sync/institutions'), (config) => {
+  const params = (config.params ?? {}) as { query?: string; country?: string }
+  const country = params.country || 'FR'
+  const query = (params.query ?? '').toLowerCase()
+  return DEMO_INSTITUTIONS.filter((inst) =>
+    inst.country === country && (query === '' || inst.name.toLowerCase().includes(query)),
+  )
+})
+handlers.set(key('GET', '/sync/countries'), () => ['FR', 'DE', 'EE'])
 
 // Crypto exchange
 handlers.set(key('GET', '/crypto/exchange/status'), () => mockExchangeStatuses)
