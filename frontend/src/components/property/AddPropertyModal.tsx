@@ -72,6 +72,11 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
   const [floorNumber, setFloorNumber] = useState('')
   const [hasElevator, setHasElevator] = useState(false)
 
+  // Survives a failed submit: the account is created before its description is saved, so a
+  // retry after the second call failed must reuse it. Without this the user gets a second
+  // empty REAL_ESTATE account on every attempt, and no hint the first one exists.
+  const [createdAccountId, setCreatedAccountId] = useState<number | null>(null)
+
   // Step 3 — what it cost
   const [purchasePrice, setPurchasePrice] = useState('')
   const [purchaseDate, setPurchaseDate] = useState('')
@@ -97,6 +102,7 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
     setSurfaceArea(''); setLandArea(''); setRooms(''); setBedrooms(''); setBathrooms('')
     setFloorNumber(''); setHasElevator(false)
     setPurchasePrice(''); setPurchaseDate(''); setNotaryFees(''); setAgencyFees(''); setWorksCost('')
+    setCreatedAccountId(null)
   }
 
   function close(next: boolean) {
@@ -108,16 +114,21 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
     const price = num(purchasePrice) ?? 0
     const costBasis = price + (num(notaryFees) ?? 0) + (num(agencyFees) ?? 0) + (num(worksCost) ?? 0)
 
-    const created = await createAccount.mutateAsync({
-      name: name.trim(),
-      type: 'REAL_ESTATE',
-      currency: 'EUR',
-      // Seeded from what the property cost, so it never shows 0 € and a 100% loss while
-      // waiting for its first estimate. A successful estimate replaces it immediately.
-      currentBalance: costBasis > 0 ? costBasis : undefined,
-      isManual: true,
-      color: '#a855f7',
-    })
+    let accountId = createdAccountId
+    if (accountId == null) {
+      const created = await createAccount.mutateAsync({
+        name: name.trim(),
+        type: 'REAL_ESTATE',
+        currency: 'EUR',
+        // Seeded from what the property cost, so it never shows 0 € and a 100% loss while
+        // waiting for its first estimate. A successful estimate replaces it immediately.
+        currentBalance: costBasis > 0 ? costBasis : undefined,
+        isManual: true,
+        color: '#a855f7',
+      })
+      accountId = created.id
+      setCreatedAccountId(accountId)
+    }
 
     const metadata: RealEstateMetadataRequest = {
       purchasePrice: price,
@@ -140,16 +151,25 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
       hasElevator: isApartment ? hasElevator : null,
       valuationMode: 'ESTIMATED',
     }
-    await updateMetadata.mutateAsync({ id: created.id, data: metadata })
+    await updateMetadata.mutateAsync({ id: accountId, data: metadata })
 
     // Fire the first estimate without blocking the redirect: the detail page renders the
     // outcome, and a slow or unavailable source must not hold the dialog open.
     if (canEstimate) {
-      refreshValuation.mutate(created.id)
+      refreshValuation.mutate(accountId)
     }
 
     close(false)
-    navigate(`/accounts/${created.id}`)
+    navigate(`/accounts/${accountId}`)
+  }
+
+  /**
+   * `submit` is wired to onClick, where a rejected promise escapes as an unhandled rejection.
+   * Both mutations already surface their failure through `error` above, so there is nothing to
+   * report here — this only keeps the rejection from leaving the handler.
+   */
+  function onSubmit() {
+    void submit().catch(() => {})
   }
 
   return (
@@ -354,7 +374,7 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
               {t('common.next')}
             </Button>
           ) : (
-            <Button type="button" onClick={submit} disabled={!step3Valid || pending}>
+            <Button type="button" onClick={onSubmit} disabled={!step3Valid || pending}>
               {pending ? t('common.loading') : t('property.add.submit')}
             </Button>
           )}
