@@ -396,4 +396,50 @@ class PropertyValuationServiceTest {
         // actually a 256 KB buffer limit.
         assertThat(result.status()).isEqualTo(ValuationStatus.PROVIDER_UNAVAILABLE);
     }
+
+    @Test
+    void estimate_bandBracketsTheEstimateOnceTheAdjustmentsApply() {
+        // A top-floor flat with a lift and two garages: the multiplier pushes up and the
+        // area-equivalents add on top. Re-indexing the raw q25/q75 alone used to leave the
+        // whole band below the figure it was supposed to bracket.
+        Account account = house();
+        RealEstateMetadata flat = metadata(account, "APARTMENT", "33063", ValuationMode.ESTIMATED);
+        flat.setFloorNumber((short) 6);
+        flat.setFloorsTotal((short) 6);
+        flat.setHasElevator(true);
+        flat.setGarageCount((short) 2);
+        flat.setEnergyClass("A");
+
+        when(accessResolver.requireOwner(10L, 1L)).thenReturn(account);
+        when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.of(flat));
+        stubSuccessfulProvider();
+        when(priceIndex.reindexRatio(any(), any(), any())).thenReturn(Optional.empty());
+
+        PropertyValuationResponse result = service.estimate(10L, 1L);
+
+        assertThat(result.status()).isEqualTo(ValuationStatus.OK);
+        assertThat(result.estimatedValue()).isGreaterThan(new BigDecimal("400000"));
+        assertThat(result.estimatedValue())
+            .isBetween(result.lowValue(), result.highValue());
+    }
+
+    @Test
+    void estimate_bandStaysAroundTheEstimateThroughReindexing() {
+        // Both the figure and the bounds are carried forward by the same ratio, so the
+        // bracketing has to survive it.
+        Account account = house();
+        RealEstateMetadata flat = metadata(account, "APARTMENT", "33063", ValuationMode.ESTIMATED);
+        flat.setGarageCount((short) 1);
+
+        when(accessResolver.requireOwner(10L, 1L)).thenReturn(account);
+        when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.of(flat));
+        stubSuccessfulProvider();
+        when(priceIndex.reindexRatio(any(), any(), any()))
+            .thenReturn(Optional.of(new BigDecimal("1.08")));
+
+        PropertyValuationResponse result = service.estimate(10L, 1L);
+
+        assertThat(result.estimatedValue())
+            .isBetween(result.lowValue(), result.highValue());
+    }
 }

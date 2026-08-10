@@ -35,6 +35,7 @@ Estimate (manual button, or monthly job)
         │       communes scale -> median €/m² x living area
         │       empty? fall back to departements, confidence forced LOW
         ├─ PropertyAdjustments      floor, lift, outdoor space, energy, garage, land
+        │                           applied to the estimate *and* to the q25/q75 bounds
         ├─ InseeBdmIndexProvider    carry the DVF vintage forward to today
         ├─ upsert property_valuation on (account_id, today)
         └─ valuation_mode == ESTIMATED ? write account.currentBalance : leave it alone
@@ -102,6 +103,7 @@ account card (see [accounts-overview.md](./accounts-overview.md#account-card-ana
 | Per-room-count series for apartments (`cod121x1..x5`) | The commune-wide flat median mixes studios with five-room apartments; the narrower bucket's median surfaces (25/45/66/85/112 m²) track room count closely | Always `cod121` |
 | Garage/parking priced in m²-equivalent | A flat €12,000 is absurd in central Paris and equally absurd in a village | Fixed euro amount |
 | Return a `status`, don't throw | "No data in Alsace-Moselle" is information the user needs, not a request failure | HTTP error codes for every non-estimate |
+| The band goes through the same correction as the estimate | The adjustment is affine (`x → x·multiplier + area-equivalents`) with a positive multiplier, so putting the bounds through it preserves ordering: a band that contained the raw commune median still contains the corrected figure. Correcting only the headline value produced a band the estimate could sit outside of | Re-index the raw q25/q75 and relabel the band as the commune spread |
 | No map dependency | Would be the first third-party UI library since the shadcn baseline, for a feature the BAN label already covers | Leaflet / MapLibre |
 
 ## Gotchas / Pitfalls
@@ -151,6 +153,13 @@ account card (see [accounts-overview.md](./accounts-overview.md#account-card-ana
 - **`lastValuedAt` is a valuation date, not a sync date.** Nothing writes `lastSyncedAt` on a
   property account — a property described but never valued has neither, and its card renders
   without a freshness line, like any other manual account.
+- **The q25/q75 band is not the raw commune spread.** `PropertyAdjustments.Result.applyTo`
+  puts both bounds through the same multiplier and area-equivalent as the estimate, before
+  re-indexing. It shipped re-indexing the bounds alone, which left a band that did not bracket
+  the figure it was drawn around — a top-floor flat with a lift and two garages landed above
+  its own q75. Anything added to the correction has to stay inside that transform, or the
+  bracketing silently breaks again. Note it is data-dependent: a modest correction still lands
+  inside the raw band, so it only shows up on well-equipped properties.
 - **Adjustment coefficients are opinions, not a fitted model.** DVF records no floor, lift,
   garden or condition. They are bounded (multiplier clamped to [0.75, 1.25], area-equivalents
   capped) and every one is disclosed in the UI.
@@ -164,7 +173,11 @@ account card (see [accounts-overview.md](./accounts-overview.md#account-card-ana
   strategies, so neither the constructor nor the buffer regression is visible to them
 - `GeoplateformeGeocoderTest` — INSEE mapping, coordinate order, overseas department codes
 - `PropertyValuationServiceTest` — MANUAL lock, status paths, re-indexing, per-property guard
-- `PropertyAdjustmentsTest` — direction, bounds, no double-counting of energy vs era
+- `PropertyAdjustmentsTest` — direction, bounds, no double-counting of energy vs era, and
+  `applyTo` reproducing the headline transform, keeping the band around the estimate in both
+  clamp directions, and passing a null bound through
+- `PropertyValuationServiceTest` — the persisted band brackets the estimate once the
+  adjustments apply, and still does after re-indexing
 - `RealEstateSummaryServiceTest` — gross/net, multiple loans, divergent property/loan shares
 - `RealEstateValuationMigrationTest` — Testcontainers; existing properties survive V66
 - `PropertyValuationCard.test.tsx` — status rendering, manual mode, method disclosure

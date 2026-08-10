@@ -203,11 +203,16 @@ public class PropertyValuationService {
         PropertyAdjustments.Result adjusted =
             adjustments.compute(metadata, result.estimatedValue(), result.pricePerSqm());
 
-        // 2. Carry it forward from the data's vintage to today.
+        // 2. Correct the bounds the same way. The band brackets *this property's* figure, so it
+        // has to go through the identical transform: adjusting only the headline value left a
+        // q25/q75 pair the estimate could sit outside of, since the multiplier reaches ±25% and
+        // a garage adds its area-equivalent on top.
+        BigDecimal low = adjusted.applyTo(result.lowValue());
+        BigDecimal high = adjusted.applyTo(result.highValue());
+
+        // 3. Carry it all forward from the data's vintage to today.
         BigDecimal reindexRatio = reindexRatio(result.sourceYear(), kind);
         BigDecimal finalValue = adjusted.value();
-        BigDecimal low = result.lowValue();
-        BigDecimal high = result.highValue();
         if (reindexRatio != null) {
             finalValue = finalValue.multiply(reindexRatio);
             low = low != null ? low.multiply(reindexRatio) : null;

@@ -259,4 +259,51 @@ class PropertyAdjustmentsTest {
 
         assertThat(result.value()).isEqualByComparingTo("400000.00");
     }
+
+    @Test
+    void applyTo_putsABoundThroughTheSameTransformAsTheValue() {
+        // The headline figure is applyTo(baseValue) by construction — that identity is what
+        // lets the caller correct the q25/q75 bounds without re-deriving the maths.
+        PropertyAdjustments.Result result = compute(
+            apartment().garageCount((short) 1).floorNumber((short) 5).hasElevator(true).build());
+
+        assertThat(result.applyTo(BASE)).isEqualByComparingTo(result.value());
+    }
+
+    @Test
+    void applyTo_keepsTheBandAroundTheEstimate() {
+        // A generously-featured flat: the multiplier pushes up and the garage adds on top, which
+        // is exactly the shape that used to leave the raw q25/q75 band below the estimate.
+        RealEstateMetadata flat = apartment()
+            .garageCount((short) 2).parkingCount((short) 1)
+            .floorNumber((short) 6).floorsTotal((short) 6).hasElevator(true)
+            .hasTerrace(true).energyClass("A")
+            .build();
+        PropertyAdjustments.Result result = compute(flat);
+
+        BigDecimal q25 = new BigDecimal("340000");
+        BigDecimal q75 = new BigDecimal("470000");
+
+        assertThat(result.value())
+            .isBetween(result.applyTo(q25), result.applyTo(q75));
+    }
+
+    @Test
+    void applyTo_survivesTheDownwardClampToo() {
+        RealEstateMetadata grim = apartment()
+            .floorNumber((short) 6).hasElevator(false).energyClass("G")
+            .build();
+        PropertyAdjustments.Result result = compute(grim);
+
+        assertThat(result.value())
+            .isBetween(result.applyTo(new BigDecimal("340000")),
+                       result.applyTo(new BigDecimal("470000")));
+    }
+
+    @Test
+    void applyTo_passesANullBoundThrough() {
+        // A provider may report one quartile and not the other; a missing bound stays missing
+        // rather than becoming the additive amount on its own.
+        assertThat(compute(apartment().garageCount((short) 1).build()).applyTo(null)).isNull();
+    }
 }

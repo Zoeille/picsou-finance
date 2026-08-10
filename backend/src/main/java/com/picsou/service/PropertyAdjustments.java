@@ -105,7 +105,38 @@ public class PropertyAdjustments {
      */
     public record Adjustment(String code, BigDecimal factor, BigDecimal sqm, BigDecimal amount) {}
 
-    public record Result(BigDecimal value, List<Adjustment> applied, BigDecimal multiplier) {}
+    /**
+     * The correction, kept as the affine transform it is rather than only its output.
+     *
+     * <p>{@link #value} is {@code applyTo(baseValue)}. Exposing the transform lets the caller
+     * put the provider's q25/q75 bounds through the identical correction, which is what keeps
+     * the band comparable with the figure it brackets — see {@link #applyTo}.
+     *
+     * @param value       the corrected headline figure
+     * @param multiplier  clamped combined multiplicative factor
+     * @param addedAmount euro value of the area-equivalents, already priced at the local €/m²
+     */
+    public record Result(BigDecimal value, List<Adjustment> applied,
+                         BigDecimal multiplier, BigDecimal addedAmount) {
+
+        /**
+         * The same correction applied to any figure derived from the same commune median.
+         *
+         * <p>Used for the q25/q75 bounds. The transform is {@code x -> x * multiplier + added}
+         * with a strictly positive multiplier, so it preserves ordering: a band that contained
+         * the raw median still contains the corrected estimate. Re-indexing the bounds alone —
+         * as this once did — left a band the estimate could sit outside of, which reads as the
+         * app contradicting itself.
+         *
+         * @return null for a null bound, since a provider may report one and not the other
+         */
+        public BigDecimal applyTo(BigDecimal bound) {
+            if (bound == null) {
+                return null;
+            }
+            return bound.multiply(multiplier).add(addedAmount).setScale(2, RoundingMode.HALF_UP);
+        }
+    }
 
     /**
      * @param baseValue    median €/m² × living area, before corrections
@@ -125,11 +156,12 @@ public class PropertyAdjustments {
         BigDecimal adjusted = baseValue.multiply(multiplier);
 
         BigDecimal extraSqm = additiveSqm(m, kind, applied, pricePerSqm);
-        if (pricePerSqm != null && extraSqm.signum() > 0) {
-            adjusted = adjusted.add(extraSqm.multiply(pricePerSqm));
-        }
+        BigDecimal added = pricePerSqm != null && extraSqm.signum() > 0
+            ? extraSqm.multiply(pricePerSqm)
+            : BigDecimal.ZERO;
+        adjusted = adjusted.add(added);
 
-        return new Result(adjusted.setScale(2, RoundingMode.HALF_UP), applied, multiplier);
+        return new Result(adjusted.setScale(2, RoundingMode.HALF_UP), applied, multiplier, added);
     }
 
     private BigDecimal floorFactors(RealEstateMetadata m, PropertyKind kind,
