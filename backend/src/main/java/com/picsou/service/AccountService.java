@@ -42,6 +42,17 @@ public class AccountService {
 
     private static final Logger log = LoggerFactory.getLogger(AccountService.class);
 
+    /**
+     * Providers that report an authoritative EUR valuation for every holding.
+     * Yahoo cannot quote some of their instruments -- and never quotes Amundi's
+     * FCPE units -- so a partial live total would understate these accounts,
+     * for épargne salariale all the way down to zero. See {@link #liveBalanceEur}.
+     */
+    private static final Set<String> PROVIDER_VALUED = Set.of(
+        BourseDirectSyncService.PROVIDER,
+        AmundiSyncService.PROVIDER
+    );
+
     private final AccountRepository accountRepository;
     private final BalanceSnapshotRepository snapshotRepository;
     private final AccountHoldingRepository holdingRepository;
@@ -301,6 +312,11 @@ public class AccountService {
             BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
             if (livePrice == null) {
                 allHoldingsPriced = false;
+                BigDecimal providerValue = h.getProviderValueEur();
+                if (providerValue != null) {
+                    liveValue = liveValue.add(providerValue);
+                    continue;
+                }
                 // Skipping is deliberate -- a held-but-unpriced asset must not be valued at a
                 // guess -- but it is not free: during a price-provider outage the balance (and
                 // any snapshot taken from it) silently shrinks by whatever those holdings were
@@ -316,13 +332,18 @@ public class AccountService {
             }
             liveValue = liveValue.add(qty.multiply(livePrice));
         }
-        // Bourse Direct reports an authoritative total in EUR. If Yahoo/OpenFIGI cannot
-        // price even one instrument, prefer that last successful broker valuation over a
+        // Some providers report an authoritative total in EUR. If Yahoo/OpenFIGI cannot
+        // price even one instrument, prefer that last successful provider valuation over a
         // misleading partial total (cash + only the symbols Yahoo happened to resolve).
-        if ("Bourse Direct".equals(account.getProvider()) && !allHoldingsPriced) {
+        if (!allHoldingsPriced && isProviderValued(account)) {
             return account.getCurrentBalance();
         }
         return liveValue;
+    }
+
+    /** Null-safe: {@code Set.of(...)} throws on a null lookup, and most accounts have no provider. */
+    private boolean isProviderValued(Account account) {
+        return account.getProvider() != null && PROVIDER_VALUED.contains(account.getProvider());
     }
 
     /**

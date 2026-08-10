@@ -20,6 +20,7 @@ public class PriceService {
 
     private static final Logger log = LoggerFactory.getLogger(PriceService.class);
     private static final long CACHE_TTL_SECONDS = 900; // 15 minutes
+    private static final long MISS_CACHE_TTL_SECONDS = 300; // 5 minutes
 
     private final CoinGeckoPriceProvider coinGecko;
     private final YahooFinancePriceProvider yahoo;
@@ -64,12 +65,8 @@ public class PriceService {
         }
 
         BigDecimal price = prices.get(upper);
-        if (price != null) {
-            priceCache.put(upper, new CachedPrice(price, Instant.now()));
-            return price;
-        }
-
-        return null;
+        priceCache.put(upper, new CachedPrice(price, Instant.now()));
+        return price;
     }
 
     /** Bulk fetch and refresh cache for all provided tickers. */
@@ -223,7 +220,8 @@ public class PriceService {
 
     private record CachedPrice(BigDecimal price, Instant cachedAt) {
         boolean isExpired() {
-            return Instant.now().isAfter(cachedAt.plusSeconds(CACHE_TTL_SECONDS));
+            long ttl = price == null ? MISS_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS;
+            return Instant.now().isAfter(cachedAt.plusSeconds(ttl));
         }
     }
 

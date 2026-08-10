@@ -12,13 +12,20 @@ const { initiateTrAuth, completeTrAuth } = vi.hoisted(() => ({
   completeTrAuth: vi.fn(),
 }))
 
+/** Mutable so each test can seed the institution list the BankWizard renders. */
+const { institutionSearch } = vi.hoisted(() => ({
+  institutionSearch: {
+    current: { data: undefined as unknown, isError: false, isLoading: false, error: null },
+  },
+}))
+
 vi.mock('@/features/accounts/hooks', () => ({
   useCreateAccount: () => ({ mutateAsync: createAccount, isPending: false }),
   useUpdateDebtMetadata: () => ({ mutateAsync: updateDebtMetadata, isPending: false }),
 }))
 
 vi.mock('@/features/sync/hooks', () => ({
-  useSearchInstitutions: () => ({ data: undefined, isError: false, isLoading: false, error: null }),
+  useSearchInstitutions: () => institutionSearch.current,
   useInitiateBankSync: () => ({ mutate: vi.fn(), isPending: false }),
   useInitiateTrAuth: () => ({ mutate: initiateTrAuth, isPending: false }),
   useCompleteTrAuth: () => ({ mutate: completeTrAuth, isPending: false }),
@@ -42,6 +49,12 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/components/sync/BourseDirectPanel', () => ({
   BourseDirectPanel: ({ onConnected }: { onConnected?: () => void }) => (
     <button onClick={onConnected}>bourse-direct-wizard</button>
+  ),
+}))
+
+vi.mock('@/components/sync/AmundiPanel', () => ({
+  AmundiPanel: ({ onConnected }: { onConnected?: () => void }) => (
+    <button onClick={onConnected}>amundi-wizard</button>
   ),
 }))
 
@@ -131,6 +144,63 @@ describe('AddAccountModal Trade Republic wizard', () => {
   })
 })
 
+describe('AddAccountModal bank wizard', () => {
+  function openBankWizardWith(institutions: unknown[]) {
+    institutionSearch.current = { data: institutions, isError: false, isLoading: false, error: null }
+    render(<AddAccountModal open onOpenChange={vi.fn()} />)
+    fireEvent.click(screen.getByText('sync.banks.title'))
+    // The list only renders past the 2-character search gate.
+    fireEvent.change(screen.getByPlaceholderText('sync.banks.searchPlaceholder'), {
+      target: { value: 'swan' },
+    })
+  }
+
+  afterEach(() => {
+    institutionSearch.current = { data: undefined, isError: false, isLoading: false, error: null }
+  })
+
+  /** Swan and other BaaS providers are business-only; the badge warns before the OAuth redirect. */
+  it('marks a business-only institution with a Pro badge', () => {
+    openBankWizardWith([
+      { id: 'Swan::FR::business', name: 'Swan', bic: 'SWNBFR22', logoUrl: null, country: 'FR', psuType: 'business' },
+    ])
+
+    expect(screen.getByText('Swan')).toBeInTheDocument()
+    expect(screen.getByText('sync.banks.proBadge')).toBeInTheDocument()
+  })
+
+  it('leaves a retail institution unbadged', () => {
+    openBankWizardWith([
+      {
+        id: 'BNP Paribas::FR::personal',
+        name: 'BNP Paribas',
+        bic: 'BNPAFRPP',
+        logoUrl: null,
+        country: 'FR',
+        psuType: 'personal',
+      },
+    ])
+
+    expect(screen.getByText('BNP Paribas')).toBeInTheDocument()
+    expect(screen.queryByText('sync.banks.proBadge')).not.toBeInTheDocument()
+  })
+
+  /**
+   * resolvePsuType falls through to the provider's own first value when it offers
+   * neither personal nor business, and a requisition written before PSU types were
+   * modelled carries none at all. The badge claims a specific thing about a bank --
+   * an unrecognised value is not evidence for it, so it stays off.
+   */
+  it('leaves an institution with an unknown PSU type unbadged', () => {
+    openBankWizardWith([
+      { id: 'Swan::FR::corporate', name: 'Swan', bic: 'SWNBFR22', logoUrl: null, country: 'FR', psuType: 'corporate' },
+    ])
+
+    expect(screen.getByText('Swan')).toBeInTheDocument()
+    expect(screen.queryByText('sync.banks.proBadge')).not.toBeInTheDocument()
+  })
+})
+
 describe('AddAccountModal Bourse Direct wizard', () => {
   it('opens the connector and closes after authentication', () => {
     const onOpenChange = vi.fn()
@@ -138,6 +208,18 @@ describe('AddAccountModal Bourse Direct wizard', () => {
 
     fireEvent.click(screen.getByText('sync.bourseDirect.title'))
     fireEvent.click(screen.getByRole('button', { name: 'bourse-direct-wizard' }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('AddAccountModal Amundi wizard', () => {
+  it('opens the connector and closes after authentication', () => {
+    const onOpenChange = vi.fn()
+    render(<AddAccountModal open onOpenChange={onOpenChange} />)
+
+    fireEvent.click(screen.getByText('sync.amundi.title'))
+    fireEvent.click(screen.getByRole('button', { name: 'amundi-wizard' }))
 
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })

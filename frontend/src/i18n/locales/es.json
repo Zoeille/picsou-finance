@@ -193,7 +193,8 @@
     "crypto": "Cripto",
     "realEstate": "Inmobiliario",
     "loan": "Préstamo",
-    "other": "Otro"
+    "other": "Otro",
+    "employeeSavings": "Ahorro salarial"
   },
   "realEstate": {
     "purchasePrice": "Precio de compra",
@@ -399,7 +400,8 @@
       "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
       "degiro": "Sincronizar tu cuenta de valores DEGIRO",
       "finary": "Importar desde Finary",
-      "manual": "Crear una cuenta manualmente"
+      "manual": "Crear una cuenta manualmente",
+      "amundi": "PEE, PEG, PERCO, PER en Amundi"
     }
   },
   "sync": {
@@ -419,7 +421,9 @@
       "callbackDone": "¡Cuentas sincronizadas!",
       "callbackError": "Error de sincronización",
       "initiateError": "Fallo al conectar",
-      "psd2ScopeNote": "Enable Banking solo sincroniza cuentas corrientes (limitación PSD2). Para PEA, seguros de vida, ahorro: usa Trade Republic, Boursobank, Finary o añádelos manualmente."
+      "psd2ScopeNote": "Enable Banking solo sincroniza cuentas corrientes (limitación PSD2). Para PEA, seguros de vida, ahorro: usa Trade Republic, Boursobank, Finary o añádelos manualmente.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Cuenta de empresa — este banco solo atiende a clientes profesionales"
     },
     "tr": {
       "title": "Trade Republic",
@@ -623,6 +627,40 @@
         "formatChanged": "Bourse Direct cambió el formato de la cartera. Tus datos existentes no se modificaron.",
         "invalidData": "Bourse Direct devolvió datos de cartera incoherentes. Tus datos existentes no se modificaron.",
         "serverError": "No se pudo contactar con Bourse Direct. Inténtalo de nuevo."
+      }
+    },
+    "amundi": {
+      "title": "Amundi",
+      "login": "Identificador",
+      "password": "Contraseña",
+      "otpCode": "Código de seguridad de 6 dígitos",
+      "otpPrompt": "Introduzca el código que Amundi le ha enviado por SMS.",
+      "appValidationPrompt": "Abra la aplicación Mon Épargne y valide la conexión.",
+      "appValidationHint": "Esta página se actualiza sola en cuanto lo valide.",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "validate": "Validar código",
+      "validating": "Validando…",
+      "sync": "Sincronizar",
+      "queued": "Sincronización en cola…",
+      "syncing": "Sincronizando…",
+      "syncSuccess": "Planes de ahorro sincronizados.",
+      "clearSession": "Desconectar",
+      "noSession": "Ninguna sesión activa",
+      "sessionActive": "Sesión activa",
+      "scope": "Sincroniza sus planes de ahorro salarial (PEE, PEG, PERCO, PER) y las líneas de FCPE que contienen, con su valoración.",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espere antes de reintentar.",
+        "invalidCredentials": "Credenciales de Amundi no válidas.",
+        "captchaBlocked": "Amundi pide un captcha que Picsou no puede resolver. Inténtelo más tarde.",
+        "invalidCode": "Código de seguridad no válido o caducado. Vuelva a empezar.",
+        "appValidationTimeout": "La validación en la aplicación no se confirmó a tiempo. Vuelva a empezar.",
+        "authAttemptExpired": "El intento de autenticación ha caducado. Vuelva a empezar.",
+        "sessionExpired": "La sesión de Amundi ha caducado. Vuelva a conectarse.",
+        "portfolioIncomplete": "Amundi devolvió planes incompletos. Se han conservado sus datos existentes.",
+        "formatChanged": "El formato del sitio de Amundi ha cambiado. Se han conservado sus datos existentes.",
+        "invalidData": "Amundi devolvió datos incoherentes. Se han conservado sus datos existentes.",
+        "serverError": "No se puede contactar con Amundi. Inténtelo de nuevo."
       }
     }
   },

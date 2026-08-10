@@ -35,6 +35,11 @@ jobs:
             context: services/bourse-direct-auth
             dockerfile: services/bourse-direct-auth/Dockerfile
             versioned: false
+          - name: amundi-auth
+            image: ${{ github.repository }}/amundi-auth
+            context: services/amundi-auth
+            dockerfile: services/amundi-auth/Dockerfile
+            versioned: false
 
     steps:
       - name: Checkout

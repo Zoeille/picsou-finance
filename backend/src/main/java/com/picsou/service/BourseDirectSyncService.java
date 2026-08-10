@@ -41,7 +41,7 @@ import java.util.concurrent.Executor;
 @Service
 public class BourseDirectSyncService {
     private static final Logger log = LoggerFactory.getLogger(BourseDirectSyncService.class);
-    private static final String PROVIDER = "Bourse Direct";
+    static final String PROVIDER = "Bourse Direct";
     private static final BigDecimal ABSOLUTE_RECONCILIATION_TOLERANCE = new BigDecimal("0.05");
     private static final BigDecimal RELATIVE_RECONCILIATION_TOLERANCE = new BigDecimal("0.001");
 

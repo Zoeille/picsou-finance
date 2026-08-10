@@ -26,7 +26,10 @@ import {
 
 const accountSchema = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(['LEP', 'PEA', 'COMPTE_TITRES', 'CRYPTO', 'CHECKING', 'SAVINGS', 'REAL_ESTATE', 'LOAN', 'OTHER']),
+  type: z.enum([
+    'LEP', 'PEA', 'COMPTE_TITRES', 'CRYPTO', 'CHECKING', 'SAVINGS',
+    'REAL_ESTATE', 'LOAN', 'EMPLOYEE_SAVINGS', 'OTHER',
+  ]),
   provider: z.string().max(100).optional(),
   currency: z.string().min(1),
   currentBalance: z.number().min(0).optional(),

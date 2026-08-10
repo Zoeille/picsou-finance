@@ -54,7 +54,8 @@ class TradeRepublicSyncServiceTest {
      * must be the VWAP -- not whichever position HashMap iteration happens to yield first.
      *
      * Scenario: ISIN_A (qty=2, avg=10) and ISIN_B (qty=3, avg=20) both resolve to "RKLB".
-     * Expected merged holding: quantity=5, averageBuyIn = (2*10 + 3*20)/5 = 16.
+     * Expected merged holding: quantity=5, averageBuyIn = (2*10 + 3*20)/5 = 16,
+     * provider value = 2*100 + 3*110 = 530.
      */
     @Test
     void sync_mergesDuplicateTickersWithVwap() {
@@ -72,7 +73,7 @@ class TradeRepublicSyncServiceTest {
         TrPosition pos1 = new TrPosition("IE00ISIN_A", bd("2"), bd("10"), bd("100"));
         TrPosition pos2 = new TrPosition("IE00ISIN_B", bd("3"), bd("20"), bd("110"));
         TrAccountData accountData = new TrAccountData(
-            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("1000"), List.of(pos1, pos2));
+            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("530"), List.of(pos1, pos2));
         when(trPort.fetchAccounts("plain-session")).thenReturn(List.of(accountData));
 
         when(isinConverter.resolve("IE00ISIN_A")).thenReturn(new TickerResult("RKLB", "Rocket Lab"));
@@ -89,7 +90,7 @@ class TradeRepublicSyncServiceTest {
             return a;
         });
         lenient().when(accountService.toResponse(any(Account.class)))
-            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("1000")));
+            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("530")));
 
         service.sync(memberId);
 
@@ -101,6 +102,91 @@ class TradeRepublicSyncServiceTest {
         assertThat(saved.getQuantity()).isEqualByComparingTo("5");
         // VWAP: (2*10 + 3*20) / 5 = 16  -- scale-8 representation 16.00000000
         assertThat(saved.getAverageBuyIn()).isEqualByComparingTo("16.00000000");
+        assertThat(saved.getProviderValueEur()).isEqualByComparingTo("530");
+    }
+
+    @Test
+    void sync_storesTheBrokerPositionValueInEur() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession storedSession = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .expiresAt(java.time.Instant.now().plusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(storedSession));
+        when(encryption.decrypt("enc-session")).thenReturn("plain-session");
+
+        TrPosition unpriceable = new TrPosition("IE000BI8OT95", bd("10"), bd("80"), bd("84"));
+        TrAccountData accountData = new TrAccountData(
+            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("840"), List.of(unpriceable));
+        when(trPort.fetchAccounts("plain-session")).thenReturn(List.of(accountData));
+        when(isinConverter.resolve("IE000BI8OT95"))
+            .thenReturn(new TickerResult("MWRDF", "Amundi Core MSCI World"));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId("tr_cto", memberId))
+            .thenReturn(Optional.empty());
+        lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("tr_cto", memberId))
+            .thenReturn(false);
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+            Account a = inv.getArgument(0);
+            a.setId(1L);
+            return a;
+        });
+        lenient().when(accountService.toResponse(any(Account.class)))
+            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("840")));
+
+        service.sync(memberId);
+
+        ArgumentCaptor<AccountHolding> captor = ArgumentCaptor.forClass(AccountHolding.class);
+        verify(holdingRepository).save(captor.capture());
+
+        AccountHolding saved = captor.getValue();
+        assertThat(saved.getQuoteCurrency()).isEqualTo("EUR");
+        assertThat(saved.getProviderValueEur()).isEqualByComparingTo("840"); // 10 × 84
+    }
+
+    @Test
+    void sync_fallsBackToAverageBuyIn_whenTradeRepublicHasNoLivePrice() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession storedSession = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .expiresAt(java.time.Instant.now().plusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(storedSession));
+        when(encryption.decrypt("enc-session")).thenReturn("plain-session");
+
+        TrPosition noPrice = new TrPosition("IE000BI8OT95", bd("10"), bd("80"), bd("0"));
+        TrAccountData accountData = new TrAccountData(
+            "tr_cto", "TR Titres", AccountType.COMPTE_TITRES, bd("800"), List.of(noPrice));
+        when(trPort.fetchAccounts("plain-session")).thenReturn(List.of(accountData));
+        when(isinConverter.resolve("IE000BI8OT95"))
+            .thenReturn(new TickerResult("MWRDF", "Amundi Core MSCI World"));
+
+        when(accountRepository.findByExternalAccountIdAndMemberId("tr_cto", memberId))
+            .thenReturn(Optional.empty());
+        lenient().when(accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId("tr_cto", memberId))
+            .thenReturn(false);
+        when(familyMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+            Account a = inv.getArgument(0);
+            a.setId(1L);
+            return a;
+        });
+        lenient().when(accountService.toResponse(any(Account.class)))
+            .thenAnswer(inv -> com.picsou.dto.AccountResponse.from(inv.getArgument(0), bd("800")));
+
+        service.sync(memberId);
+
+        ArgumentCaptor<AccountHolding> captor = ArgumentCaptor.forClass(AccountHolding.class);
+        verify(holdingRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getProviderValueEur()).isEqualByComparingTo("800"); // 10 × 80
     }
 
     @Test

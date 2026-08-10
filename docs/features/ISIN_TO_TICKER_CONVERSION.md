@@ -108,6 +108,7 @@ restored one.
   either, for the same reason. This remains a known, accepted gap rather than
   a fixed bug — see `pickBest()`'s Javadoc for the full account and the
   reverted test names in `OpenFigiIsinConverterTest`.
+- **OpenFIGI's `ticker` field is not always a symbol**. For bonds it holds the Bloomberg *description*: querying `XS2657412201` (airBaltic 14.5% 2029) returns `ticker: "AIRBAL 14.5 08/14/29 REGS"` on `exchCode: "EURONEXT-DUBLIN"`, which is absent from `EXCHANGE_SUFFIX` — so `byExchange` stayed empty and step 5 ("raw ticker from first entry") emitted that description verbatim as the holding's ticker. `pickBest()` now filters every candidate through `SYMBOL_PATTERN` (`[A-Z0-9][A-Z0-9.-]{0,14}`, checked before the exchange suffix is appended) and returns `null` when nothing plausible remains. `resolve()` then falls back to the ISIN, which `YahooFinancePriceProvider.supports()` already rejects — so an unmappable bond costs zero HTTP requests instead of one 404 per price lookup (GH issue #76).
 
 ## Tests
 

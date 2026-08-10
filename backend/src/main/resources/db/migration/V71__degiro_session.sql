@@ -1,4 +1,4 @@
--- V64: DEGIRO session storage (one row per family member)
+-- V71: DEGIRO session storage (one row per family member)
 --
 -- DEGIRO's unofficial session cookie times out after ~30 minutes of inactivity
 -- and there is no refresh token, unlike Trade Republic / Bourse Direct / Bourso

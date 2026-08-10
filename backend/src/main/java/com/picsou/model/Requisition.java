@@ -28,7 +28,8 @@ public class Requisition extends AuditableEntity {
     @Column(name = "requisition_id", nullable = false, unique = true, length = 100)
     private String requisitionId;
 
-    @Column(name = "institution_id", nullable = false, length = 100)
+    /** Composite "name::country::psuType" — see EnableBankingBankConnector.parseInstitutionId. */
+    @Column(name = "institution_id", nullable = false, length = 255)
     private String institutionId;
 
     @Column(name = "institution_name", length = 200)

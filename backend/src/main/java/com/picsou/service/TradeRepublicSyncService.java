@@ -28,15 +28,18 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -355,10 +358,18 @@ public class TradeRepublicSyncService {
             // aggregate them via VWAP to avoid unique constraint violations and
             // preserve a meaningful weighted average buy-in.
             Map<String, HoldingDedup.HoldingAgg> deduped = new HashMap<>();
+            Map<String, BigDecimal> providerValuesEur = new HashMap<>();
+            Set<String> incompleteProviderValues = new HashSet<>();
             for (TrPosition p : data.positions()) {
                 var result = isinConverter.resolve(p.isin());
                 String ticker = result.ticker();
                 String name = result.name();
+                BigDecimal positionValueEur = providerValueEur(p);
+                if (positionValueEur == null) {
+                    incompleteProviderValues.add(ticker);
+                } else {
+                    providerValuesEur.merge(ticker, positionValueEur, BigDecimal::add);
+                }
                 deduped.merge(
                     ticker,
                     new HoldingDedup.HoldingAgg(p.quantity(), p.averageBuyIn(), p.currentPrice(), name),
@@ -381,12 +392,29 @@ public class TradeRepublicSyncService {
                     .quantity(agg.quantity())
                     .averageBuyIn(agg.averageBuyIn())
                     .currentPrice(agg.currentPrice())
+                    .quoteCurrency("EUR")
+                    .providerValueEur(incompleteProviderValues.contains(entry.getKey())
+                        ? null
+                        : providerValuesEur.get(entry.getKey()).setScale(8, RoundingMode.HALF_UP))
                     .lastSyncedAt(Instant.now())
                     .build());
             }
         }
 
         return Optional.of(accountService.toResponse(account));
+    }
+
+    private static BigDecimal providerValueEur(TrPosition position) {
+        BigDecimal price = position.currentPrice() != null && position.currentPrice().signum() > 0
+            ? position.currentPrice()
+            : position.averageBuyIn();
+        if (price == null || price.signum() <= 0) {
+            return null;
+        }
+        // TradeRepublicAdapter builds balanceEur by rounding each original position
+        // to cents. Preserve that exact subtotal even when several ISINs collapse to
+        // one persisted ticker with different market prices.
+        return price.multiply(position.quantity()).setScale(2, RoundingMode.HALF_UP);
     }
 
     private String colorFor(AccountType type) {
