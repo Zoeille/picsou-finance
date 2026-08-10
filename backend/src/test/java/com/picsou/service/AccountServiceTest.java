@@ -240,6 +240,23 @@ class AccountServiceTest {
     }
 
     @Test
+    void liveBalanceEur_usesBrokerPositionValue_whenLivePriceIsUnavailable() {
+        Account account = ownedAccount();
+        AccountHolding priced = AccountHolding.builder()
+            .ticker("AAPL").quantity(new BigDecimal("5")).build();
+        AccountHolding brokerValued = AccountHolding.builder()
+            .ticker("PHYMF").quantity(new BigDecimal("10"))
+            .providerValueEur(new BigDecimal("840")).build();
+        when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(priced, brokerValued));
+        when(priceService.getQuotes(any())).thenReturn(Map.of(
+            "AAPL", new PriceService.Quote(new BigDecimal("200"), LocalDate.now(), true)));
+
+        BigDecimal result = accountService.liveBalanceEur(account);
+
+        assertThat(result).isEqualByComparingTo("1840"); // 5 × 200 + broker's 840
+    }
+
+    @Test
     void liveBalanceEur_cashAccount_convertsStoredBalance() {
         Account cash = Account.builder()
             .id(2L)
@@ -280,6 +297,38 @@ class AccountServiceTest {
         stubQuotes("UNKNOWN", null);
 
         assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1250");
+    }
+
+    /**
+     * Yahoo can never quote an FCPE, so without the provider-valued fallback an
+     * Amundi plan collapses to its (null) cash sleeve -- i.e. zero -- and the
+     * dashboard books the whole plan as a loss.
+     */
+    @Test
+    void liveBalanceEur_amundi_usesTheProviderTotalWhenNoFcpeCanBePriced() {
+        Account account = Account.builder().id(4L).name("PEG — ACME SA")
+            .type(AccountType.EMPLOYEE_SAVINGS).provider("Amundi Épargne Salariale")
+            .currency("EUR").currentBalance(new BigDecimal("1234.56")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("FR0010405035").quantity(new BigDecimal("12.3456")).build();
+        when(holdingRepository.findByAccount_Id(4L)).thenReturn(List.of(holding));
+        when(priceService.getQuotes(any())).thenReturn(Map.of());
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
+    }
+
+    @Test
+    void liveBalanceEur_amundi_stillPrefersLivePricesWhenEveryFcpeResolves() {
+        Account account = Account.builder().id(4L).name("PEG — ACME SA")
+            .type(AccountType.EMPLOYEE_SAVINGS).provider("Amundi Épargne Salariale")
+            .currency("EUR").currentBalance(new BigDecimal("1000")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("FR0010405035").quantity(new BigDecimal("10")).build();
+        when(holdingRepository.findByAccount_Id(4L)).thenReturn(List.of(holding));
+        when(priceService.getQuotes(any())).thenReturn(Map.of(
+            "FR0010405035", new PriceService.Quote(new BigDecimal("123.456"), LocalDate.now(), true)));
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
     }
 
     @Test

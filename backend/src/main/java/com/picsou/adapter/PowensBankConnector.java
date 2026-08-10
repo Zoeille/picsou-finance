@@ -186,7 +186,10 @@ public class PowensBankConnector implements BankConnectorPort {
                 c.name(),
                 null,
                 null,
-                c.country() != null ? c.country().toUpperCase() : null
+                c.country() != null ? c.country().toUpperCase() : null,
+                // Screen scraping has no PSU-type concept: the user's own credentials
+                // decide which space they land in.
+                "personal"
             ))
             .limit(20)
             .toList();

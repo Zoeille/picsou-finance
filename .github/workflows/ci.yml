@@ -21,10 +21,10 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Run backend tests
-        # The migration test skips itself when Docker is unreachable so local runs
+        # Migration tests skip themselves when Docker is unreachable so local runs
         # without a socket still work. Runners always have Docker, so require it here --
-        # otherwise environment drift would silently drop the project's only coverage of
-        # a data-mutating migration and the build would stay green.
+        # otherwise environment drift would silently drop the PostgreSQL coverage of
+        # data-mutating migrations and the build would stay green.
         env:
           PICSOU_REQUIRE_DOCKER_TESTS: 'true'
         run: mvn -B test
@@ -67,4 +67,22 @@ jobs:
           --volume "${{ github.workspace }}/services/bourse-direct-auth/test_lifecycle.py:/tests/test_lifecycle.py:ro"
           --workdir /tests
           picsou-bourse-direct-auth:test
+          python -m unittest discover -v
+
+  amundi-sidecar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the Chromium-only sidecar image
+        run: docker build --tag picsou-amundi-auth:test services/amundi-auth
+      - name: Run parser and lifecycle tests
+        run: >-
+          docker run --rm --ipc=host
+          --env PYTHONPATH=/app
+          --volume "${{ github.workspace }}/services/amundi-auth/test_main.py:/tests/test_main.py:ro"
+          --volume "${{ github.workspace }}/services/amundi-auth/test_lifecycle.py:/tests/test_lifecycle.py:ro"
+          --workdir /tests
+          picsou-amundi-auth:test
           python -m unittest discover -v

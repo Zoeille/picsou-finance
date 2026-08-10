@@ -68,8 +68,8 @@ class WalletEvmMigrationTest {
      * {@code /var/run/docker.sock} mount). Evaluated as a JUnit {@code ExecutionCondition},
      * which runs <em>before</em> the Testcontainers extension tries to start the container.
      *
-     * <p>A skip is invisible in a green build, and this is the project's only coverage of
-     * a data-mutating migration — so CI sets {@code PICSOU_REQUIRE_DOCKER_TESTS=true},
+     * <p>A skip is invisible in a green build, so CI sets
+     * {@code PICSOU_REQUIRE_DOCKER_TESTS=true},
      * which turns "no Docker" into a hard failure instead. Environment drift then shows up
      * as a red build rather than silently deleting the coverage.
      */
@@ -78,8 +78,8 @@ class WalletEvmMigrationTest {
         if (!available && Boolean.parseBoolean(System.getenv("PICSOU_REQUIRE_DOCKER_TESTS"))) {
             throw new IllegalStateException(
                 "PICSOU_REQUIRE_DOCKER_TESTS is set but no Docker environment was found. "
-                    + "The V54/V55 migration test cannot be skipped here -- it is the only "
-                    + "coverage of a data-mutating migration. Needs Docker Engine >= 25.0.");
+                    + "The V54/V55 migration test cannot be skipped here. "
+                    + "Needs Docker Engine >= 25.0.");
         }
         return available;
     }

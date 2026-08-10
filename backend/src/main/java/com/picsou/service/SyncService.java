@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -311,7 +312,14 @@ public class SyncService {
         }
     }
 
-    /** Matches by exact institution id first; falls back to a case-insensitive name match only if no id match exists. */
+    /**
+     * Matches by exact institution id, then on name+country alone, and only then by
+     * name. The middle tier exists for requisitions stored before PSU types were
+     * modelled: they hold the two-segment {@code "BoursoBank::FR"} while the catalog
+     * now returns {@code "BoursoBank::FR::personal"}, and dropping straight to the
+     * name tier would lose the country preference — and pick arbitrarily for a bank
+     * listed under both PSU types.
+     */
     private static Optional<BankConnectorPort.InstitutionData> findInstitution(
         List<BankConnectorPort.InstitutionData> candidates, String institutionId, String institutionName
     ) {
@@ -319,11 +327,28 @@ public class SyncService {
             .filter(i -> i.id().equals(institutionId))
             .findFirst()
             .or(() -> candidates.stream()
+                .filter(i -> institutionKey(i.id()).equals(institutionKey(institutionId)))
+                .findFirst())
+            .or(() -> candidates.stream()
                 .filter(i -> i.name().equalsIgnoreCase(institutionName))
                 .findFirst());
     }
 
-    /** institutionId format: "BankName::FR" (name::country) — see EnableBankingBankConnector. */
+    /**
+     * Drops the PSU-type segment so old and new institution ids compare equal, and
+     * normalizes what is left: a stored id was written from the catalog name of the
+     * day, so a later casing change on the provider side would otherwise miss this
+     * tier and fall through to the name-only one, losing the country preference.
+     */
+    private static String institutionKey(String institutionId) {
+        if (institutionId == null) return "";
+        String[] parts = institutionId.split("::");
+        return parts.length > 1
+            ? parts[0].trim().toLowerCase(Locale.ROOT) + "::" + parts[1].trim().toUpperCase(Locale.ROOT)
+            : institutionId.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** institutionId format: "BankName::FR::personal" (name::country::psuType) — see EnableBankingBankConnector. */
     private static String parseCountry(String institutionId) {
         if (institutionId == null) return null;
         String[] parts = institutionId.split("::");

@@ -193,6 +193,7 @@
     "compteTitres": "Wertpapierdepot",
     "crypto": "Krypto",
     "realEstate": "Immobilie",
+    "employeeSavings": "Mitarbeitersparplan",
     "loan": "Kredit",
     "other": "Sonstiges"
   },
@@ -408,6 +409,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "PEA- und Wertpapierkonten synchronisieren",
+      "amundi": "PEE, PEG, PERCO, PER bei Amundi",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen"
     }
@@ -419,6 +421,8 @@
       "search": "Bank suchen",
       "searchPlaceholder": "z. B. BNP Paribas...",
       "searchError": "Die Bankensuche ist derzeit nicht möglich.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Geschäftskonto — diese Bank richtet sich nur an Geschäftskunden",
       "connected": "Aktive Verbindungen",
       "noConnections": "Keine Bankverbindungen",
       "connect": "Verbinden",
@@ -586,6 +590,40 @@
         "invalidMfaCode": "Ungültiger oder abgelaufener MFA-Code.",
         "sessionExpired": "Sitzung abgelaufen. Bitte verbinde dich erneut.",
         "serverError": "BoursoBank-Serverfehler. Bitte versuche es erneut."
+      }
+    },
+    "amundi": {
+      "title": "Amundi",
+      "login": "Benutzername",
+      "password": "Passwort",
+      "otpCode": "6-stelliger Sicherheitscode",
+      "otpPrompt": "Geben Sie den Code ein, den Amundi Ihnen per SMS gesendet hat.",
+      "appValidationPrompt": "Öffnen Sie die App „Mon Épargne“ und bestätigen Sie die Anmeldung.",
+      "appValidationHint": "Diese Seite aktualisiert sich automatisch, sobald Sie bestätigt haben.",
+      "connect": "Verbinden",
+      "connecting": "Verbindung läuft…",
+      "validate": "Code bestätigen",
+      "validating": "Wird überprüft…",
+      "sync": "Synchronisieren",
+      "queued": "Synchronisierung in Warteschlange…",
+      "syncing": "Synchronisierung läuft…",
+      "syncSuccess": "Sparpläne synchronisiert.",
+      "clearSession": "Trennen",
+      "noSession": "Keine aktive Sitzung",
+      "sessionActive": "Sitzung aktiv",
+      "scope": "Synchronisiert Ihre Mitarbeitersparpläne (PEE, PEG, PERCO, PER) und die darin gehaltenen FCPE-Positionen mit ihrer Bewertung.",
+      "errors": {
+        "tooManyAttempts": "Zu viele Versuche. Bitte warten Sie.",
+        "invalidCredentials": "Ungültige Amundi-Zugangsdaten.",
+        "captchaBlocked": "Amundi verlangt ein Captcha, das Picsou nicht lösen kann. Bitte später erneut versuchen.",
+        "invalidCode": "Ungültiger oder abgelaufener Sicherheitscode. Bitte erneut beginnen.",
+        "appValidationTimeout": "Die Bestätigung in der App erfolgte nicht rechtzeitig. Bitte erneut beginnen.",
+        "authAttemptExpired": "Der Anmeldeversuch ist abgelaufen. Bitte erneut beginnen.",
+        "sessionExpired": "Die Amundi-Sitzung ist abgelaufen. Bitte erneut verbinden.",
+        "portfolioIncomplete": "Amundi hat unvollständige Pläne zurückgegeben. Ihre vorhandenen Daten wurden beibehalten.",
+        "formatChanged": "Das Format der Amundi-Website hat sich geändert. Ihre vorhandenen Daten wurden beibehalten.",
+        "invalidData": "Amundi hat inkonsistente Daten zurückgegeben. Ihre vorhandenen Daten wurden beibehalten.",
+        "serverError": "Amundi ist nicht erreichbar. Bitte erneut versuchen."
       }
     },
     "bourseDirect": {

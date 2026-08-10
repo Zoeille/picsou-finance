@@ -31,11 +31,20 @@ public interface BankConnectorPort {
         BigDecimal balance
     ) {}
 
+    /**
+     * @param id       opaque round-trip token; the Enable Banking adapter encodes
+     *                 {@code name::country::psuType} in it (see the adapter's
+     *                 {@code parseInstitutionId}). Clients must pass it back verbatim.
+     * @param psuType  {@code "personal"} or {@code "business"} — which login the
+     *                 provider will present. Banks serving only professionals
+     *                 (Swan, Qonto…) are published under {@code business} only.
+     */
     record InstitutionData(
         String id,
         String name,
         String bic,
         String logoUrl,
-        String country
+        String country,
+        String psuType
     ) {}
 }

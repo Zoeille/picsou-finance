@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Amundi Épargne Salariale sync.** Connect an Amundi account and import every
+  funded employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own
+  account, leaving emptied and closed dispositifs out,
+  with each FCPE line's units, unit value, valuation and unrealized gain. A
+  dedicated read-only Playwright sidecar handles the captcha-gated login and the
+  mandatory second factor, either an approval in the "Mon Épargne" app or an SMS
+  code; credentials and codes are never persisted, only the encrypted session.
+  Valuations come from Amundi rather than a price feed, since no FCPE is quotable
+  on Yahoo. Imports expose queued/running/success/failure progress, reject plans
+  whose total does not reconcile with their lines, and preserve the last valid
+  holdings on failure. Reachable from the Sync page and the Add-account modal, in
+  all four locales, and its accounts carry the Amundi logo rather than a color
+  circle. See [feature notes](docs/features/amundi-epargne-salariale.md)
+  and the [ADR](docs/decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 - **Meria crypto exchange sync.** Connect a Meria account with the single
   read-only API key from `dashboard.meria.com/account/api` — no API secret, and
   the add-exchange form now hides that field for exchanges that don't use one
@@ -102,6 +116,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Business-oriented banks never appeared in the bank search.** Picsou asked
+  Enable Banking only for retail (`personal`) institutions, so BaaS and
+  professional banks — Swan among them — were invisible in the picker even
+  though the account existed and the credentials were valid, with nothing to
+  distinguish that from a misconfiguration. The catalog is now fetched
+  unfiltered, each bank's PSU type is read from the provider and carried through
+  the connection flow so the consent page presents the right login, and
+  business-only banks are marked with a **Pro** badge in both bank pickers.
+  See [feature notes](docs/features/bank-sync.md).
 - **A price provider outage no longer blanks positions, invents a loss, or writes
   a zero into your history.** After a restart, a rate-limited CoinGecko left the
   largest lines of a crypto account with no price: they dropped out of the account's

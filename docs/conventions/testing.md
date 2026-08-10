@@ -128,7 +128,7 @@ Three things the class must do, all learned the hard way:
 - **Make CI refuse to skip.** A skip is invisible in a green build, so `ci.yml` sets
   `PICSOU_REQUIRE_DOCKER_TESTS=true` and `dockerAvailable()` throws instead of returning
   false when it is set. Without this, any Docker drift on the runner silently converts the
-  project's only data-mutating-migration coverage into a permanently green no-op.
+  PostgreSQL coverage of data-mutating migrations into a permanently green no-op.
 
 The three interlock: the guard alone turns a config problem into a silent pass, and the
 API pin alone makes Docker-less machines fail the whole suite.

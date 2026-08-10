@@ -1,6 +1,6 @@
 # Feature: Price Service
 
-> Last updated: 2026-08-07
+> Last updated: 2026-08-10
 
 ## Context
 
@@ -24,14 +24,16 @@ Both providers implement `PriceProviderPort` with `supports(ticker)` and `getPri
 `PriceService.resolve(tickers, cryptoOnly)` answers every on-demand read, in this order:
 
 1. **In-memory cache** — `ConcurrentHashMap<String, CachedPrice>` keyed by uppercase ticker, 900 s TTL. Hits are returned as a live `Quote` dated today.
-2. **One batched provider call** for everything still missing — CoinGecko takes the whole crypto set in a single request, Yahoo is per-ticker (it has no batch endpoint). Skipped for a ticker whose last attempt failed less than 60 s ago (the *negative cache*), and skipped entirely while `CoinGeckoPriceProvider` is in its post-429 cooldown.
+2. **One batched provider call** for everything still missing — CoinGecko takes the whole crypto set in a single request, Yahoo is per-ticker (it has no batch endpoint). Skipped for a ticker whose last attempt came back empty and is still within the miss TTL (the *negative cache*, below), and skipped entirely while `CoinGeckoPriceProvider` is in its post-429 cooldown.
 3. **Last recorded price** — `price_snapshot`, most recent row per ticker within 7 days, one query for the whole set (`findRecentByTickers`). Returned as a `Quote` with `live = false` and `asOf` = the snapshot's date.
 
-Anything still unresolved returns nothing, and the ticker is marked in the negative cache so the next read does not repeat the request.
+Anything still unresolved returns nothing.
+
+**Failures are cached too**, in that same map, as a `CachedPrice` with a `null` price and a shorter TTL of 300 seconds (5 minutes). Without this, a ticker the provider cannot resolve was re-fetched on *every* read: the dashboard, the account cards, the holdings table and the history chart each iterate the same holdings, so one permanently-unresolvable ticker produced dozens of identical Yahoo 404s per minute across Tomcat threads (GH issue #76). The miss TTL is deliberately shorter than the hit TTL — a miss is more likely to be transient (rate limiting) than a hit is to be stale, so recovery stays fast while the storm collapses to one call per ticker per 5 minutes. A cached miss does not end resolution: step 3 still runs, so an outage degrades a price's *age* rather than its existence.
 
 `Quote(price, asOf, live)` is the shape callers get from `getQuote`/`getCryptoQuote`/`getQuotes`/`getCryptoQuotes`. `getPriceEur`/`getCryptoPriceEur` delegate to it and drop the freshness, so existing callers gained the fallback without changing.
 
-`refreshPrices(Set<String> tickers)` is the *write* path: it bypasses both caches, always calls the providers, updates the cache and records the day's `price_snapshot` rows. `refreshCryptoQuotes` layers the last-known-price fallback on top for sync paths — but only live prices are ever written back to `price_snapshot`, or a stale price would be laundered into a fresh-looking one and the fallback would walk itself forward indefinitely.
+`refreshPrices(Set<String> tickers)` is the *write* path: it bypasses both the hit and miss caches, always calls the providers, updates the cache and records the day's `price_snapshot` rows. `refreshCryptoQuotes` layers the last-known-price fallback on top for sync paths — but only live prices are ever written back to `price_snapshot`, or a stale price would be laundered into a fresh-looking one and the fallback would walk itself forward indefinitely.
 
 ### Currency conversion
 
@@ -118,6 +120,8 @@ Update cache + upsert today's price_snapshot rows
 
 ## Gotchas / Pitfalls
 
+- **`supports()` enforces a symbol shape**: beyond rejecting 12-char ISINs, `YahooFinancePriceProvider.supports()` accepts an optional leading `^` for indices, then alphanumerics and the separators Yahoo uses for exchange suffixes, share classes and FX pairs (`IWDA.AS`, `BRK-B`, `USDEUR=X`), with a 20-character limit for the complete symbol. Anything containing whitespace or a slash is not a symbol. This matters because OpenFIGI returns Bloomberg *bond descriptions* in its `ticker` field (`AIRBAL 14.5 08/14/29 REGS`): WebClient percent-encodes the spaces but **not** the slashes, so the request lands on `/v8/finance/chart/AIRBAL%2014.5%2008/14/29%20REGS` — a different API path entirely — and 404s forever.
+- **`GET /api/prices` bypasses the cache**: `PriceController` calls `refreshPrices()`, which on `main` always hits the providers regardless of TTL. The negative cache only covers the `getPriceEur` path. PR #33 makes `refreshPrices` honor the TTL; this was left alone here to avoid a conflict.
 - **Yahoo Finance is unofficial**: The Yahoo Finance API is undocumented and can break or get rate-limited without notice. FX conversion is now applied inside `YahooFinancePriceProvider` using the `{CURRENCY}EUR=X` chart endpoint; `GBp`/`GBX` is treated as `GBP / 100`. If the FX call fails the ticker is omitted from the result map (no fabricated rate) — downstream consumers must tolerate a missing key.
 - **CoinGecko rate limits, and how they used to sustain themselves**: the keyless free tier is throttled per IP. A 429 was previously answered with *more* traffic — nothing was cached on failure, so every holding of every account re-issued a single-ticker request on every page render, and the provider counts the calls it rejects. On 2026-08-01 that turned a startup burst into two hours of missing prices. Three things now prevent it: reads are batched (one request per set, not per holding), a failed ticker is left alone for 60 s, and `CoinGeckoPriceProvider` refuses to send anything at all until its post-429 cooldown expires (`Retry-After` when sane, else 60 s, capped at 15 min). If you add a price call, batch it and route it through `PriceService` — a direct adapter call bypasses all three.
 - **Read paths must resolve the whole set at once**: `AccountService.valuation` and `CryptoExchangeSyncService.getPositions` build their ticker set first and make one call. Reverting either to a per-holding lookup re-creates the amplification above, and the tests that pin it (`aSetOfTickersCostsOneProviderCall`, `aFailedLookupIsNotRetriedOnEveryRead`) are the only thing that will say so.

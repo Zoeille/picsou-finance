@@ -2,6 +2,9 @@ package com.picsou.adapter;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenFigiIsinConverterTest {
@@ -89,5 +92,51 @@ class OpenFigiIsinConverterTest {
         OpenFigiIsinConverter.TickerResult padded = converter.resolve(" xf000btc0017 ");
         assertThat(padded.ticker()).isEqualTo("BTC");
         assertThat(padded.name()).isEqualTo("Bitcoin");
+    }
+
+    @Test
+    void pickBest_rejectsBondDescriptionsThatAreNotSymbols() {
+        OpenFigiIsinConverter converter = new OpenFigiIsinConverter(new CoinGeckoPriceProvider());
+
+        List<Map<String, Object>> entries = List.of(Map.of(
+            "ticker", "AIRBAL 14.5 08/14/29 REGS",
+            "exchCode", "EURONEXT-DUBLIN",
+            "name", "AIR BALTIC CORPORATION"));
+
+        assertThat(converter.pickBest("XS2657412201", entries)).isNull();
+    }
+
+    @Test
+    void pickBest_stillResolvesRealSymbolsOnKnownExchanges() {
+        OpenFigiIsinConverter converter = new OpenFigiIsinConverter(new CoinGeckoPriceProvider());
+
+        List<Map<String, Object>> entries = List.of(Map.of(
+            "ticker", "MBG",
+            "exchCode", "GY",
+            "name", "MERCEDES-BENZ GROUP AG"));
+
+        OpenFigiIsinConverter.TickerResult equity = converter.pickBest("DE0007100000", entries);
+
+        assertThat(equity).isNotNull();
+        assertThat(equity.ticker()).isEqualTo("MBG.DE");
+    }
+
+    @Test
+    void pickBest_returnsTheNormalizedSymbol_notTheRawOpenFigiValue() {
+        OpenFigiIsinConverter converter = new OpenFigiIsinConverter(new CoinGeckoPriceProvider());
+
+        List<Map<String, Object>> padded = List.of(Map.of(
+            "ticker", " mbg ",
+            "exchCode", "GY",
+            "name", "MERCEDES-BENZ GROUP AG"));
+
+        assertThat(converter.pickBest("DE0007100000", padded).ticker()).isEqualTo("MBG.DE");
+
+        List<Map<String, Object>> unknownExchange = List.of(Map.of(
+            "ticker", " aapl ",
+            "exchCode", "NOT LISTED",
+            "name", "APPLE INC"));
+
+        assertThat(converter.pickBest("US0378331005", unknownExchange).ticker()).isEqualTo("AAPL");
     }
 }

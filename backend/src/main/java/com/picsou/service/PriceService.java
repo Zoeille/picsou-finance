@@ -22,14 +22,7 @@ public class PriceService {
 
     private static final Logger log = LoggerFactory.getLogger(PriceService.class);
     private static final long CACHE_TTL_SECONDS = 900; // 15 minutes
-
-    /**
-     * How long a ticker that just failed to price is left alone before the network is tried
-     * again. Without it, a provider outage costs one HTTP request <em>per read</em>: every
-     * dashboard render, every account page, every history point re-attempts the same doomed
-     * call, which is how a momentary CoinGecko 429 turned into hours of missing prices.
-     */
-    private static final long NEGATIVE_TTL_SECONDS = 60;
+    private static final long MISS_CACHE_TTL_SECONDS = 300; // 5 minutes
 
     /**
      * How stale a {@code price_snapshot} row may be before it stops being an acceptable answer.
@@ -51,11 +44,6 @@ public class PriceService {
 
     // Simple in-memory price cache: ticker → (price, cachedAt)
     private final Map<String, CachedPrice> priceCache = new ConcurrentHashMap<>();
-
-    // Tickers whose last resolution attempt reached the provider and came back empty: ticker →
-    // when. Read by the on-demand path only; refreshPrices/refreshCryptoPrices deliberately
-    // ignore it, so a scheduled refresh or a user-triggered sync always gets a real attempt.
-    private final Map<String, Instant> recentMisses = new ConcurrentHashMap<>();
 
     public PriceService(CoinGeckoPriceProvider coinGecko, YahooFinancePriceProvider yahoo,
                         PriceSnapshotRepository priceSnapshotRepository) {
@@ -143,6 +131,7 @@ public class PriceService {
         LocalDate today = LocalDate.now();
         Map<String, Quote> resolved = new HashMap<>();
         Set<String> pending = new TreeSet<>();
+        Set<String> missCached = new TreeSet<>();
 
         for (String ticker : tickers) {
             if (ticker == null || ticker.isBlank()) continue;
@@ -156,28 +145,37 @@ public class PriceService {
                 continue;
             }
             CachedPrice cached = priceCache.get(upper);
-            if (cached != null && !cached.isExpired()) {
+            if (cached != null && !cached.isExpired() && cached.price() != null) {
                 resolved.put(upper, new Quote(cached.price(), today, true));
-            } else {
-                pending.add(upper);
+                continue;
             }
+            // A cached entry with no price is a remembered miss: the provider was asked
+            // recently and had nothing. Skip the network -- that is what the shorter
+            // MISS_CACHE_TTL_SECONDS buys -- and go straight to the recorded fallback.
+            if (cached != null && !cached.isExpired()) {
+                missCached.add(upper);
+            }
+            pending.add(upper);
         }
 
         if (pending.isEmpty()) return resolved;
 
         Set<String> fetchable = pending.stream()
-            .filter(t -> !recentlyMissed(t))
+            .filter(t -> !missCached.contains(t))
             .collect(Collectors.toCollection(TreeSet::new));
 
         if (!fetchable.isEmpty()) {
-            fetchLive(fetchable, cryptoOnly).forEach((ticker, price) -> {
-                priceCache.put(ticker, new CachedPrice(price, Instant.now()));
-                recentMisses.remove(ticker);
-                resolved.put(ticker, new Quote(price, today, true));
-            });
-            fetchable.stream()
-                .filter(t -> !resolved.containsKey(t))
-                .forEach(t -> recentMisses.put(t, Instant.now()));
+            Map<String, BigDecimal> live = fetchLive(fetchable, cryptoOnly);
+            Instant fetchedAt = Instant.now();
+            for (String ticker : fetchable) {
+                BigDecimal price = live.get(ticker);
+                // Misses are cached too: that null entry *is* the negative cache, and it
+                // expires on its own shorter TTL.
+                priceCache.put(ticker, new CachedPrice(price, fetchedAt));
+                if (price != null) {
+                    resolved.put(ticker, new Quote(price, today, true));
+                }
+            }
         }
 
         Set<String> unresolved = pending.stream()
@@ -240,11 +238,6 @@ public class PriceService {
                 (a, b) -> a.getDate().isAfter(b.getDate()) ? a : b);
         }
         return latest;
-    }
-
-    private boolean recentlyMissed(String ticker) {
-        Instant missedAt = recentMisses.get(ticker);
-        return missedAt != null && Instant.now().isBefore(missedAt.plusSeconds(NEGATIVE_TTL_SECONDS));
     }
 
     /**
@@ -330,7 +323,6 @@ public class PriceService {
         if (!cryptoTickers.isEmpty()) {
             coinGecko.getPricesEur(cryptoTickers).forEach((k, v) -> {
                 priceCache.put(k, new CachedPrice(v, Instant.now()));
-                recentMisses.remove(k);
                 result.put(k, v);
             });
         }
@@ -338,7 +330,6 @@ public class PriceService {
         if (!stockTickers.isEmpty()) {
             yahoo.getPricesEur(stockTickers).forEach((k, v) -> {
                 priceCache.put(k, new CachedPrice(v, Instant.now()));
-                recentMisses.remove(k);
                 result.put(k, v);
             });
         }
@@ -505,16 +496,14 @@ public class PriceService {
 
     private record CachedPrice(BigDecimal price, Instant cachedAt) {
         boolean isExpired() {
-            return Instant.now().isAfter(cachedAt.plusSeconds(CACHE_TTL_SECONDS));
+            long ttl = price == null ? MISS_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS;
+            return Instant.now().isAfter(cachedAt.plusSeconds(ttl));
         }
     }
 
     /** Drop the in-memory price cache. Used by PriceFxCleanupRunner. */
     public void clearPriceCache() {
         priceCache.clear();
-        // Also the failure memory: a caller asking for a clean slate wants the next read to
-        // reach the provider, not to be short-circuited by a miss recorded before the reset.
-        recentMisses.clear();
     }
 
     /**

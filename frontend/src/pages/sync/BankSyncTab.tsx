@@ -218,6 +218,11 @@ export function BankSyncTab() {
                   <div className="flex min-w-0 items-center gap-3">
                     <Landmark className="size-5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 text-sm font-medium leading-5">{inst.name}</span>
+                    {inst.psuType === 'business' && (
+                      <Badge variant="outline" title={t('sync.banks.proBadgeTitle')}>
+                        {t('sync.banks.proBadge')}
+                      </Badge>
+                    )}
                   </div>
                   <span className="justify-self-center text-xs text-muted-foreground">{inst.country}</span>
                   <Button

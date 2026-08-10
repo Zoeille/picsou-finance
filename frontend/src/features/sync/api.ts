@@ -4,6 +4,7 @@ import type {
   ExchangeType,
   ChainType,
   ExchangeStatus,
+  Institution,
   WalletStatus,
   FinaryPreviewResponse,
   FinaryConnectionStatus,
@@ -15,6 +16,8 @@ import type {
   BoursoAuthInitResponse,
   BourseDirectSessionStatus,
   BourseDirectAuthInitResponse,
+  AmundiSessionStatus,
+  AmundiAuthInitResponse,
 } from '@/types/api'
 
 // --- Bank Sync (Enable Banking) ---
@@ -22,10 +25,7 @@ import type {
 export const bankSyncApi = {
   searchInstitutions: (query: string) =>
     api
-      .get<{ id: string; name: string; bic: string | null; logoUrl?: string | null; country: string }[]>(
-        '/sync/institutions',
-        { params: { query }, skipGlobalErrorRedirect: true },
-      )
+      .get<Institution[]>('/sync/institutions', { params: { query }, skipGlobalErrorRedirect: true })
       .then(r => r.data),
 
   initiate: (institutionId: string, institutionName: string) =>
@@ -178,6 +178,32 @@ export const bourseDirectApi = {
       .then(r => r.data),
 
   clearSession: () => api.delete('/bourse-direct/session'),
+}
+
+// --- Amundi Épargne Salariale ---
+
+export const amundiApi = {
+  initiateAuth: (login: string, password: string) =>
+    api
+      .post<AmundiAuthInitResponse>('/amundi/auth/initiate', { login, password })
+      .then(r => r.data),
+
+  // `code` is omitted for an app push: the user approves on their phone.
+  completeAuth: (processId: string, code?: string) =>
+    api
+      .post<AmundiSessionStatus>('/amundi/auth/complete', { processId, code })
+      .then(r => r.data),
+
+  sync: () => api.post<AmundiSessionStatus>('/amundi/sync').then(r => r.data),
+
+  getStatus: () =>
+    api
+      .get<AmundiSessionStatus>('/amundi/status', {
+        skipGlobalErrorRedirect: true,
+      })
+      .then(r => r.data),
+
+  clearSession: () => api.delete('/amundi/session'),
 }
 
 // --- Finary ---
