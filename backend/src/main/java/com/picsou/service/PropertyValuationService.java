@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -58,6 +59,7 @@ public class PropertyValuationService {
     private final AccountRepository accountRepository;
     private final AccountAccessResolver accessResolver;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate txTemplate;
     private final boolean enabled;
 
     public PropertyValuationService(
@@ -70,6 +72,7 @@ public class PropertyValuationService {
         AccountRepository accountRepository,
         AccountAccessResolver accessResolver,
         ObjectMapper objectMapper,
+        TransactionTemplate txTemplate,
         @Value("${app.valuation.enabled:true}") boolean enabled
     ) {
         this.providers = providers;
@@ -81,6 +84,7 @@ public class PropertyValuationService {
         this.accountRepository = accountRepository;
         this.accessResolver = accessResolver;
         this.objectMapper = objectMapper;
+        this.txTemplate = txTemplate;
         this.enabled = enabled;
     }
 
@@ -117,26 +121,38 @@ public class PropertyValuationService {
      * Values every property of a member, for the scheduled refresh.
      *
      * <p>Guarded per property: one unreachable commune must not abort the rest.
+     *
+     * <p><b>Each property commits on its own.</b> This method is deliberately not
+     * {@code @Transactional}: catching the exception is not enough to isolate a database
+     * failure, because JPA marks the transaction rollback-only when the provider raises, and
+     * the commit at the end then throws {@code UnexpectedRollbackException} — discarding every
+     * property that had already succeeded. A per-property {@link TransactionTemplate} is what
+     * makes the guard mean what it says. The same reason {@code AmundiSyncService} and
+     * {@code BourseDirectSyncService} use one.
      */
-    @Transactional
     public int refreshAllForMember(Long memberId) {
         if (!enabled) {
             return 0;
         }
+        List<Account> accounts = txTemplate.execute(status ->
+            accountRepository.findAllByMemberIdOrderByCreatedAtAsc(memberId));
         int refreshed = 0;
-        for (Account account : accountRepository.findAllByMemberIdOrderByCreatedAtAsc(memberId)) {
+        for (Account account : accounts) {
             if (account.getType() != AccountType.REAL_ESTATE) {
                 continue;
             }
             // The metadata lookup belongs inside the guard: it hits the database, so it can
             // fail too, and a single bad property must not abort the whole member's refresh.
             try {
-                Optional<RealEstateMetadata> metadata = metadataRepository.findByAccountId(account.getId());
-                if (metadata.isEmpty()) {
-                    continue;
-                }
-                PropertyValuationResponse result = estimateFor(account, metadata.get());
-                if (result.status() == ValuationStatus.OK) {
+                Boolean ok = txTemplate.execute(status -> {
+                    Optional<RealEstateMetadata> metadata =
+                        metadataRepository.findByAccountId(account.getId());
+                    if (metadata.isEmpty()) {
+                        return false;
+                    }
+                    return estimateFor(account, metadata.get()).status() == ValuationStatus.OK;
+                });
+                if (Boolean.TRUE.equals(ok)) {
                     refreshed++;
                 }
             } catch (Exception ex) {
@@ -243,6 +259,10 @@ public class PropertyValuationService {
      *
      * <p>Only ever raises a zero balance: an existing valuation, manual or estimated, is left
      * exactly as it was.
+     *
+     * <p>Applies in {@code MANUAL} mode as well, which is the single place that lock does not
+     * hold — deliberately, because it protects a figure the user gave and a zero is the absence
+     * of one. See {@link com.picsou.model.ValuationMode}.
      */
     private PropertyValuationResponse withCostBasisFloor(Account account, RealEstateMetadata metadata,
                                                          PropertyValuationResponse response) {

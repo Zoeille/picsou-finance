@@ -18,6 +18,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -46,13 +53,41 @@ class PropertyValuationServiceTest {
     @Mock AccountAccessResolver accessResolver;
 
     private PropertyValuationService service;
+    private CountingTxManager txManager;
+
+    /**
+     * Runs callbacks straight through while counting boundaries, so a test can assert that each
+     * property gets its own transaction rather than sharing the caller's.
+     */
+    private static final class CountingTxManager implements PlatformTransactionManager {
+        int started;
+        int committed;
+        int rolledBack;
+
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            started++;
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            committed++;
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            rolledBack++;
+        }
+    }
 
     @BeforeEach
     void setUp() {
+        txManager = new CountingTxManager();
         service = new PropertyValuationService(
             List.of(provider), geocoder, priceIndex, new PropertyAdjustments(),
             metadataRepository, valuationRepository, accountRepository, accessResolver,
-            new ObjectMapper(), true);
+            new ObjectMapper(), new TransactionTemplate(txManager), true);
     }
 
     private static Account house() {
@@ -331,7 +366,7 @@ class PropertyValuationServiceTest {
         PropertyValuationService disabled = new PropertyValuationService(
             List.of(provider), geocoder, priceIndex, new PropertyAdjustments(),
             metadataRepository, valuationRepository, accountRepository, accessResolver,
-            new ObjectMapper(), false);
+            new ObjectMapper(), new TransactionTemplate(new CountingTxManager()), false);
 
         Account account = house();
         when(accessResolver.requireOwner(10L, 1L)).thenReturn(account);
@@ -441,5 +476,35 @@ class PropertyValuationServiceTest {
 
         assertThat(result.estimatedValue())
             .isBetween(result.lowValue(), result.highValue());
+    }
+
+    @Test
+    void refreshAllForMember_givesEachPropertyItsOwnTransaction() {
+        // The per-property try/catch is not enough on its own: a DataAccessException marks the
+        // surrounding transaction rollback-only, so a single @Transactional method would commit
+        // nothing at the end and throw UnexpectedRollbackException, losing the properties that
+        // had already succeeded. Only a real boundary per property makes the guard mean what it
+        // says, which is what these counts pin.
+        Account ok = house();
+        Account broken = Account.builder()
+            .id(11L).name("Autre").type(AccountType.REAL_ESTATE).currency("EUR")
+            .currentBalance(new BigDecimal("100000")).color("#a855f7").member(ALICE).build();
+
+        when(accountRepository.findAllByMemberIdOrderByCreatedAtAsc(1L))
+            .thenReturn(List.of(broken, ok));
+        when(metadataRepository.findByAccountId(11L))
+            .thenThrow(new DataAccessResourceFailureException("connection reset"));
+        when(metadataRepository.findByAccountId(10L))
+            .thenReturn(Optional.of(metadata(ok, "HOUSE", "33063", ValuationMode.ESTIMATED)));
+        stubSuccessfulProvider();
+        when(priceIndex.reindexRatio(any(), any(), any())).thenReturn(Optional.empty());
+
+        assertThat(service.refreshAllForMember(1L)).isEqualTo(1);
+
+        // One for the account list, one per property.
+        assertThat(txManager.started).isEqualTo(3);
+        // Only the failing property rolled back; the healthy one committed on its own.
+        assertThat(txManager.rolledBack).isEqualTo(1);
+        assertThat(txManager.committed).isEqualTo(2);
     }
 }
