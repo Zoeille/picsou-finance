@@ -248,8 +248,7 @@ class AccountServiceTest {
             .ticker("PHYMF").quantity(new BigDecimal("10"))
             .providerValueEur(new BigDecimal("840")).build();
         when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(priced, brokerValued));
-        when(priceService.getPriceEur("AAPL")).thenReturn(new BigDecimal("200"));
-        when(priceService.getPriceEur("PHYMF")).thenReturn(null);
+        stubQuotes("AAPL", "200", "PHYMF", null);
 
         BigDecimal result = accountService.liveBalanceEur(account);
 
@@ -312,7 +311,7 @@ class AccountServiceTest {
         AccountHolding holding = AccountHolding.builder()
             .ticker("FR0010405035").quantity(new BigDecimal("12.3456")).build();
         when(holdingRepository.findByAccount_Id(4L)).thenReturn(List.of(holding));
-        when(priceService.getPriceEur("FR0010405035")).thenReturn(null);
+        stubQuotes("FR0010405035", null);
 
         assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
     }
@@ -325,7 +324,7 @@ class AccountServiceTest {
         AccountHolding holding = AccountHolding.builder()
             .ticker("FR0010405035").quantity(new BigDecimal("10")).build();
         when(holdingRepository.findByAccount_Id(4L)).thenReturn(List.of(holding));
-        when(priceService.getPriceEur("FR0010405035")).thenReturn(new BigDecimal("123.456"));
+        stubQuotes("FR0010405035", "123.456");
 
         assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
     }
