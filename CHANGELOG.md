@@ -86,6 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   locale registry (`SUPPORTED_LOCALES`); selectors and `Intl` formatting derive
   from it (#32).
 - **Build version surfaced** in Settings → About and `/actuator/info`.
+- **More logos on account cards.** Trade Republic accounts now carry the broker's
+  mark, and on-chain wallets — whose provider is a bare ticker, so no provider
+  logo can match — show a blockchain mark by default. A wallet held on a Ledger
+  can be switched to the Ledger logo from the account form, next to the color
+  picker; the choice is stored on the account, so it follows every device and
+  family member. Existing wallets are backfilled by a migration.
+  See [feature notes](docs/features/bank-logos.md).
 
 ### Changed
 

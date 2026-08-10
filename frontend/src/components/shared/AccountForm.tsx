@@ -9,6 +9,7 @@ import { NumericInput } from '@/components/shared/NumericInput'
 import { DateInput } from '@/components/shared/DateInput'
 import { Label } from '@/components/ui/label'
 import { ColorPicker } from '@/components/shared/ColorPicker'
+import { LogoPicker } from '@/components/shared/LogoPicker'
 import { parseAmount, getLocale } from '@/lib/utils'
 import { ACCOUNT_TYPES, SUPPORTED_CURRENCIES } from '@/lib/constants'
 
@@ -36,6 +37,7 @@ const accountSchema = z.object({
   isManual: z.boolean(),
   color: z.string(),
   ticker: z.string().max(20).optional(),
+  logoKey: z.string().optional(),
   // Loan-only fields (validated as numbers but optional at the form level — required-ness is enforced at submit when type=LOAN)
   borrowedAmount: z.number().min(0).optional(),
   interestRatePct: z.number().min(0).max(100).optional(),
@@ -66,6 +68,7 @@ const EMPTY_DEFAULTS: AccountFormData = {
   isManual: false,
   color: '#6366f1',
   ticker: '',
+  logoKey: '',
   borrowedAmount: undefined,
   interestRatePct: undefined,
   monthlyPayment: undefined,
@@ -85,6 +88,10 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
   })
 
   const selectedColor = useWatch({ control, name: 'color' })
+  // Doubles as the "does this account get a logo choice at all" test: only an on-chain wallet
+  // is created with a key (WalletSyncService), and the picker only ever swaps one key for
+  // another, so an account that has none never grows one here.
+  const selectedLogoKey = useWatch({ control, name: 'logoKey' })
   const selectedType = useWatch({ control, name: 'type' })
   const selectedCurrency = useWatch({ control, name: 'currency' })
 
@@ -271,6 +278,13 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
             <Label>{t('accounts.color')}</Label>
             <ColorPicker value={selectedColor} onChange={(c) => setValue('color', c)} />
           </div>
+
+          {selectedLogoKey && (
+            <div className="space-y-2">
+              <Label>{t('accounts.logo')}</Label>
+              <LogoPicker value={selectedLogoKey} onChange={(k) => setValue('logoKey', k)} />
+            </div>
+          )}
 
           {selectedType !== 'REAL_ESTATE' && selectedType !== 'LOAN' && (
             <div className="flex min-h-10 items-center gap-2">

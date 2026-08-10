@@ -20,6 +20,7 @@ public record AccountResponse(
     String color,
     String ticker,
     String logoUrl,
+    String logoKey,
     Instant createdAt,
     RealEstateMetadataResponse realEstate,
     DebtResponse debt
@@ -39,6 +40,7 @@ public record AccountResponse(
             a.getColor(),
             a.getTicker(),
             a.getLogoUrl(),
+            a.getLogoKey(),
             a.getCreatedAt(),
             null,
             null
@@ -47,11 +49,13 @@ public record AccountResponse(
 
     public AccountResponse withRealEstate(RealEstateMetadataResponse realEstate) {
         return new AccountResponse(id, name, type, provider, currency, currentBalance,
-            currentBalanceEur, cashBalance, lastSyncedAt, isManual, color, ticker, logoUrl, createdAt, realEstate, debt);
+            currentBalanceEur, cashBalance, lastSyncedAt, isManual, color, ticker, logoUrl, logoKey, createdAt,
+            realEstate, debt);
     }
 
     public AccountResponse withDebt(DebtResponse debt) {
         return new AccountResponse(id, name, type, provider, currency, currentBalance,
-            currentBalanceEur, cashBalance, lastSyncedAt, isManual, color, ticker, logoUrl, createdAt, realEstate, debt);
+            currentBalanceEur, cashBalance, lastSyncedAt, isManual, color, ticker, logoUrl, logoKey, createdAt,
+            realEstate, debt);
     }
 }

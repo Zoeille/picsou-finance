@@ -421,7 +421,7 @@ handlers.set(key('POST', '/crypto/exchange'), (config) => {
   const body = JSON.parse(config.data || '{}')
   const provider = body.type ?? 'BINANCE'
   return {
-    id: Date.now(), name: provider, type: 'CRYPTO' as const, provider, currency: 'EUR', currentBalance: 0, currentBalanceEur: 0, lastSyncedAt: null, isManual: false, color: '#f59e0b', ticker: null, logoUrl: null, createdAt: new Date().toISOString()
+    id: Date.now(), name: provider, type: 'CRYPTO' as const, provider, currency: 'EUR', currentBalance: 0, currentBalanceEur: 0, lastSyncedAt: null, isManual: false, color: '#f59e0b', ticker: null, logoUrl: null, logoKey: null, createdAt: new Date().toISOString()
   }
 })
 

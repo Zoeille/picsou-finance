@@ -71,6 +71,16 @@ public class Account extends AuditableEntity {
     @Column(name = "logo_url", columnDefinition = "TEXT")
     private String logoUrl;
 
+    /**
+     * Which bundled frontend asset this account shows, e.g. {@code "ledger"}. Set by
+     * {@link com.picsou.service.WalletSyncService} for on-chain wallets (whose {@code provider}
+     * is a ticker, so nothing stable to key a logo on) and overridable by the user. The key is
+     * opaque here -- the frontend owns the key -> asset mapping and falls back to
+     * {@link #logoUrl}, then {@link #color}, when it is null or unknown.
+     */
+    @Column(name = "logo_key", length = 32)
+    private String logoKey;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 }

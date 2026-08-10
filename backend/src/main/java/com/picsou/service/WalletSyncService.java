@@ -40,6 +40,15 @@ public class WalletSyncService {
     /** Matches the {@code wallet_address.address} column width (see V10). */
     private static final int MAX_ADDRESS_LENGTH = 200;
 
+    /**
+     * Bundled logo a freshly synced wallet starts with. A wallet's {@code provider} is its
+     * native ticker (BTC, SOL...), so the frontend's provider -> logo map has nothing stable to
+     * key on; this hands it a key instead. The user can swap it for another bundled asset
+     * (a Ledger, typically) from the account form -- so it is only ever written on creation,
+     * never refreshed on a later sync, and V75 backfilled the wallets that predate it.
+     */
+    public static final String DEFAULT_LOGO_KEY = "blockchain";
+
     private final List<WalletPort> walletAdapters;
     private final WalletAddressRepository walletRepository;
     private final AccountRepository accountRepository;
@@ -289,6 +298,7 @@ public class WalletSyncService {
                 .externalAccountId(externalId)
                 .isManual(false)
                 .color("#f59e0b")
+                .logoKey(DEFAULT_LOGO_KEY)
                 .build();
         }
 

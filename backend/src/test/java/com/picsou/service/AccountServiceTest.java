@@ -1,5 +1,6 @@
 package com.picsou.service;
 
+import com.picsou.dto.AccountRequest;
 import com.picsou.dto.DebtRequest;
 import com.picsou.dto.HoldingResponse;
 import com.picsou.exception.ResourceNotFoundException;
@@ -71,6 +72,40 @@ class AccountServiceTest {
             }
         }
         when(priceService.getQuotes(any())).thenReturn(quotes);
+    }
+
+    // ─── logo key ─────────────────────────────────────────────────────────────
+
+    @Test
+    void update_setsTheLogoKeyThePickerSent() {
+        Account account = Account.builder().id(1L).name("BITCOIN Wallet").type(AccountType.CRYPTO)
+            .currency("EUR").logoKey("blockchain").build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, logoRequest("ledger"), 7L);
+
+        assertThat(account.getLogoKey()).isEqualTo("ledger");
+    }
+
+    @Test
+    void update_keepsTheStoredLogoKey_whenTheClientSendsNone() {
+        // Unlike ticker, an absent logoKey means "this client doesn't know about logos" -- the
+        // MCP update_account tool sends none. Clearing it there would drop a wallet's Ledger
+        // mark as a side effect of renaming the account.
+        Account account = Account.builder().id(1L).name("BITCOIN Wallet").type(AccountType.CRYPTO)
+            .currency("EUR").logoKey("ledger").build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, logoRequest(null), 7L);
+
+        assertThat(account.getLogoKey()).isEqualTo("ledger");
+    }
+
+    private static AccountRequest logoRequest(String logoKey) {
+        return new AccountRequest("BITCOIN Wallet", AccountType.CRYPTO, "BTC", "EUR",
+            null, false, "#f59e0b", null, logoKey);
     }
 
     @Test

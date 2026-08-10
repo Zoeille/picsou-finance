@@ -81,6 +81,7 @@ const baseAccount: Account = {
   color: '#6366f1',
   ticker: null,
   logoUrl: null,
+  logoKey: null,
   createdAt: '2024-01-01T00:00:00Z',
 }
 
@@ -122,6 +123,46 @@ describe('AccountCard', () => {
     await waitFor(() => {
       const img = container.querySelector('img') as HTMLImageElement
       expect(img).toHaveAttribute('src', 'https://logos.example/bnp.png')
+    })
+  })
+
+  // A wallet's provider is its native ticker (BTC, SOL...), so nothing in PROVIDER_LOGOS can
+  // match it -- the key stored on the account is the only thing that gives it a logo.
+  it.each([
+    ['blockchain', '/wallets/blockchain.svg'],
+    ['ledger', '/wallets/ledger.svg'],
+  ])('renders the %s asset for a wallet carrying that logoKey', async (logoKey, asset) => {
+    const account = { ...baseAccount, type: 'CRYPTO' as const, provider: 'BTC', logoKey }
+    const { container } = render(<AccountCard account={account} />)
+
+    await waitFor(() => {
+      const img = container.querySelector('img') as HTMLImageElement
+      expect(img).toHaveAttribute('src', asset)
+    })
+  })
+
+  it("prefers the account's own logoKey over both a connector logo and a bundled provider one", async () => {
+    const account = {
+      ...baseAccount,
+      provider: 'MERIA',
+      logoUrl: 'https://logos.example/bnp.png',
+      logoKey: 'ledger',
+    }
+    const { container } = render(<AccountCard account={account} />)
+
+    await waitFor(() => {
+      const img = container.querySelector('img') as HTMLImageElement
+      expect(img).toHaveAttribute('src', '/wallets/ledger.svg')
+    })
+  })
+
+  it('ignores a logoKey this build has no asset for, falling through to the provider logo', async () => {
+    const account = { ...baseAccount, provider: 'MERIA', logoKey: 'trezor' }
+    const { container } = render(<AccountCard account={account} />)
+
+    await waitFor(() => {
+      const img = container.querySelector('img') as HTMLImageElement
+      expect(img).toHaveAttribute('src', '/exchanges/meria.svg')
     })
   })
 

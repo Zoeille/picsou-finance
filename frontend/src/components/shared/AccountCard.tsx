@@ -8,7 +8,7 @@ import { AccountTypeBadge } from '@/components/shared/AccountTypeBadge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatCurrency, formatDate, formatTimeAgo, localeFromLanguage } from '@/lib/utils'
-import { providerLogoUrl } from '@/lib/provider-logos'
+import { logoKeyUrl, providerLogoUrl } from '@/lib/provider-logos'
 
 interface AccountCardProps {
   account: Account
@@ -23,13 +23,17 @@ interface AccountCardProps {
 const SYNC_STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000
 
 /**
- * The provider's own logo when the connector supplied one (Enable Banking), otherwise the
- * brand asset bundled for that provider, otherwise the account's color.
+ * The bundled asset the account itself points at (a wallet's `logoKey`) when it has one, else
+ * the provider's own logo when the connector supplied one (Enable Banking), else the brand
+ * asset bundled for that provider, else the account's color.
  */
 function AccountAvatar(
-  { logoUrl, provider, color }: { logoUrl: string | null; provider: string | null; color: string },
+  { logoKey, logoUrl, provider, color }:
+    { logoKey: string | null; logoUrl: string | null; provider: string | null; color: string },
 ) {
-  const src = logoUrl ?? providerLogoUrl(provider)
+  // The account's own key first: it is the only one a user picked by hand, so it outranks
+  // both the connector's logo and the provider map.
+  const src = logoKeyUrl(logoKey) ?? logoUrl ?? providerLogoUrl(provider)
   return (
     <Avatar className="mt-1 size-10 shrink-0 bg-white">
       {src && <AvatarImage src={src} alt="" className="object-contain p-1" />}
@@ -71,6 +75,7 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
     >
       <CardContent className="flex items-start gap-3 p-4">
         <AccountAvatar
+          logoKey={account.logoKey}
           logoUrl={account.logoUrl}
           provider={account.provider}
           color={account.color}

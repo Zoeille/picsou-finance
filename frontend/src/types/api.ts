@@ -38,6 +38,8 @@ export interface Account {
   color: string
   ticker: string | null
   logoUrl: string | null
+  /** Key of a bundled frontend asset (`lib/provider-logos.ts`); null for accounts with no choice made. */
+  logoKey: string | null
   createdAt: string
   realEstate?: RealEstateMetadata
   debt?: DebtInfo
@@ -52,6 +54,8 @@ export interface AccountRequest {
   isManual: boolean
   color?: string
   ticker?: string
+  /** Omitted leaves the stored key untouched — the backend only overwrites it when set. */
+  logoKey?: string
 }
 
 export interface RealEstateMetadataRequest {

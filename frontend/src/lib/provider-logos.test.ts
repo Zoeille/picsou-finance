@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PROVIDER_LOGOS, providerLogoUrl } from './provider-logos'
+import { LOGO_KEYS, PROVIDER_LOGOS, WALLET_LOGO_CHOICES, logoKeyUrl, providerLogoUrl } from './provider-logos'
 
 /**
  * Vite expands this glob against the filesystem at transform time, so the keys are exactly
@@ -23,6 +23,43 @@ describe('PROVIDER_LOGOS', () => {
   })
 })
 
+describe('LOGO_KEYS', () => {
+  it.each(Object.entries(LOGO_KEYS))('ships the asset mapped for %s', (key, path) => {
+    expect(path.startsWith('/'), `${key}: path must be root-relative`).toBe(true)
+    expect(bundledAssets, `missing frontend/public${path}`).toContain(path)
+  })
+
+  // The picker renders LOGO_KEYS[key] directly, so a choice pointing at a key that isn't in
+  // the map would render a broken <img> rather than degrade to anything.
+  it('offers wallets only keys the map resolves', () => {
+    for (const { key } of WALLET_LOGO_CHOICES) {
+      expect(LOGO_KEYS[key], `${key} is offered but unmapped`).toBeDefined()
+    }
+  })
+})
+
+describe('logoKeyUrl', () => {
+  // 'blockchain' is WalletSyncService.DEFAULT_LOGO_KEY, written on every new wallet account
+  // and backfilled by V75 — renaming it on either side drops every wallet's logo.
+  it('resolves the key the wallet connector writes', () => {
+    expect(logoKeyUrl('blockchain')).toBe('/wallets/blockchain.svg')
+  })
+
+  it('resolves the key the picker sets for a Ledger', () => {
+    expect(logoKeyUrl('ledger')).toBe('/wallets/ledger.svg')
+  })
+
+  // The backend validates the key as a slug, not against this map, so an account can carry
+  // one this build has never heard of (a downgrade, a hand-edited row). It falls back rather
+  // than rendering a 404.
+  it('returns null for an unknown or missing key', () => {
+    expect(logoKeyUrl('trezor')).toBeNull()
+    expect(logoKeyUrl('BLOCKCHAIN')).toBeNull()
+    expect(logoKeyUrl(null)).toBeNull()
+    expect(logoKeyUrl('')).toBeNull()
+  })
+})
+
 describe('providerLogoUrl', () => {
   it('resolves the exchange name the backend writes as provider', () => {
     expect(providerLogoUrl('MERIA')).toBe('/exchanges/meria.svg')
@@ -35,6 +72,11 @@ describe('providerLogoUrl', () => {
     expect(providerLogoUrl('Amundi Épargne Salariale')).toBe('/providers/amundi.png')
   })
 
+  // Copied verbatim from the literal TradeRepublicSyncService.upsertAccount() writes.
+  it('resolves the provider string the Trade Republic connector writes', () => {
+    expect(providerLogoUrl('Trade Republic')).toBe('/providers/trade-republic.svg')
+  })
+
   it('resolves the exchange name the backend writes as provider', () => {
     expect(providerLogoUrl('MERIA')).toBe('/exchanges/meria.svg')
   })
@@ -42,6 +84,7 @@ describe('providerLogoUrl', () => {
   it('matches case-insensitively', () => {
     expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
     expect(providerLogoUrl('AMUNDI ÉPARGNE SALARIALE')).toBe('/providers/amundi.png')
+    expect(providerLogoUrl('TRADE REPUBLIC')).toBe('/providers/trade-republic.svg')
     expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
   })
 

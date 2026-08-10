@@ -106,6 +106,7 @@ public class AccountService {
             .isManual(req.isManual())
             .color(req.color() != null ? req.color() : "#6366f1")
             .ticker(req.ticker())
+            .logoKey(req.logoKey())
             .build();
 
         account = accountRepository.save(account);
@@ -129,6 +130,12 @@ public class AccountService {
         account.setCurrency(req.currency());
         account.setColor(req.color() != null ? req.color() : account.getColor());
         account.setTicker(req.ticker());
+        // Kept when absent, like color rather than like ticker: the logo picker only offers
+        // wallets a choice between concrete keys, so a null here means "this client doesn't
+        // know about logos" (the MCP update_account tool, an older frontend) rather than
+        // "clear it" -- and silently dropping a Ledger back to the generic wallet icon on an
+        // unrelated rename would be a surprise.
+        account.setLogoKey(req.logoKey() != null ? req.logoKey() : account.getLogoKey());
 
         // For manual accounts, allow balance update
         if (account.isManual() && req.currentBalance() != null) {
