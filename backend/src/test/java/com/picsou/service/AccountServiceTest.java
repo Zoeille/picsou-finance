@@ -1,6 +1,7 @@
 package com.picsou.service;
 
 import com.picsou.dto.AccountRequest;
+import com.picsou.dto.AccountResponse;
 import com.picsou.dto.DebtRequest;
 import com.picsou.dto.HoldingResponse;
 import com.picsou.exception.ResourceNotFoundException;
@@ -8,6 +9,7 @@ import com.picsou.model.Account;
 import com.picsou.model.AccountHolding;
 import com.picsou.model.AccountType;
 import com.picsou.model.Debt;
+import com.picsou.model.FamilyMember;
 import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.BalanceSnapshotRepository;
@@ -101,6 +103,33 @@ class AccountServiceTest {
         accountService.update(1L, logoRequest(null), 7L);
 
         assertThat(account.getLogoKey()).isEqualTo("ledger");
+    }
+
+    @Test
+    void update_dropsTheLogoKey_whenTheAccountIsRetypedAwayFromCrypto() {
+        // The picker offers no "none", and an omitted key is kept -- so without this the
+        // blockchain mark would follow a wallet retyped to CHECKING forever, with no way back.
+        Account account = Account.builder().id(1L).name("BITCOIN Wallet").type(AccountType.CRYPTO)
+            .currency("EUR").logoKey("ledger").build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, new AccountRequest("Livret", AccountType.SAVINGS, "BTC", "EUR",
+            null, false, "#f59e0b", null, null), 7L);
+
+        assertThat(account.getLogoKey()).isNull();
+    }
+
+    @Test
+    void create_ignoresALogoKeyOnANonCryptoAccount() {
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AccountResponse created = accountService.create(
+            new AccountRequest("Livret", AccountType.SAVINGS, null, "EUR",
+                null, true, "#f59e0b", null, "ledger"),
+            FamilyMember.builder().id(7L).build());
+
+        assertThat(created.logoKey()).isNull();
     }
 
     private static AccountRequest logoRequest(String logoKey) {

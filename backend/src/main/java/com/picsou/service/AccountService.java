@@ -106,7 +106,7 @@ public class AccountService {
             .isManual(req.isManual())
             .color(req.color() != null ? req.color() : "#6366f1")
             .ticker(req.ticker())
-            .logoKey(req.logoKey())
+            .logoKey(normalizeLogoKey(req.logoKey(), req.type()))
             .build();
 
         account = accountRepository.save(account);
@@ -135,7 +135,8 @@ public class AccountService {
         // know about logos" (the MCP update_account tool, an older frontend) rather than
         // "clear it" -- and silently dropping a Ledger back to the generic wallet icon on an
         // unrelated rename would be a surprise.
-        account.setLogoKey(req.logoKey() != null ? req.logoKey() : account.getLogoKey());
+        account.setLogoKey(normalizeLogoKey(
+            req.logoKey() != null ? req.logoKey() : account.getLogoKey(), account.getType()));
 
         // For manual accounts, allow balance update
         if (account.isManual() && req.currentBalance() != null) {
@@ -275,6 +276,19 @@ public class AccountService {
             .balance(balance)
             .investedAmount(investedAmount)
             .build());
+    }
+
+    /**
+     * A bundled logo key only means something on a crypto account: it is seeded by
+     * {@link WalletSyncService} for on-chain wallets and the picker only offers wallet marks.
+     *
+     * <p>Enforced here rather than trusted from the client because the key otherwise outlives
+     * the reason it exists — retyping a wallet to CHECKING would leave a blockchain mark on it
+     * for good, since the picker has no "none" option and {@code update} keeps a key the
+     * request omits.
+     */
+    private static String normalizeLogoKey(String logoKey, AccountType type) {
+        return type == AccountType.CRYPTO ? logoKey : null;
     }
 
     Account getOrThrow(Long id, Long memberId) {
