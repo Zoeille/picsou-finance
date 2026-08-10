@@ -4,6 +4,7 @@ import com.picsou.dto.AccountRequest;
 import com.picsou.dto.AccountResponse;
 import com.picsou.dto.DebtRequest;
 import com.picsou.dto.DebtResponse;
+import com.picsou.dto.ExchangePositionResponse;
 import com.picsou.dto.HoldingRequest;
 import com.picsou.dto.HoldingResponse;
 import com.picsou.dto.RealEstateMetadataRequest;
@@ -14,6 +15,7 @@ import com.picsou.dto.TransactionRequest;
 import com.picsou.dto.TransactionResponse;
 import com.picsou.model.BalanceSnapshot;
 import com.picsou.service.AccountService;
+import com.picsou.service.CryptoExchangeSyncService;
 import com.picsou.service.LoanAmortizationService;
 import com.picsou.service.ManualTransactionService;
 import com.picsou.service.RealizedPnlService;
@@ -35,14 +37,17 @@ public class AccountController {
     private final UserContext userContext;
     private final ManualTransactionService manualTransactionService;
     private final RealizedPnlService realizedPnlService;
+    private final CryptoExchangeSyncService cryptoExchangeSyncService;
 
     public AccountController(AccountService accountService, UserContext userContext,
                             ManualTransactionService manualTransactionService,
-                            RealizedPnlService realizedPnlService) {
+                            RealizedPnlService realizedPnlService,
+                            CryptoExchangeSyncService cryptoExchangeSyncService) {
         this.accountService = accountService;
         this.userContext = userContext;
         this.manualTransactionService = manualTransactionService;
         this.realizedPnlService = realizedPnlService;
+        this.cryptoExchangeSyncService = cryptoExchangeSyncService;
     }
 
     @GetMapping
@@ -93,6 +98,15 @@ public class AccountController {
     @GetMapping("/{id}/holdings")
     public List<HoldingResponse> getHoldings(@PathVariable Long id) {
         return accountService.getHoldings(id, userContext.currentMemberId());
+    }
+
+    /**
+     * The per-product breakdown (spot / staking / lending) behind this account's holdings, or an
+     * empty list for accounts that have none — the client falls back to the flat holdings table.
+     */
+    @GetMapping("/{id}/positions")
+    public List<ExchangePositionResponse> getPositions(@PathVariable Long id) {
+        return cryptoExchangeSyncService.getPositions(id, userContext.currentMemberId());
     }
 
     @GetMapping("/{id}/transactions")

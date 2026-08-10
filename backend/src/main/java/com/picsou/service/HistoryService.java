@@ -153,8 +153,13 @@ public class HistoryService {
         Map<Long, AccountPoint> liveAccountPoints = split ? new HashMap<>() : null;
 
         for (Account account : accounts) {
-            BigDecimal accLive = accountService.liveBalanceEur(account);
-            BigDecimal accInvested = accountService.calculateInvestedAmount(account);
+            // One pass, not two: liveBalanceEur and calculateInvestedAmount each run the whole
+            // valuation, and two runs can straddle a price-cache change — the value excluding an
+            // asset the cost basis then includes is the disagreement that reported an untouched
+            // account as an 85% loss, and here it would land straight in the live P&L point.
+            AccountService.Valuation valuation = accountService.valuation(account);
+            BigDecimal accLive = valuation.liveEur();
+            BigDecimal accInvested = valuation.investedEur();
             boolean isLoan = account.getType() == AccountType.LOAN;
 
             if (isLoan) {
@@ -355,13 +360,16 @@ public class HistoryService {
             List<AccountHolding> holdings = holdingRepository.findByAccount_Id(account.getId());
             allHoldings.addAll(holdings);
 
+            // One valuation per account, for the same reason as buildHistory above: the P&L
+            // printed here is value minus cost, so the two must come from the same prices.
+            AccountService.Valuation valuation = accountService.valuation(account);
+
             if (account.getType() == AccountType.LOAN) {
-                liveTotal = liveTotal.subtract(accountService.liveBalanceEur(account));
+                liveTotal = liveTotal.subtract(valuation.liveEur());
             } else {
-                BigDecimal accLive = accountService.liveBalanceEur(account);
-                liveTotal = liveTotal.add(accLive);
-                liveNonLoanValue = liveNonLoanValue.add(accLive);
-                liveInvested = liveInvested.add(accountService.calculateInvestedAmount(account));
+                liveTotal = liveTotal.add(valuation.liveEur());
+                liveNonLoanValue = liveNonLoanValue.add(valuation.liveEur());
+                liveInvested = liveInvested.add(valuation.investedEur());
             }
         }
 

@@ -39,7 +39,7 @@
 
 ### ExchangeType
 
-`BINANCE` · `KRAKEN`
+`BINANCE` · `KRAKEN` · `MERIA`
 
 ### FinaryMappingAction
 
@@ -286,13 +286,29 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
     "costBasisEur": 1500.00,
     "pnlEur": 300.00,
     "pnlPercent": 20.00,
-    "priceUpdatedAt": "2026-07-20T10:00:00Z"
+    "priceUpdatedAt": "2026-07-20T10:00:00Z",
+    "priceAsOf": "2026-07-20",
+    "priceStale": false
   }
 ]
 ```
 
 `currentPrice` is expressed in `quoteCurrency`. `averageBuyIn`,
 `currentValueEur`, `costBasisEur` and `pnlEur` are EUR-denominated.
+
+`priceAsOf` is the day the EUR price is for, and `priceStale` is `true` when the price provider
+could not be reached and the last recorded price (up to 7 days old) was used instead. The value is
+still returned in that case — clients should display it and mark it, not hide it. Both are
+`null`/`false` when no price could be resolved at all.
+
+`priceUpdatedAt` answers a different question: it is the instant the stored price on the holding
+was last refreshed, whereas `priceAsOf` is the calendar day that price *is for*. A holding synced
+minutes ago can carry a `priceAsOf` of yesterday. It is `null` when the holding has never been
+priced — a manually entered position, or one whose ticker no provider resolves.
+
+> A crypto exchange account also exposes its per-product breakdown at
+> [`GET /api/accounts/{id}/positions`](#get-apiaccountsidpositions), documented with the crypto
+> exchange endpoints in section 9.
 
 ---
 
@@ -818,11 +834,18 @@ rate limiting returns `429`.
 **Request body:**
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | `ExchangeType` | `BINANCE` · `KRAKEN` |
-| `apiKey` | `string` | Exchange API key |
-| `apiSecret` | `string` | Exchange API secret |
+| `type` | `ExchangeType` | `BINANCE` · `KRAKEN` · `MERIA` |
+| `apiKey` | `string` | Exchange API key (required, max 200 chars) |
+| `apiSecret` | `string?` | Exchange API secret (max 300 chars). **Required** for `BINANCE` and `KRAKEN`; must be **omitted** for `MERIA`, which authenticates with a single read-only API key |
 
 **Response `200` — `AccountResponse`.**
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| `400` | Blank API key; missing secret for an exchange that needs one; secret supplied for a single-key exchange |
+| `422` | Bean-validation failure (`errors` map), the credentials were refused by the exchange, or the immediate sync failed |
 
 ---
 
@@ -832,6 +855,40 @@ rate limiting returns `429`.
 - **Body:** none
 
 **Response `200` — `AccountResponse`** (updated with latest holdings).
+
+---
+
+#### `GET /api/accounts/{id}/positions`
+
+- **Auth:** Required
+
+The per-product breakdown behind an account's holdings. **Empty** for every account that has none
+(anything but a crypto exchange), in which case the client shows the flat holdings table instead.
+
+**Response `200` — `ExchangePositionResponse[]`:**
+```json
+[
+  { "product": "SPOT", "ticker": "BTC", "quantity": 0.01204, "principal": null, "interest": null,
+    "averageBuyIn": 68000.0, "currentPriceEur": 92100.0, "currentValueEur": 1108.88,
+    "costBasisEur": 818.72, "pnlEur": 290.16, "pnlPercent": 35.4,
+    "priceAsOf": "2026-08-01", "priceStale": false },
+  { "product": "STAKING", "ticker": "ATOM", "quantity": 33.154, "principal": 19.73, "interest": 13.424,
+    "averageBuyIn": 6.4, "currentPriceEur": 5.65, "currentValueEur": 187.32,
+    "costBasisEur": 212.19, "pnlEur": -24.87, "pnlPercent": -11.7,
+    "priceAsOf": "2026-07-31", "priceStale": true }
+]
+```
+
+`interest` is the yield **already included** in `quantity` (`principal + interest = quantity`), not
+an amount to add. `principal`/`interest` are null for exchanges that don't report yield, and
+`currentPriceEur`/`currentValueEur` are null for an asset with no CoinGecko mapping.
+
+`priceAsOf` / `priceStale` carry the price's freshness, as on `HoldingResponse` above: the second
+line is valued from the price recorded on 2026-07-31 because the provider did not answer.
+
+Cost basis is tracked **per asset**, not per product: `averageBuyIn` comes from the asset's
+`AccountHolding` and every line of the same asset shares it, with `costBasisEur = averageBuyIn ×
+quantity`. The per-line figures therefore still add up to the holding's own cost and P&L.
 
 ---
 
@@ -845,6 +902,12 @@ rate limiting returns `429`.
   {
     "id": 1,
     "exchangeType": "BINANCE",
+    "status": "CONNECTED",
+    "lastSyncedAt": "2025-03-15T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "exchangeType": "MERIA",
     "status": "CONNECTED",
     "lastSyncedAt": "2025-03-15T10:00:00Z"
   }

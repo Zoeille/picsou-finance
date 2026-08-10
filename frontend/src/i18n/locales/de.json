@@ -156,6 +156,7 @@
     "assetNamePlaceholder": "z. B. iShares Core MSCI World",
     "priceLive": "Live-Kurs",
     "priceStale": "Kurs von {{time}}",
+    "priceAsOf": "Kurs vom {{date}} — der Kursanbieter hat nicht geantwortet",
     "history": "Verlauf",
     "manual": "Manuell",
     "allTypes": "Alle Typen",
@@ -335,6 +336,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Kapital",
+    "interest": "Zinsen",
+    "total": "Gesamt"
+  },
   "goals": {
     "title": "Ziele",
     "addGoal": "Neues Ziel",
@@ -394,7 +405,7 @@
     "syncingDesc": "Wir laden gerade deine neuesten Transaktionen. Das dauert normalerweise nur ein paar Sekunden.",
     "desc": {
       "banks": "Verbinde deine Banken per OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "PEA- und Wertpapierkonten synchronisieren",
@@ -480,8 +491,12 @@
       "type": "Exchange-Typ",
       "apiKey": "API-Key",
       "apiSecret": "API-Secret",
+      "apiKeyOnly": "Meria verbindet sich mit einem einzigen schreibgeschützten API-Key — kein Secret nötig.",
+      "showSecret": "API-Secret anzeigen",
+      "hideSecret": "API-Secret verbergen",
       "connect": "Verbinden",
       "connectError": "Exchange konnte nicht verbunden werden. Prüfe deinen API-Key und dein Secret.",
+      "connectErrorKeyOnly": "Exchange konnte nicht verbunden werden. Prüfe deinen API-Key.",
       "sync": "Synchronisieren",
       "remove": "Entfernen",
       "removeConfirm": "Diesen Exchange entfernen?",
@@ -1195,7 +1210,7 @@
     },
     "crypto": {
       "title": "Verschlüssele deine Exchange-API-Keys",
-      "body": "Deine API-Keys von Binance / Kraken / Coinbase werden verschlüsselt gespeichert. Picsou kann den Verschlüsselungsschlüssel für dich generieren — er bleibt auf deiner Festplatte und wird nie übertragen.",
+      "body": "Deine Exchange-API-Keys (Binance, Meria...) werden verschlüsselt gespeichert. Picsou kann den Verschlüsselungsschlüssel für dich generieren — er bleibt auf deiner Festplatte und wird nie übertragen.",
       "generateCta": "Schlüssel für mich generieren",
       "generating": "Wird generiert...",
       "existed": "Dein Verschlüsselungsschlüssel existiert bereits auf der Festplatte — nichts zu tun.",

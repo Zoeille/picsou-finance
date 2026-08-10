@@ -5,11 +5,13 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.picsou.adapter.CoinGeckoPriceProvider;
 import com.picsou.adapter.YahooFinancePriceProvider;
+import com.picsou.model.PriceSnapshot;
 import com.picsou.repository.PriceSnapshotRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,18 +30,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Pins the per-ticker guard in {@code backfillHistoricalPrices}, which exists for two reasons
- * that are easy to undo by accident.
+ * Pins two contracts.
  *
- * <p>It must <b>continue</b>: this runs from {@code PriceBackfillRunner}, an
- * {@code ApplicationRunner}, so an escaping exception fails Spring Boot startup outright.
+ * <p><b>The resolution chain.</b> A price the provider cannot deliver right now must fall back to
+ * the last one recorded in {@code price_snapshot}, and a failed attempt must not be retried on
+ * every read. Without either, one rate-limited morning blanked the largest positions of an
+ * account — which then reported a large loss, because the value side dropped those assets while
+ * the cost side kept them — and every page render answered the rate limit with more requests.
  *
- * <p>And it must log at <b>ERROR</b>: the price providers swallow expected upstream failures and
- * return an empty map, so anything thrown here is a genuine bug. Logging it at WARN would
- * re-hide precisely what {@code CoinGeckoPriceProvider} was changed to rethrow.
+ * <p><b>The per-ticker guard in {@code backfillHistoricalPrices}</b>, which exists for two reasons
+ * that are easy to undo by accident. It must <b>continue</b>: this runs from
+ * {@code PriceBackfillRunner}, an {@code ApplicationRunner}, so an escaping exception fails Spring
+ * Boot startup outright. And it must log at <b>ERROR</b>: the price providers swallow expected
+ * upstream failures and return an empty map, so anything thrown here is a genuine bug. Logging it
+ * at WARN would re-hide precisely what {@code CoinGeckoPriceProvider} was changed to rethrow.
  */
 @ExtendWith(MockitoExtension.class)
 class PriceServiceTest {
@@ -68,6 +76,179 @@ class PriceServiceTest {
 
     private List<ILoggingEvent> eventsAt(Level level) {
         return logs.list.stream().filter(e -> e.getLevel() == level).toList();
+    }
+
+    private PriceSnapshot snapshot(String ticker, LocalDate date, String price) {
+        return PriceSnapshot.builder().ticker(ticker).date(date).priceEur(new BigDecimal(price)).build();
+    }
+
+    @Test
+    void price_fallsBackToTheLastRecordedOne_whenTheProviderReturnsNothing() {
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        when(coinGecko.supports("BTC")).thenReturn(true);
+        when(coinGecko.getPricesEur(Set.of("BTC"))).thenReturn(Map.of());
+        when(priceSnapshotRepository.findRecentByTickers(eq(Set.of("BTC")), any(), any()))
+            .thenReturn(List.of(snapshot("BTC", yesterday, "54619")));
+
+        assertThat(priceService.getPriceEur("BTC")).isEqualByComparingTo("54619");
+    }
+
+    @Test
+    void quote_carriesTheRecordedDate_andSaysItIsNotLive() {
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        when(coinGecko.supports("SOL")).thenReturn(true);
+        when(coinGecko.getPricesEur(Set.of("SOL"))).thenReturn(Map.of());
+        when(priceSnapshotRepository.findRecentByTickers(eq(Set.of("SOL")), any(), any()))
+            .thenReturn(List.of(snapshot("SOL", yesterday, "63.20")));
+
+        PriceService.Quote quote = priceService.getCryptoQuote("SOL");
+
+        // The client shows the figure and marks it -- both halves need the date and the flag.
+        assertThat(quote).isNotNull();
+        assertThat(quote.price()).isEqualByComparingTo("63.20");
+        assertThat(quote.asOf()).isEqualTo(yesterday);
+        assertThat(quote.live()).isFalse();
+    }
+
+    @Test
+    void quote_fromTheProvider_isLiveAndDatedToday() {
+        when(coinGecko.supports("BTC")).thenReturn(true);
+        when(coinGecko.getPricesEur(Set.of("BTC"))).thenReturn(Map.of("BTC", new BigDecimal("54619")));
+
+        PriceService.Quote quote = priceService.getCryptoQuote("BTC");
+
+        assertThat(quote.live()).isTrue();
+        assertThat(quote.asOf()).isEqualTo(LocalDate.now());
+        verifyNoInteractions(priceSnapshotRepository);
+    }
+
+    @Test
+    void fallback_onlyLooksBackAWeek() {
+        when(coinGecko.supports("BTC")).thenReturn(true);
+        when(coinGecko.getPricesEur(Set.of("BTC"))).thenReturn(Map.of());
+        when(priceSnapshotRepository.findRecentByTickers(any(), any(), any())).thenReturn(List.of());
+
+        assertThat(priceService.getPriceEur("BTC")).isNull();
+
+        // The age limit is enforced by the query, so that is where it has to be asserted. A
+        // month-old crypto price is not a stale number, it is a wrong one.
+        ArgumentCaptor<LocalDate> from = ArgumentCaptor.forClass(LocalDate.class);
+        verify(priceSnapshotRepository).findRecentByTickers(any(), from.capture(), any());
+        assertThat(from.getValue()).isEqualTo(LocalDate.now().minusDays(7));
+    }
+
+    @Test
+    void aFailedLookupIsNotRetriedOnEveryRead() {
+        when(coinGecko.supports("BTC")).thenReturn(true);
+        when(coinGecko.getPricesEur(Set.of("BTC"))).thenReturn(Map.of());
+        when(priceSnapshotRepository.findRecentByTickers(any(), any(), any())).thenReturn(List.of());
+
+        priceService.getPriceEur("BTC");
+        priceService.getPriceEur("BTC");
+        priceService.getPriceEur("BTC");
+
+        // Three reads, one attempt. The opposite -- a request per read -- is what kept an
+        // instance rate-limited for hours after a momentary 429.
+        verify(coinGecko, times(1)).getPricesEur(Set.of("BTC"));
+    }
+
+    @Test
+    void aSetOfTickersCostsOneProviderCall() {
+        Set<String> tickers = Set.of("BTC", "ETH", "SOL");
+        tickers.forEach(t -> when(coinGecko.supports(t)).thenReturn(true));
+        when(coinGecko.getPricesEur(any())).thenReturn(Map.of(
+            "BTC", new BigDecimal("54619"),
+            "ETH", new BigDecimal("1619"),
+            "SOL", new BigDecimal("63.20")));
+
+        assertThat(priceService.getCryptoQuotes(tickers)).containsOnlyKeys("BTC", "ETH", "SOL");
+
+        verify(coinGecko, times(1)).getPricesEur(any());
+    }
+
+    @Test
+    void cryptoLookupOfAnUnmappedTicker_neverReachesTheRecordedPrices() {
+        when(coinGecko.supports("STX")).thenReturn(false);
+
+        assertThat(priceService.getCryptoQuote("STX")).isNull();
+
+        // price_snapshot is keyed by ticker alone, exactly like the cache: reading it here would
+        // hand back the share price of the equity trading under the same symbol.
+        verifyNoInteractions(priceSnapshotRepository);
+        verify(coinGecko, org.mockito.Mockito.never()).getPricesEur(any());
+    }
+
+    @Test
+    void refreshCryptoQuotes_valuesFromTheRecordedPrice_withoutRerecordingItAsToday() {
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        when(coinGecko.supports("ATOM")).thenReturn(true);
+        when(coinGecko.getPricesEur(any())).thenReturn(Map.of());
+        when(priceSnapshotRepository.findRecentByTickers(eq(Set.of("ATOM")), any(), any()))
+            .thenReturn(List.of(snapshot("ATOM", yesterday, "1.065")));
+
+        Map<String, PriceService.Quote> quotes = priceService.refreshCryptoQuotes(Set.of("ATOM"));
+
+        assertThat(quotes.get("ATOM").price()).isEqualByComparingTo("1.065");
+        assertThat(quotes.get("ATOM").live()).isFalse();
+        // Writing the fallback back under today's date would launder a stale price into a fresh
+        // one and let the fallback walk itself forward indefinitely.
+        verify(priceSnapshotRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** A row every {@code stepDays} from {@code from} up to today, ordered as the query returns. */
+    private List<PriceSnapshot> dailyHistory(String ticker, LocalDate from, int stepDays) {
+        List<PriceSnapshot> rows = new java.util.ArrayList<>();
+        for (LocalDate date = from; !date.isAfter(LocalDate.now()); date = date.plusDays(stepDays)) {
+            rows.add(snapshot(ticker, date, "50000"));
+        }
+        return rows;
+    }
+
+    @Test
+    void backfill_skipsATickerWhoseHistoryIsAlreadyThere() {
+        LocalDate from = LocalDate.now().minusMonths(12);
+        when(priceSnapshotRepository.findByTickerInAndDateBetween(eq(Set.of("BTC")), any(), any()))
+            .thenReturn(dailyHistory("BTC", from, 1));
+
+        assertThat(priceService.backfillHistoricalPrices(Set.of("BTC"), from)).isZero();
+
+        // This runs at every boot, once per held ticker, against a free tier that counts
+        // requests: re-fetching twelve months only to discard every row as a duplicate is what
+        // exhausted the rate limit seconds after startup.
+        verifyNoInteractions(coinGecko);
+        verifyNoInteractions(yahoo);
+    }
+
+    @Test
+    void backfill_toleratesTheGapsClosedMarketsLeave() {
+        // Equities have no weekend rows, and an Easter or Christmas week stretches that further.
+        // Treating those as holes would re-request every stock's full year at every boot.
+        LocalDate from = LocalDate.now().minusMonths(12);
+        when(priceSnapshotRepository.findByTickerInAndDateBetween(eq(Set.of("AAPL")), any(), any()))
+            .thenReturn(dailyHistory("AAPL", from, 5));
+
+        assertThat(priceService.backfillHistoricalPrices(Set.of("AAPL"), from)).isZero();
+
+        verifyNoInteractions(yahoo);
+    }
+
+    @Test
+    void backfill_refillsAHoleInTheMiddleOfAnExistingHistory() {
+        // The failure the edge-probe version could not see: an instance offline for months has
+        // history on both sides of the outage, so probing the two ends declares it covered and
+        // the hole is never filled — the history chart then flat-lines across it forever.
+        LocalDate from = LocalDate.now().minusMonths(12);
+        List<PriceSnapshot> withHole = new java.util.ArrayList<>();
+        withHole.addAll(dailyHistory("BTC", from, 1).subList(0, 30));
+        withHole.add(snapshot("BTC", LocalDate.now(), "54619"));
+        when(priceSnapshotRepository.findByTickerInAndDateBetween(eq(Set.of("BTC")), any(), any()))
+            .thenReturn(withHole);
+        when(coinGecko.supports("BTC")).thenReturn(true);
+        when(coinGecko.getHistoricalPricesEur(eq("BTC"), any(), any()))
+            .thenReturn(Map.of(from.plusDays(60), new BigDecimal("51000")));
+        when(priceSnapshotRepository.findByTickerAndDate(any(), any())).thenReturn(Optional.empty());
+
+        assertThat(priceService.backfillHistoricalPrices(Set.of("BTC"), from)).isEqualTo(1);
     }
 
     @Test

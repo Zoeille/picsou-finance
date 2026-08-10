@@ -7,9 +7,10 @@ const { createAccount, updateDebtMetadata } = vi.hoisted(() => ({
   updateDebtMetadata: vi.fn(),
 }))
 
-const { initiateTrAuth, completeTrAuth } = vi.hoisted(() => ({
+const { initiateTrAuth, completeTrAuth, addCryptoExchange } = vi.hoisted(() => ({
   initiateTrAuth: vi.fn(),
   completeTrAuth: vi.fn(),
+  addCryptoExchange: vi.fn(),
 }))
 
 /** Mutable so each test can seed the institution list the BankWizard renders. */
@@ -29,7 +30,7 @@ vi.mock('@/features/sync/hooks', () => ({
   useInitiateBankSync: () => ({ mutate: vi.fn(), isPending: false }),
   useInitiateTrAuth: () => ({ mutate: initiateTrAuth, isPending: false }),
   useCompleteTrAuth: () => ({ mutate: completeTrAuth, isPending: false }),
-  useAddCryptoExchange: () => ({ mutate: vi.fn(), isPending: false }),
+  useAddCryptoExchange: () => ({ mutate: addCryptoExchange, isPending: false }),
   useAddCryptoWallet: () => ({ mutate: vi.fn(), isPending: false }),
   useFinaryConnectionStatus: () => ({ data: { connected: false } }),
   useFinaryLogin: () => ({ mutate: vi.fn(), isPending: false }),
@@ -139,6 +140,49 @@ describe('AddAccountModal Trade Republic wizard', () => {
     await waitFor(() => expect(tanInput).toHaveValue(''))
     expect(completeTrAuth).toHaveBeenCalledWith(
       { processId: 'process-123', tan: '9876' },
+      expect.any(Object),
+    )
+  })
+})
+
+describe('AddAccountModal exchange wizard', () => {
+  beforeEach(() => {
+    addCryptoExchange.mockReset()
+  })
+
+  function openExchangeWizard() {
+    render(<AddAccountModal open onOpenChange={vi.fn()} />)
+    fireEvent.click(screen.getByText('sync.exchanges.title'))
+  }
+
+  it('asks Meria for an API key only, and posts no secret', () => {
+    // The backend rejects a stray secret for a single-key exchange with a 400, so hiding the
+    // field is what keeps that error unreachable.
+    openExchangeWizard()
+
+    fireEvent.change(screen.getByLabelText('sync.exchanges.apiKey'), { target: { value: 'k' } })
+    fireEvent.change(screen.getByLabelText('sync.exchanges.apiSecret'), { target: { value: 's' } })
+    fireEvent.click(screen.getByRole('button', { name: 'MERIA' }))
+
+    expect(screen.queryByLabelText('sync.exchanges.apiSecret')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'sync.exchanges.connect' }))
+
+    expect(addCryptoExchange).toHaveBeenCalledWith(
+      { type: 'MERIA', apiKey: 'k', apiSecret: undefined },
+      expect.any(Object),
+    )
+  })
+
+  it('still sends both credentials for Binance', () => {
+    openExchangeWizard()
+
+    fireEvent.change(screen.getByLabelText('sync.exchanges.apiKey'), { target: { value: 'k' } })
+    fireEvent.change(screen.getByLabelText('sync.exchanges.apiSecret'), { target: { value: 's' } })
+    fireEvent.click(screen.getByRole('button', { name: 'sync.exchanges.connect' }))
+
+    expect(addCryptoExchange).toHaveBeenCalledWith(
+      { type: 'BINANCE', apiKey: 'k', apiSecret: 's' },
       expect.any(Object),
     )
   })

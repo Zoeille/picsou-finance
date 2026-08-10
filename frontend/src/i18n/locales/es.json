@@ -156,6 +156,7 @@
     "assetNamePlaceholder": "Ej.: iShares Core MSCI World",
     "priceLive": "Precio en directo",
     "priceStale": "Precio de {{time}}",
+    "priceAsOf": "Precio del {{date}} — el proveedor de precios no respondió",
     "history": "Historial",
     "manual": "Manual",
     "allTypes": "Todos los tipos",
@@ -335,6 +336,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Capital",
+    "interest": "Intereses",
+    "total": "Total"
+  },
   "goals": {
     "title": "Objetivos",
     "addGoal": "Nuevo objetivo",
@@ -394,7 +405,7 @@
     "syncingDesc": "Estamos recuperando tus últimas transacciones. Suele tardar unos segundos.",
     "desc": {
       "banks": "Conecta tus bancos vía OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
@@ -480,8 +491,12 @@
       "type": "Tipo de exchange",
       "apiKey": "Clave API",
       "apiSecret": "Secreto API",
+      "apiKeyOnly": "Meria se conecta con una única clave API de solo lectura — no hace falta secreto.",
+      "showSecret": "Mostrar el secreto API",
+      "hideSecret": "Ocultar el secreto API",
       "connect": "Conectar",
       "connectError": "No se pudo conectar el exchange. Comprueba tu clave API y tu secreto.",
+      "connectErrorKeyOnly": "No se pudo conectar el exchange. Comprueba tu clave API.",
       "sync": "Sincronizar",
       "remove": "Eliminar",
       "removeConfirm": "¿Eliminar este exchange?",
@@ -1195,7 +1210,7 @@
     },
     "crypto": {
       "title": "Cifra tus claves API de exchange",
-      "body": "Tus claves API de Binance / Kraken / Coinbase se cifran en reposo. Picsou puede generar la clave de cifrado por ti — se queda en tu disco y nunca se transmite.",
+      "body": "Tus claves API de exchange (Binance, Meria...) se cifran en reposo. Picsou puede generar la clave de cifrado por ti — se queda en tu disco y nunca se transmite.",
       "generateCta": "Generar una clave por mí",
       "generating": "Generando...",
       "existed": "Tu clave de cifrado ya existe en el disco — nada que hacer.",

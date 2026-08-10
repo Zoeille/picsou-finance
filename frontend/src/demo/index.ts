@@ -62,6 +62,21 @@ handlers.set(key('GET', '/accounts/2/holdings'), () => mockHoldings[2] ?? [])
 handlers.set(key('GET', '/accounts/3/holdings'), () => mockHoldings[3] ?? [])
 handlers.set(key('GET', '/accounts/6/holdings'), () => mockHoldings[6] ?? [])
 
+// Per-product breakdown. Only the crypto account (id=6) has one, exactly like a real crypto
+// exchange account; every other account falls back to the flat holdings table.
+handlers.set(key('GET', '/accounts/6/positions'), () => {
+  const today = new Date().toISOString().slice(0, 10)
+  return [
+    { product: 'SPOT', ticker: 'BTC', quantity: 0.01204, principal: null, interest: null, averageBuyIn: 68000, currentPriceEur: 92100, currentValueEur: 1108.88, costBasisEur: 818.72, pnlEur: 290.16, pnlPercent: 35.4, priceAsOf: today, priceStale: false },
+    { product: 'SPOT', ticker: 'ETH', quantity: 0.031906, principal: null, interest: null, averageBuyIn: 3200, currentPriceEur: 4116, currentValueEur: 131.32, costBasisEur: 102.1, pnlEur: 29.22, pnlPercent: 28.6, priceAsOf: today, priceStale: false },
+    { product: 'STAKING', ticker: 'ATOM', quantity: 33.154, principal: 19.73, interest: 13.424, averageBuyIn: 6.4, currentPriceEur: 5.65, currentValueEur: 187.32, costBasisEur: 212.19, pnlEur: -24.87, pnlPercent: -11.7, priceAsOf: today, priceStale: false },
+    { product: 'LENDING', ticker: 'USDT', quantity: 75.01, principal: 75, interest: 0.01, averageBuyIn: 0.91, currentPriceEur: 0.92, currentValueEur: 69.01, costBasisEur: 68.26, pnlEur: 0.75, pnlPercent: 1.1, priceAsOf: today, priceStale: false },
+  ]
+})
+for (const i of [1, 2, 3, 4, 5, 7]) {
+  handlers.set(key('GET', `/accounts/${i}/positions`), () => [])
+}
+
 // Account details: transactions for all accounts
 for (let i = 1; i <= 7; i++) {
   handlers.set(key('GET', `/accounts/${i}/transactions`), () => mockTransactions[i] ?? [])
@@ -383,16 +398,24 @@ handlers.set(key('POST', '/tr/import'), () => [])
 // Trade Republic - logout
 handlers.set(key('POST', '/tr/logout'), () => null)
 
-// Crypto exchange - add
-handlers.set(key('POST', '/crypto/exchange'), () => ({
-  id: Date.now(), name: 'Binance', type: 'CRYPTO' as const, provider: 'BINANCE', currency: 'USDT', currentBalance: 0, currentBalanceEur: 0, lastSyncedAt: null, isManual: false, color: '#f59e0b', ticker: null, createdAt: new Date().toISOString()
-}))
+// Crypto exchange - add. Echoes the chosen exchange rather than hardcoding one, so the demo
+// reflects whichever exchange the user picked.
+handlers.set(key('POST', '/crypto/exchange'), (config) => {
+  const body = JSON.parse(config.data || '{}')
+  const provider = body.type ?? 'BINANCE'
+  return {
+    id: Date.now(), name: provider, type: 'CRYPTO' as const, provider, currency: 'EUR', currentBalance: 0, currentBalanceEur: 0, lastSyncedAt: null, isManual: false, color: '#f59e0b', ticker: null, logoUrl: null, createdAt: new Date().toISOString()
+  }
+})
 
-// Crypto exchange - sync
+// Crypto exchange - sync (one route per mockExchangeStatuses entry: an unmapped route resolves
+// `{}` and the row's buttons silently misbehave)
 handlers.set(key('POST', '/crypto/exchange/1/sync'), () => [])
+handlers.set(key('POST', '/crypto/exchange/2/sync'), () => [])
 
 // Crypto exchange - remove
 handlers.set(key('DELETE', '/crypto/exchange/1'), () => null)
+handlers.set(key('DELETE', '/crypto/exchange/2'), () => null)
 
 // Crypto wallet - add
 handlers.set(key('POST', '/crypto/wallet'), () => ({

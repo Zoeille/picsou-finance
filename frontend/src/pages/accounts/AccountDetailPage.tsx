@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  useAccount, useAccountHistory, useHoldingsWithLivePrices,
+  useAccount, useAccountHistory, useHoldingsWithLivePrices, useAccountPositions,
   useAccountTransactions, useAddTransaction, useDeleteTransaction,
   useUpdateTransaction, useUpdateHolding, useDeleteHolding
 } from '@/features/accounts/hooks'
@@ -10,6 +10,7 @@ import { useHistory } from '@/features/history/hooks'
 import { BalanceHistoryChart } from '@/components/shared/BalanceHistoryChart'
 import { NetWorthChart } from '@/components/shared/NetWorthChart'
 import { HoldingsTable } from '@/components/shared/HoldingsTable'
+import { PositionsByProduct } from '@/components/shared/PositionsByProduct'
 import { RealizedPnlSection } from '@/components/shared/RealizedPnlSection'
 import { TransactionsList } from '@/components/shared/TransactionsList'
 import { AddTransactionModal } from '@/components/shared/AddTransactionModal'
@@ -40,6 +41,7 @@ export function AccountDetailPage() {
   const { data: account, isLoading } = useAccount(accountId)
   const { data: history } = useAccountHistory(accountId)
   const { data: holdings } = useHoldingsWithLivePrices(accountId)
+  const { data: positions } = useAccountPositions(accountId)
   const { data: transactions } = useAccountTransactions(accountId)
   const addTxMutation = useAddTransaction(accountId)
   const deleteTxMutation = useDeleteTransaction(accountId)
@@ -182,14 +184,19 @@ export function AccountDetailPage() {
         </Card>
       ) : null}
 
-      {/* Holdings */}
+      {/* Holdings — grouped by product when the connector reports one (crypto exchanges),
+          otherwise the flat table. */}
       {showHoldings && (
         holdings ? (
-          <HoldingsTable
-            holdings={holdings}
-            onEdit={setEditingHolding}
-            onDelete={(h) => deleteHoldingMutation.mutate(h.ticker)}
-          />
+          positions && positions.length > 0 ? (
+            <PositionsByProduct positions={positions} />
+          ) : (
+            <HoldingsTable
+              holdings={holdings}
+              onEdit={setEditingHolding}
+              onDelete={(h) => deleteHoldingMutation.mutate(h.ticker)}
+            />
+          )
         ) : (
           <Card>
             <CardContent className="pt-6">

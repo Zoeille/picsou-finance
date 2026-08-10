@@ -163,6 +163,7 @@
     "assetNamePlaceholder": "Example: iShares Core MSCI World",
     "priceLive": "Live price",
     "priceStale": "Price from {{time}}",
+    "priceAsOf": "Price from {{date}} — the price provider did not respond",
     "history": "History",
     "manual": "Manual",
     "allTypes": "All types",
@@ -342,6 +343,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Principal",
+    "interest": "Interest",
+    "total": "Total"
+  },
   "goals": {
     "title": "Goals",
     "addGoal": "New goal",
@@ -401,7 +412,7 @@
     "syncingDesc": "We're pulling in your latest transactions. This usually takes a few seconds.",
     "desc": {
       "banks": "Connect your banks via OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sync your PEA and securities accounts",
@@ -487,8 +498,12 @@
       "type": "Exchange type",
       "apiKey": "API Key",
       "apiSecret": "API Secret",
+      "apiKeyOnly": "Meria connects with a single read-only API key — no secret needed.",
+      "showSecret": "Show API secret",
+      "hideSecret": "Hide API secret",
       "connect": "Connect",
       "connectError": "Failed to connect exchange. Check your API key and secret.",
+      "connectErrorKeyOnly": "Failed to connect exchange. Check your API key.",
       "sync": "Synchronize",
       "remove": "Remove",
       "removeConfirm": "Remove this exchange?",
@@ -1202,7 +1217,7 @@
     },
     "crypto": {
       "title": "Encrypt your exchange API keys",
-      "body": "Your Binance / Kraken / Coinbase API keys are encrypted at rest. Picsou can generate the encryption key for you — it stays on your disk and is never transmitted.",
+      "body": "Your exchange API keys (Binance, Meria...) are encrypted at rest. Picsou can generate the encryption key for you — it stays on your disk and is never transmitted.",
       "generateCta": "Generate a key for me",
       "generating": "Generating...",
       "existed": "Your encryption key is already configured — nothing to do.",

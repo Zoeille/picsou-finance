@@ -1,5 +1,5 @@
 import { api } from '@/lib/api-client'
-import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, RealEstateMetadataRequest, RealEstateMetadata, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest } from '@/types/api'
+import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, RealEstateMetadataRequest, RealEstateMetadata, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest, ExchangePositionResponse } from '@/types/api'
 
 export const accountsApi = {
   list: () => api.get<Account[]>('/accounts').then(r => r.data),
@@ -11,6 +11,11 @@ export const accountsApi = {
     api.get<BalanceSnapshot[]>(`/accounts/${id}/history`, { params: { from, to } }).then(r => r.data),
   holdings: (id: number) =>
     api.get<HoldingResponse[]>(`/accounts/${id}/holdings`).then(r => r.data),
+
+  // Empty for every account without a per-product breakdown (i.e. everything but a crypto
+  // exchange), in which case the caller keeps the flat holdings table.
+  positions: (id: number) =>
+    api.get<ExchangePositionResponse[]>(`/accounts/${id}/positions`).then(r => r.data),
   transactions: (id: number) =>
     api.get<Transaction[]>(`/accounts/${id}/transactions`).then(r => r.data),
   prices: (tickers: string[]) =>

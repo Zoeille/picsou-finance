@@ -83,20 +83,15 @@ public class DashboardService {
                 accountValue = priceService.toEur(account.getCurrentBalance(), account.getCurrency(), account.getTicker());
                 accountInvested = accountValue;
             } else {
-                BigDecimal investedValue = BigDecimal.ZERO;
-                for (AccountHolding h : holdings) {
-                    BigDecimal qty = h.getQuantity();
-                    BigDecimal avgBuy = h.getAverageBuyIn() != null ? h.getAverageBuyIn() : BigDecimal.ZERO;
-
-                    investedValue = investedValue.add(qty.multiply(avgBuy));
-                }
-                // Keep the dashboard on the same account-level valuation path as account
-                // cards and history. In particular, Bourse Direct falls back atomically to
-                // its authoritative EUR total when Yahoo/OpenFIGI cannot resolve an ISIN.
-                accountValue = accountService.liveBalanceEur(account);
-                log.info("getDashboard: account={} holdings={} accountValue={} investedValue={}",
-                    account.getId(), holdings.size(), accountValue, investedValue);
-                accountInvested = investedValue;
+                // One pass for both figures. Summing the cost basis here while taking the value
+                // from liveBalanceEur is exactly the asymmetry that reported an untouched account
+                // at -85%: the value drops a holding it cannot price, the inline loop kept that
+                // holding's full purchase cost. valuation() excludes it from both sides, and
+                // still falls back atomically to a provider's own EUR total (Bourse Direct,
+                // Amundi) when a price lookup fails.
+                AccountService.Valuation valuation = accountService.valuation(account);
+                accountValue = valuation.liveEur();
+                accountInvested = valuation.investedEur();
             }
             accountValues.put(account.getId(), accountValue);
 
