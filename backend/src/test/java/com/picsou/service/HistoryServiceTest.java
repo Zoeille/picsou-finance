@@ -26,9 +26,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -258,6 +260,38 @@ class HistoryServiceTest {
         when(accountRepository.findAllById(List.of(1L))).thenReturn(List.of(othersAccount));
 
         // A different member must not be able to read account 1's history.
+        assertThatThrownBy(() -> historyService.buildHistory(List.of(1L), 1, false, 7L))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void buildHistory_letsTheOwnerReadAnAccountTheyHoldNoShareOf() {
+        // An owner may legitimately hold none of their own account -- they can transfer their
+        // whole share away, and the resolver reports that as 0 rather than inventing 100%.
+        // Reading is still theirs: they administer it. Rejecting the request instead 404'd the
+        // *whole batch*, and DashboardService sends every readable id at once, so one such
+        // account took the entire dashboard history down with it.
+        Account transferred = brokerage(1L, "Maison");
+        when(accountRepository.findAllById(List.of(1L))).thenReturn(List.of(transferred));
+        // doReturn, not when(...): the lenient @BeforeEach answer would run against the matcher
+        // call itself and NPE on a null collection.
+        doReturn(java.util.Map.of(1L, java.math.BigDecimal.ZERO))
+            .when(accessResolver).sharesFor(any(), any());
+        stubValuation(transferred, "0", "0");
+
+        assertThatCode(() -> historyService.buildHistory(List.of(1L), 1, false, MEMBER_ID))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void buildHistory_stillRejectsAZeroShareForANonOwner() {
+        // The relaxation is for the owner only: a zero share is still the "not yours" signal
+        // for everyone else, including a co-owner written out of the split.
+        Account othersAccount = brokerage(1L, "CT");
+        when(accountRepository.findAllById(List.of(1L))).thenReturn(List.of(othersAccount));
+        doReturn(java.util.Map.of(1L, java.math.BigDecimal.ZERO))
+            .when(accessResolver).sharesFor(any(), any());
+
         assertThatThrownBy(() -> historyService.buildHistory(List.of(1L), 1, false, 7L))
             .isInstanceOf(ResourceNotFoundException.class);
     }

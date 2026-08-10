@@ -68,9 +68,18 @@ public class HistoryService {
      * null), not a "skip validation" signal — failing loud here prevents a future caller
      * from accidentally returning another member's financial data.
      *
-     * <p>Ownership alone is no longer the test: a co-owner legitimately reads an account
-     * they do not own. A zero share is the "not yours" signal, and it covers both cases —
-     * an account of another member entirely, and one whose split omits this member.
+     * <p>Ownership alone is not the test: a co-owner legitimately reads an account they do not
+     * own, so a positive share grants access on its own.
+     *
+     * <p>But a zero share is not the opposite signal, and treating it as one was a bug. The
+     * administrative owner may legitimately hold none of their own account — they can transfer
+     * their whole share away, and {@code shareFrom} deliberately reports that as 0 rather than
+     * inventing an implicit 100%. Reading is still theirs: they administer it, and
+     * {@link AccountAccessResolver#requireReadable} has always let them through on that basis.
+     * This guard did not, and because it rejects the <em>whole batch</em> while
+     * {@code DashboardService} passes every readable id at once, one such account 404'd the
+     * entire dashboard history rather than showing itself as worth nothing. The two guards now
+     * answer the same question.
      */
     private Map<Long, BigDecimal> assertReadable(List<Account> accounts, Long memberId) {
         if (memberId == null) {
@@ -79,7 +88,9 @@ public class HistoryService {
         Map<Long, BigDecimal> shares = accessResolver.sharesFor(accounts, memberId);
         for (Account account : accounts) {
             BigDecimal share = shares.getOrDefault(account.getId(), BigDecimal.ZERO);
-            if (share.signum() <= 0) {
+            boolean owner = account.getMember() != null
+                && memberId.equals(account.getMember().getId());
+            if (share.signum() <= 0 && !owner) {
                 throw com.picsou.exception.ResourceNotFoundException.account(account.getId());
             }
         }

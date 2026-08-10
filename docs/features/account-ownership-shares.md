@@ -72,8 +72,15 @@ PUT /accounts/{id}/ownership
   dashboard, so counting the full value there would report the property twice.
 - **A property and its mortgage have independent splits.** `RealEstateSummaryService` applies
   each account's own share. Assuming they match would quietly produce the wrong equity.
-- **`HistoryService.assertReadable` uses a zero share as the "not yours" signal.** It covers
-  both an account belonging to another member entirely and one whose split omits this member.
+- **A zero share means "worth nothing to you", not "not yours".** For a non-owner the two
+  coincide, and `HistoryService.assertReadable` treats a zero share as inaccessible. For the
+  *owner* they do not: they may transfer their whole share away and still administer the
+  account, which is why `AccountAccessResolver.requireReadable` lets an owner through
+  regardless of share. `assertReadable` did not, and it rejects the **whole batch** — since
+  `DashboardService` passes every readable id to `buildHistory` at once, one such account 404'd
+  the entire dashboard history instead of showing itself as worth nothing. Both guards now
+  answer the same question. Note `shareFrom` still reports 0 rather than inventing an implicit
+  100%: the split is the truth about value, ownership is the truth about access.
 - **`deleteAllForAccount` is JPQL on purpose.** A derived `deleteByAccountId` lets Hibernate
   flush the inserts first, tripping `uk_account_ownership_account_member` on a rewrite.
 - **…and it detaches whatever the caller is holding.** It is declared
