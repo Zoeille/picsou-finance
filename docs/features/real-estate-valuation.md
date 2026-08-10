@@ -90,6 +90,18 @@ Daily snapshot job (unchanged) picks up the new balance -> gain curve for free
 
 ## Gotchas / Pitfalls
 
+- **V66/V67 keep their numbers, below the current highest.** They were numbered above the
+  crypto branch's then-V64/V65, which have since become V71/V72 (renumbered around main's own
+  V64). They are deliberately *not* renumbered upward to match: they collide with nothing,
+  `flyway.out-of-order` is enabled for exactly this, and V66 is already applied on running
+  instances — renumbering would leave those with an applied migration Flyway cannot resolve,
+  and the app would refuse to start. Verified: an instance at main's V70 takes V66/V67 out of
+  order and validates cleanly.
+- **Do not edit V66 or V67, not even a comment.** Flyway checksums the whole file, including
+  comments, and both are already applied on running instances — an edit fails validation at
+  startup on every one of them. V67 exists at all because of this rule. Corrections go here,
+  not in the SQL.
+
 - **The Cerema client needs a raised buffer.** One response carries every vintage back to
   2010 with ~200 indicator columns each — about 265 KB, just past WebClient's 256 KB default.
   Over the limit the body is never assembled and *every* commune fails. It shipped that way,
