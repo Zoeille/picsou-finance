@@ -19,7 +19,7 @@ rhythm whatever the asset:
 | Name | `name` + type badge + co-ownership share | same |
 | Subtitle | `provider` | property kind and city, joined by ` · ` |
 | Balance | `currentBalanceEur` (negated and red for a `LOAN`) | same |
-| Freshness | `lastSyncedAt` | `realEstate.lastValuedAt` |
+| Freshness | `lastSyncedAt`, amber with a warning glyph past the 48h staleness threshold | `realEstate.lastValuedAt` |
 
 A property is a manual account: it has no `provider` and nothing ever writes its
 `lastSyncedAt`, so before this shape it rendered two lines shorter than its neighbours *and*
@@ -30,6 +30,15 @@ the two slots that were empty.
 Every line is still conditional — an account with no provider and no sync date (a manual
 `OTHER` account, or a property described but never valued) renders short, as it always has.
 Only the property case, where the data existed but was not surfaced, was fixed.
+
+The freshness line doubles as the staleness warning: a synced account whose `lastSyncedAt`
+is more than `SYNC_STALE_THRESHOLD_MS` (48h) old turns amber with a `TriangleAlert` and a
+tooltip, because live prices keep the numbers moving and a dead provider session otherwise
+looks perfectly healthy. That check reads the *sync* date only. A valuation date belongs to
+a manual account, which the badge excludes anyway, and an estimate a few months old is not a
+broken connection to warn about — so the freshness object carries its own `stale` flag,
+false by construction on the valuation branch, rather than re-deriving staleness from
+whichever date the line ended up showing.
 
 The glyphs come from `frontend/src/lib/property-icons.ts` (`PROPERTY_KIND_ICONS`), which
 `AddPropertyModal`'s kind picker shares so a property looks the same wherever it is shown.
@@ -142,7 +151,8 @@ AccountsPage
   instead of the color circle, each kind gets its own glyph, an unparseable `property_type`
   falls back to the circle, kind and city stand in for the provider line (and either half
   may be missing), the valuation date replaces the sync date, and the unrealized gain is
-  gone. Glyph assertions match lucide's own `lucide-<icon>` class.
+  gone. Glyph assertions match lucide's own `lucide-<icon>` class. A second block covers the
+  stale badge: flagged past 48h, the plain last-sync line below it, never on a manual account.
 - Nothing covers the PnL chart, the summary card or the filters yet.
 
 ## Links

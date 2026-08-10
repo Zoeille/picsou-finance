@@ -128,7 +128,14 @@
     "recentAccounts": "Zuletzt verwendete Konten",
     "viewAll": "Alle anzeigen",
     "totalLiabilities": "Summe der Verbindlichkeiten",
-    "totalAssets": "Summe der Vermögenswerte"
+    "totalAssets": "Summe der Vermögenswerte",
+    "evolution": {
+      "net": "Entwicklung des Nettovermögens",
+      "gross": "Entwicklung des Bruttovermögens",
+      "financial": "Entwicklung des Finanzvermögens"
+    },
+    "liabilitiesTitle": "Verbindlichkeiten",
+    "liabilitiesDescription": "Ausstehende Schulden nach Konto"
   },
   "accounts": {
     "title": "Konten",
@@ -158,6 +165,8 @@
     "priceLive": "Live-Kurs",
     "priceStale": "Kurs von {{time}}",
     "priceAsOf": "Kurs vom {{date}} — der Kursanbieter hat nicht geantwortet",
+    "syncStale": "Synchronisiert {{time}}",
+    "syncStaleTooltip": "Dieses Konto wurde seit längerer Zeit nicht synchronisiert. Starte eine Synchronisierung oder verbinde den Anbieter erneut.",
     "history": "Verlauf",
     "manual": "Manuell",
     "allTypes": "Alle Typen",
@@ -432,6 +441,7 @@
       "noConnections": "Keine Bankverbindungen",
       "connect": "Verbinden",
       "retry": "Erneut versuchen",
+      "reconnect": "Bank erneut verbinden",
       "delete": "Entfernen",
       "deleteConfirm": "Diese Bankverbindung entfernen?",
       "callbackCompleting": "Konten werden abgerufen...",

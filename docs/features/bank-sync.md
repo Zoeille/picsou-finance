@@ -1,6 +1,6 @@
 # Feature: Bank Sync
 
-> Last updated: 2026-08-10 (bank search country picker: `listCountries`, `GET /api/sync/countries`, `DEFAULT_COUNTRY` — on top of PSU types, 2026-08-01)
+> Last updated: 2026-08-10 (sync-flow hardening: OAuth `state` correlation, reconnect path, visible errors — merged with the bank search country picker: `listCountries`, `GET /api/sync/countries`, `DEFAULT_COUNTRY`; on top of PSU types, 2026-08-01)
 
 > **Status (1.0.0).** Enable Banking is the only enabled provider. The Powens
 > adapter ships in the codebase but is **experimental and untested** —
@@ -77,8 +77,11 @@ preference instead of degrading to a bare name match.
 ### Requisition lifecycle
 
 1. **CREATED** -- `SyncService.initiateConnection()` calls the port and stores a `Requisition` with `authLink`.
-2. **LINKED** -- `SyncService.completeConnection()` exchanges the OAuth callback code, fetches balances, upserts at least one account, and marks the requisition as LINKED.
-3. **FAILED** -- If the code exchange or balance fetch fails, or if Enable Banking returns zero accounts after polling, the requisition is marked FAILED and can be retried via `retrySync()`.
+2. **LINKED** -- `SyncService.completeConnection()` exchanges the OAuth callback code, fetches balances, upserts at least one account, and marks the requisition as LINKED. Immediately after a successful exchange, `RequisitionLifecycleWriter` commits the `session_id` and clears the spent OAuth nonce in an independent `REQUIRES_NEW` transaction. A later fetch or account-upsert rollback therefore cannot restore the stale authorization id.
+3. **FAILED** -- If the code exchange, balance fetch, or account upsert fails, or if Enable Banking returns zero accounts after polling, `RequisitionLifecycleWriter` marks the requisition FAILED in an independent transaction. Account and snapshot writes are explicitly flushed inside the guarded block so deferred constraints surface before method return; they still roll back atomically, while the session id remains available to `retrySync()`.
+4. **Reconnect** -- `POST /api/sync/{id}/reconnect` (`SyncService.reconnect()`) re-initiates the OAuth flow **on the existing requisition** for the cases a retry can never fix: a failed code exchange (the stored id is an authorization id, not a session) or an expired/revoked PSD2 consent (~90 days). Status returns to CREATED with a fresh `authLink`; accounts survive because `upsertAccount` matches on `externalAccountId`. **Refused for LINKED requisitions** — overwriting a working session id with an unconsumed authorization id would break scheduled syncs if the user abandons the new OAuth flow. Exposed in the UI as a "Reconnect to bank" button next to retry on FAILED connections (BankSyncTab and SyncAllModal). Rate-limited like `/initiate` (it triggers an outbound EB `/auth` call), on its own `ip + endpoint` bucket — as is `/complete`, whose `exchangeCode` + `fetchBalances` also hit the provider.
+
+Every public method of `EnableBankingBankConnector` maps **all** provider failures (HTTP errors, timeouts, connection errors) to `SyncException`, keeping the external-error contract stable. `completeConnection()` additionally catches arbitrary runtime failures from account persistence, marks the requisition retryable through the independent lifecycle writer, and lets its main transaction roll back partial account/snapshot work.
 
 ### Account type detection
 
@@ -92,6 +95,7 @@ preference instead of degrading to a bare name match.
 - `backend/src/main/java/com/picsou/adapter/PowensBankConnector.java` -- Scraping adapter (experimental, OAuth webview; `@Primary` removed in 1.0.0)
 - `backend/src/main/java/com/picsou/port/BankConnectorPort.java` -- Port interface with `AccountData`, `InstitutionData` records, `DEFAULT_COUNTRY`, and the shared `parseInstitutionId()` static parser
 - `backend/src/main/java/com/picsou/service/SyncService.java` -- Orchestration: initiate, complete, retry, resync, type detection
+- `backend/src/main/java/com/picsou/service/RequisitionLifecycleWriter.java` -- Independent transaction checkpoints for consumed OAuth sessions and retryable failures
 - `backend/src/main/java/com/picsou/controller/SyncController.java` -- REST endpoints under `/api/sync/`
 - `backend/src/main/java/com/picsou/model/Requisition.java` -- Tracks connection lifecycle (CREATED/LINKED/FAILED)
 - `frontend/src/components/shared/BankCountrySelect.tsx` -- Country picker, populated from `GET /api/sync/countries`
@@ -108,7 +112,9 @@ SyncController.initiate() --> SyncService --> BankConnectorPort.initiateConnecti
         |                          Powens: build webview URL
         |
         v
-User authorizes in browser --> redirect to /api/sync/complete?code=xxx
+User authorizes in browser --> redirect to /sync/callback?code=xxx&state=yyy
+        |                      (frontend forwards code + state to /api/sync/complete;
+        |                       the requisition is resolved by its stored state nonce)
         |
         v
 SyncController.complete() --> SyncService.completeConnection()
@@ -116,6 +122,9 @@ SyncController.complete() --> SyncService.completeConnection()
         |                         v
         |               BankConnectorPort.exchangeCode() --> session_id
         |                         |
+        |                         v
+        |               RequisitionLifecycleWriter.checkpointSession()
+        |                         |  (REQUIRES_NEW commit)
         |                         v
         |               BankConnectorPort.fetchBalances(session_id)
         |                         |
@@ -136,8 +145,9 @@ SchedulerService.dailyBankSync() --> SyncService.resyncAll()
 | Dual providers with `@Primary` | PSD2 can't access LEP/PEA/livrets; scraping covers all French account types | Single provider only |
 | `@ConditionalOnExpression` for Powens | No-code activation: set env var, adapter appears; unset, it disappears | Feature toggles, profiles |
 | Keyword-based type detection | Banks rarely expose a standardized type field; product name is the most reliable signal | Hardcoded institution-to-type mapping |
-| Async polling for Enable Banking accounts | EB links accounts asynchronously after OAuth; polling (8x3s) handles the delay | Webhook (EB does not provide one) |
+| Async polling for Enable Banking accounts | EB links accounts asynchronously after OAuth; polling (3 x 1.5 s) handles the delay | Webhook (EB does not provide one) |
 | Permanent access token for Powens | Powens tokens do not expire; stored directly as the requisition ID | Refresh token rotation (not needed) |
+| Independent requisition lifecycle checkpoint | OAuth codes are single-use; the exchanged session id and FAILED status must survive rollback of account/snapshot writes | `saveAndFlush` in the outer transaction (flushes SQL but still rolls back with that transaction) |
 | PSU type encoded in the composite institution id | The id is already an opaque token the client round-trips untouched, so no new request field, no DTO change — and legacy two-segment ids stay parseable | A separate `psuType` field on `POST /sync/initiate` (one more thing the client must send back, plus a nullable column on `requisition`) |
 | One PSU type resolved per bank, `personal` preferred | A personal-finance app should not ask retail users to pick a login flavour; only business-only banks need the other one | A Particulier/Pro toggle in the search UI |
 
@@ -175,7 +185,10 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 - **Local dev key path**: the `dev` Spring profile stores the generated key under `backend/.local/keys/enablebanking-private.pem` so bare-metal macOS/Linux runs do not try to create Docker's `/data/keys` directory at filesystem root.
 - **The callback URI must be HTTPS — a plain-HTTP deployment cannot sync banks.** Enable Banking rejects `http://` redirect URLs for PRODUCTION applications, and PRODUCTION is the only mode that lists real banks (see the SANDBOX pitfall above), so there is no HTTP escape hatch. Docker deployments must therefore terminate TLS: either the bundled `tls` compose profile (`docker compose --profile tls up -d`, see [docker-deployment.md](./docker-deployment.md)) or an existing reverse proxy. Note that Enable Banking never *fetches* the callback URL — the redirect is browser-side only (`window.location.href = authLink`, then the SPA POSTs the `code`) — so a certificate from Caddy's internal CA works fine on a LAN, as long as the family's browsers trust its root.
 - **Enable Banking redirect URI must be registered**: `ENABLEBANKING_REDIRECT_URI` defaults to `https://localhost:5173/sync/callback` for local development, matching Vite's HTTPS dev server. In production, set it to the public frontend callback URL (for example `https://picsou.example.com/sync/callback`). The exact same URL must be registered in the Enable Banking developer portal under the application's Redirect URIs. A mismatch causes a `REDIRECT_URI_NOT_ALLOWED` 400 error at auth initiation — it surfaces in the Add Account modal bank wizard.
-- **ALREADY_AUTHORIZED**: If the OAuth code is reused (e.g. browser back button), `SyncService.completeConnection()` catches the error and falls back to refreshing the latest linked session instead of failing.
+- **ALREADY_AUTHORIZED**: If the OAuth code is reused (e.g. browser back button), `SyncService.completeConnection()` catches the error and falls back to refreshing the latest linked session **of the same institution** instead of failing (a replayed Revolut callback must not resync BNP).
+- **OAuth `state` correlation**: each initiation stores a random single-use nonce on the requisition; the callback resolves the requisition by it (member derived from the row — this is what makes admin-impersonated connections complete correctly). See [ADR 2026-07-08](../decisions/2026-07-08-oauth-state-requisition-correlation.md).
+- **Session identifiers stay out of logs**: Enable Banking session ids are opaque references that still identify a long-lived PSD2 consent. Use the internal requisition id and institution name for log correlation; never print the raw session id.
+- **One bank-status query key**: bank-sync feature hooks own `syncKeys.banks()`, and every complete/retry/reconnect/delete mutation invalidates it. Components must use those hooks rather than introducing a parallel key such as `['sync', 'connections']`, or another sync surface can remain stale until its polling interval elapses.
 - **Type upgrade on resync**: If the user has not customized an account's type, `upsertAccount()` will upgrade it from CHECKING to the detected type on the next sync. Manual user changes are preserved (only CHECKING is auto-upgraded).
 - **Both providers are optional**: The app starts fine without either. No `BankConnectorPort` bean is required at startup.
 - **A business bank in the list can still fail at authorization**: Enable Banking
@@ -190,7 +203,8 @@ Because the text fields (Application ID + Redirect URI) live in Postgres while t
 
 ## Tests
 
-- `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow, and logo matching for both the current and the legacy institution id format
+- `SyncServiceTest` -- unit tests for type detection, upsert logic, retry flow, checkpoint ordering on fetch/upsert failures, and logo matching for both the current and the legacy institution id format
+- `RequisitionLifecycleWriterTest` -- session/nonce transitions and `REQUIRES_NEW` propagation invariant
 - `AddAccountModal.test.tsx` -- the Pro badge shows for a business-only institution, and not for a retail one nor for an unrecognised PSU type
 - `EnableBankingConfigProviderTest` -- DB/env resolution precedence, and `keyId()` falling back to the Application ID vs honoring an explicitly-configured value
 - `EnableBankingBankConnectorTest` -- JWT build / institution search against a mocked provider, plus the pure catalog helpers: `resolvePsuType` (business-only banks, the Swan regression), `toInstitutions` (composite id, de-duplication, country fallback) and `parseInstitutionId` (three-segment, legacy two-segment, unexpected PSU segment)

@@ -12,8 +12,14 @@ public interface BankConnectorPort {
     /** Fallback country when none is specified — Picsou's primary market. */
     String DEFAULT_COUNTRY = "FR";
 
-    /** Create an authorization link to connect a bank account. */
-    InitiateResult initiateConnection(String institutionId);
+    /**
+     * Create an authorization link to connect a bank account.
+     *
+     * @param state OAuth {@code state} nonce the provider must echo back on the
+     *              redirect; the caller persists it to correlate the callback
+     *              with its requisition.
+     */
+    InitiateResult initiateConnection(String institutionId, String state);
 
     /** Exchange the OAuth code from the callback for a session ID. */
     String exchangeCode(String oauthCode);

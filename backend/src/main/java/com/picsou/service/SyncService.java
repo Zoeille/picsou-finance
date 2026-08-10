@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -30,19 +31,22 @@ public class SyncService {
     private final RequisitionRepository requisitionRepository;
     private final FamilyMemberRepository familyMemberRepository;
     private final AccountService accountService;
+    private final RequisitionLifecycleWriter requisitionLifecycleWriter;
 
     public SyncService(
         BankConnectorPort bankConnector,
         AccountRepository accountRepository,
         RequisitionRepository requisitionRepository,
         FamilyMemberRepository familyMemberRepository,
-        AccountService accountService
+        AccountService accountService,
+        RequisitionLifecycleWriter requisitionLifecycleWriter
     ) {
         this.bankConnector = bankConnector;
         this.accountRepository = accountRepository;
         this.requisitionRepository = requisitionRepository;
         this.familyMemberRepository = familyMemberRepository;
         this.accountService = accountService;
+        this.requisitionLifecycleWriter = requisitionLifecycleWriter;
     }
 
     /** Step 1: Initiate Enable Banking bank connection for a given institution. */
@@ -50,7 +54,8 @@ public class SyncService {
         FamilyMember member = familyMemberRepository.findById(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Family member not found"));
 
-        BankConnectorPort.InitiateResult result = bankConnector.initiateConnection(institutionId);
+        String state = UUID.randomUUID().toString();
+        BankConnectorPort.InitiateResult result = bankConnector.initiateConnection(institutionId, state);
 
         Requisition requisition = Requisition.builder()
             .member(member)
@@ -60,6 +65,7 @@ public class SyncService {
             .logoUrl(resolveLogoUrl(institutionId, institutionName))
             .status(RequisitionStatus.CREATED)
             .authLink(result.authLink())
+            .oauthState(state)
             .build();
 
         requisitionRepository.save(requisition);
@@ -68,57 +74,78 @@ public class SyncService {
     }
 
     /** Step 2: Complete Enable Banking flow -- exchange OAuth code, fetch balances, upsert accounts. */
-    @Transactional(noRollbackFor = SyncException.class)
-    public List<AccountResponse> completeConnection(String oauthCode, Long memberId) {
-        // Find the pending requisition for this member
-        Requisition requisition = requisitionRepository
-            .findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.CREATED, memberId)
-            .stream().findFirst()
-            .orElseThrow(() -> new SyncException("No pending bank connection found. Please initiate a new connection."));
+    public List<AccountResponse> completeConnection(String oauthCode, String state, Long memberId) {
+        Requisition requisition = resolveCallbackRequisition(state, memberId);
+        // The state nonce is the callback's credential; the member it was issued
+        // for wins over the current user context (fixes admin impersonation:
+        // initiation under ?memberId=X must complete under X too).
+        Long targetMemberId = requisition.getMember().getId();
 
         String sessionId;
         try {
             sessionId = bankConnector.exchangeCode(oauthCode);
         } catch (SyncException ex) {
-            // Code already used -> find existing linked session and just refresh balances
+            // Code already used -> refresh the latest linked session of the SAME
+            // institution (a replayed Revolut callback must not resync BNP).
             if (ex.getMessage().contains("ALREADY_AUTHORIZED")) {
-                log.info("Code already used, refreshing latest linked session");
-                return resyncLatest(memberId);
+                log.info("Code already used, refreshing latest linked session for {}", requisition.getInstitutionName());
+                return resyncLatest(targetMemberId, requisition.getInstitutionId());
             }
-            requisition.setStatus(RequisitionStatus.FAILED);
-            requisitionRepository.save(requisition);
+            // Keep oauthState so a transient exchange failure can replay the same
+            // callback, but persist FAILED independently of this transaction's rollback.
+            requisitionLifecycleWriter.markFailed(requisition.getId(), targetMemberId);
             throw ex;
         }
 
-        // Store session_id so the scheduler can re-sync later
-        requisition.setRequisitionId(sessionId);
+        // The OAuth code is consumed as soon as exchangeCode succeeds. Commit its
+        // session id and clear the spent nonce in a separate physical transaction,
+        // before any provider fetch or account write can fail.
+        requisitionLifecycleWriter.checkpointSession(requisition.getId(), targetMemberId, sessionId);
 
-        List<BankConnectorPort.AccountData> accountDataList;
         try {
-            accountDataList = bankConnector.fetchBalances(sessionId);
-        } catch (SyncException ex) {
-            requisition.setStatus(RequisitionStatus.FAILED);
+            List<BankConnectorPort.AccountData> accountDataList = bankConnector.fetchBalances(sessionId);
+
+            if (accountDataList.isEmpty()) {
+                requisitionLifecycleWriter.markFailed(requisition.getId(), targetMemberId);
+                log.info("Enable Banking requisition {} ({}) returned no accounts during completion — marking retryable",
+                    requisition.getId(), requisition.getInstitutionName());
+                return List.of();
+            }
+
+            FamilyMember member = requisition.getMember();
+
+            List<AccountResponse> responses = accountDataList.stream()
+                .map(data -> upsertAccount(data, requisition, member))
+                .flatMap(Optional::stream)
+                .toList();
+
+            // Force deferred account/snapshot constraints to fail inside this
+            // guarded block rather than during the transaction commit, where the
+            // lifecycle writer would no longer have a chance to mark FAILED.
+            accountRepository.flush();
+
+            // Bring the outer transaction's managed entity in line with the
+            // independently committed checkpoint only after every upsert succeeds.
+            requisition.setRequisitionId(sessionId);
+            requisition.setOauthState(null);
+            requisition.setStatus(RequisitionStatus.LINKED);
+            requisition.setLastSyncedAt(Instant.now());
             requisitionRepository.save(requisition);
-            throw ex;
-        }
 
-        FamilyMember member = requisition.getMember();
-
-        List<AccountResponse> responses = accountDataList.stream()
-            .map(data -> upsertAccount(data, requisition, member))
-            .flatMap(Optional::stream)
-            .toList();
-
-        if (markRetryableIfEmpty(requisition, accountDataList, "completion")) {
+            log.info("Completed Enable Banking sync for {}: {} accounts linked", requisition.getInstitutionName(), responses.size());
             return responses;
+        } catch (RuntimeException ex) {
+            // This write uses REQUIRES_NEW, so it survives even when Hibernate has
+            // already marked the account transaction rollback-only.
+            requisitionLifecycleWriter.markFailed(requisition.getId(), targetMemberId);
+            if (ex instanceof SyncException syncException) {
+                throw syncException;
+            }
+            throw new SyncException(
+                "Synchronized bank accounts could not be saved. Please retry the connection.",
+                ex
+            );
         }
-
-        requisition.setStatus(RequisitionStatus.LINKED);
-        requisition.setLastSyncedAt(Instant.now());
-        requisitionRepository.save(requisition);
-
-        log.info("Completed Enable Banking sync for {}: {} accounts linked", requisition.getInstitutionName(), responses.size());
-        return responses;
     }
 
     /** Search available institutions. */
@@ -145,7 +172,7 @@ public class SyncService {
         Requisition req = requisitionRepository.findByIdAndMemberId(id, memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Requisition not found"));
 
-        log.info("Retrying sync for {} (session={})", req.getInstitutionName(), req.getRequisitionId());
+        log.info("Retrying sync for {} (requisition={})", req.getInstitutionName(), req.getId());
         ensureLogoUrl(req);
 
         List<BankConnectorPort.AccountData> accountDataList;
@@ -176,6 +203,38 @@ public class SyncService {
         return responses;
     }
 
+    /**
+     * Re-initiates the Enable Banking OAuth flow for an existing requisition
+     * whose session is dead (failed code exchange, expired/revoked PSD2
+     * consent). The requisition row is reused: status returns to CREATED and
+     * the new authorization id replaces the stale session id. Accounts are
+     * preserved because {@link #upsertAccount} matches on externalAccountId.
+     */
+    public InitiateResponse reconnect(Long id, Long memberId) {
+        Requisition req = requisitionRepository.findByIdAndMemberId(id, memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Requisition not found"));
+
+        // A LINKED requisition holds a working session id; overwriting it with a
+        // fresh (unconsumed) authorization id would break scheduled syncs if the
+        // user abandons the new OAuth flow. Only dead connections may reconnect.
+        if (req.getStatus() == RequisitionStatus.LINKED) {
+            throw new SyncException(
+                "This bank connection is still active. Use sync/retry instead, or delete it to start over.");
+        }
+
+        String state = UUID.randomUUID().toString();
+        BankConnectorPort.InitiateResult result = bankConnector.initiateConnection(req.getInstitutionId(), state);
+
+        req.setRequisitionId(result.requisitionId());
+        req.setAuthLink(result.authLink());
+        req.setStatus(RequisitionStatus.CREATED);
+        req.setOauthState(state);
+        requisitionRepository.save(req);
+
+        log.info("Re-initiated Enable Banking auth for {} (requisition {})", req.getInstitutionName(), id);
+        return new InitiateResponse(result.requisitionId(), result.authLink());
+    }
+
     /** Delete a requisition (cancel or remove a bank connection). */
     public void deleteRequisition(Long id, Long memberId) {
         Requisition req = requisitionRepository.findByIdAndMemberId(id, memberId)
@@ -192,8 +251,8 @@ public class SyncService {
             try {
                 retrySync(req.getId(), memberId);
             } catch (Exception ex) {
-                log.warn("Scheduled retry failed for {} (session={}): {}",
-                    req.getInstitutionName(), req.getRequisitionId(), ex.getMessage());
+                log.warn("Scheduled retry failed for {} (requisition={}): {}",
+                    req.getInstitutionName(), req.getId(), ex.getMessage());
             }
         }
     }
@@ -221,10 +280,38 @@ public class SyncService {
         }
     }
 
-    /** Refresh balances for the most recent LINKED session for a member. */
-    private List<AccountResponse> resyncLatest(Long memberId) {
+    /**
+     * Resolves the requisition an OAuth callback belongs to. The state nonce is
+     * authoritative when it matches. Requisitions created before the nonce
+     * shipped DID send a state (the old connector's {@code appId_timestamp}
+     * format) that was never persisted, so an unknown or missing state falls
+     * back to the latest CREATED requisition <b>without a stored nonce</b> —
+     * post-migration rows always carry one, so they can never be captured by a
+     * crafted state, and the fallback self-retires once legacy rows are gone.
+     */
+    private Requisition resolveCallbackRequisition(String state, Long memberId) {
+        if (state != null && !state.isBlank()) {
+            Optional<Requisition> byState = requisitionRepository.findByOauthState(state);
+            if (byState.isPresent()) {
+                return byState.get();
+            }
+            log.warn("OAuth callback state not found — trying legacy (pre-nonce) requisitions for member {}", memberId);
+        } else {
+            log.warn("OAuth callback without state — trying legacy (pre-nonce) requisitions for member {}", memberId);
+        }
+        return requisitionRepository
+            .findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.CREATED, memberId)
+            .stream()
+            .filter(r -> r.getOauthState() == null)
+            .findFirst()
+            .orElseThrow(() -> new SyncException(
+                "Unknown or expired bank connection. Please initiate a new connection."));
+    }
+
+    /** Refresh balances for the most recent LINKED session of the given institution. */
+    private List<AccountResponse> resyncLatest(Long memberId, String institutionId) {
         Requisition req = requisitionRepository
-            .findByStatusAndMemberIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId)
+            .findByStatusAndMemberIdAndInstitutionIdOrderByCreatedAtDesc(RequisitionStatus.LINKED, memberId, institutionId)
             .stream().findFirst()
             .orElseThrow(() -> new SyncException("No linked session found to refresh."));
 
@@ -263,15 +350,15 @@ public class SyncService {
         // transient provider gap than a broken link. Demoting it would make the status
         // flap LINKED → FAILED on every scheduled resync — keep it LINKED and just skip.
         if (requisition.getStatus() == RequisitionStatus.LINKED) {
-            log.warn("Enable Banking session {} returned no accounts during {} — keeping LINKED, skipping update",
-                requisition.getRequisitionId(), operation);
+            log.warn("Enable Banking requisition {} ({}) returned no accounts during {} — keeping LINKED, skipping update",
+                requisition.getId(), requisition.getInstitutionName(), operation);
             return true;
         }
 
         requisition.setStatus(RequisitionStatus.FAILED);
         requisitionRepository.save(requisition);
-        log.info("Enable Banking session {} returned no accounts during {} — marking retryable",
-            requisition.getRequisitionId(), operation);
+        log.info("Enable Banking requisition {} ({}) returned no accounts during {} — marking retryable",
+            requisition.getId(), requisition.getInstitutionName(), operation);
         return true;
     }
 

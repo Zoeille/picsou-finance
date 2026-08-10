@@ -292,7 +292,13 @@ public class PriceService {
         return quotes;
     }
 
-    /** Bulk fetch and refresh cache for all provided tickers. */
+    /**
+     * Bulk price lookup: serves still-fresh cache entries and fetches only the
+     * expired or missing tickers from the upstream providers. Honoring the TTL
+     * here matters because {@code GET /prices} is polled by the frontend on an
+     * interval — bypassing the cache would turn every open dashboard tab into
+     * a steady stream of Yahoo/CoinGecko calls.
+     */
     public Map<String, BigDecimal> refreshPrices(Set<String> tickers) {
         return refreshPrices(tickers, false);
     }
@@ -309,6 +315,11 @@ public class PriceService {
             String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) {
                 result.put(upper, BigDecimal.ONE);
+                continue;
+            }
+            CachedPrice cached = priceCache.get(upper);
+            if (cached != null && !cached.isExpired()) {
+                result.put(upper, cached.price());
             } else if (coinGecko.supports(upper)) {
                 cryptoTickers.add(upper);
             } else if (cryptoOnly) {
@@ -319,25 +330,29 @@ public class PriceService {
             }
         }
 
+        Map<String, BigDecimal> fetched = new HashMap<>();
+
         if (!cryptoTickers.isEmpty()) {
             coinGecko.getPricesEur(cryptoTickers).forEach((k, v) -> {
                 priceCache.put(k, new CachedPrice(v, Instant.now()));
-                result.put(k, v);
+                fetched.put(k, v);
             });
         }
 
         if (!stockTickers.isEmpty()) {
             yahoo.getPricesEur(stockTickers).forEach((k, v) -> {
                 priceCache.put(k, new CachedPrice(v, Instant.now()));
-                result.put(k, v);
+                fetched.put(k, v);
             });
         }
 
-        log.debug("Refreshed prices for {} tickers", result.size());
+        result.putAll(fetched);
+        log.debug("Refreshed prices: {} fetched, {} served from cache", fetched.size(), result.size() - fetched.size());
 
-        // Persist daily price snapshots
+        // Persist daily price snapshots — only for freshly fetched prices;
+        // cache-served values were already persisted when they were fetched.
         LocalDate today = LocalDate.now();
-        for (var entry : result.entrySet()) {
+        for (var entry : fetched.entrySet()) {
             if ("EUR".equals(entry.getKey())) continue;
             if (entry.getValue() == null) continue;
             Optional<PriceSnapshot> existing = priceSnapshotRepository.findByTickerAndDate(entry.getKey(), today);

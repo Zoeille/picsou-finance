@@ -27,7 +27,9 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -76,6 +78,46 @@ class PriceServiceTest {
 
     private List<ILoggingEvent> eventsAt(Level level) {
         return logs.list.stream().filter(e -> e.getLevel() == level).toList();
+    }
+
+    /**
+     * refreshPrices must honor the 15-minute cache TTL: GET /prices is polled
+     * by the frontend on an interval, so serving fresh cache entries (instead
+     * of re-fetching upstream every call) is what keeps an open dashboard tab
+     * from hammering Yahoo/CoinGecko.
+     */
+    @Test
+    void refreshPrices_servesFreshCacheWithoutUpstreamCall() {
+        lenient().when(coinGecko.supports(any())).thenReturn(false);
+        when(yahoo.getPricesEur(Set.of("AAPL"))).thenReturn(Map.of("AAPL", new BigDecimal("150")));
+        lenient().when(priceSnapshotRepository.findByTickerAndDate(any(), any())).thenReturn(Optional.empty());
+
+        Map<String, BigDecimal> first = priceService.refreshPrices(Set.of("AAPL"));
+        assertThat(first).containsEntry("AAPL", new BigDecimal("150"));
+
+        Map<String, BigDecimal> second = priceService.refreshPrices(Set.of("AAPL"));
+        assertThat(second).containsEntry("AAPL", new BigDecimal("150"));
+
+        verify(yahoo, times(1)).getPricesEur(anySet());
+        verify(priceSnapshotRepository, times(1)).save(any());
+    }
+
+    @Test
+    void refreshPrices_fetchesOnlyMissingTickers() {
+        lenient().when(coinGecko.supports(any())).thenReturn(false);
+        when(yahoo.getPricesEur(Set.of("AAPL"))).thenReturn(Map.of("AAPL", new BigDecimal("150")));
+        lenient().when(priceSnapshotRepository.findByTickerAndDate(any(), any())).thenReturn(Optional.empty());
+        priceService.refreshPrices(Set.of("AAPL"));
+
+        when(yahoo.getPricesEur(Set.of("MSFT"))).thenReturn(Map.of("MSFT", new BigDecimal("410")));
+
+        Map<String, BigDecimal> result = priceService.refreshPrices(Set.of("AAPL", "MSFT", "EUR"));
+
+        assertThat(result)
+            .containsEntry("AAPL", new BigDecimal("150"))
+            .containsEntry("MSFT", new BigDecimal("410"))
+            .containsEntry("EUR", BigDecimal.ONE);
+        verify(yahoo).getPricesEur(Set.of("MSFT"));
     }
 
     private PriceSnapshot snapshot(String ticker, LocalDate date, String price) {
@@ -256,7 +298,6 @@ class PriceServiceTest {
         LocalDate from = LocalDate.of(2026, 1, 1);
         when(coinGecko.supports("BTC")).thenReturn(true);
         when(coinGecko.supports("ETH")).thenReturn(true);
-        // BTC blows up with a genuine bug; ETH must still be backfilled.
         when(coinGecko.getHistoricalPricesEur(eq("BTC"), any(), any()))
             .thenThrow(new IllegalStateException("a real bug"));
         when(coinGecko.getHistoricalPricesEur(eq("ETH"), any(), any()))
@@ -266,18 +307,12 @@ class PriceServiceTest {
         int saved = assertThatNoStartupFailure(() ->
             priceService.backfillHistoricalPrices(new java.util.LinkedHashSet<>(List.of("BTC", "ETH")), from));
 
-        // The good ticker still landed -- the loop was not aborted.
         assertThat(saved).isEqualTo(1);
         verify(priceSnapshotRepository).save(any());
 
-        // ERROR, not WARN: a bug here must not be quietly downgraded. Two lines now -- the
-        // per-ticker failure and the run summary.
         assertThat(eventsAt(Level.ERROR)).hasSize(2);
         assertThat(eventsAt(Level.ERROR).get(0).getFormattedMessage()).contains("BTC");
         assertThat(eventsAt(Level.WARN)).isEmpty();
-
-        // The returned count alone can't distinguish "1 of 1" from "1 of 100", so the run
-        // summary has to carry the failure ratio.
         assertThat(eventsAt(Level.ERROR).get(1).getFormattedMessage())
             .contains("1 of 2 tickers failing");
     }

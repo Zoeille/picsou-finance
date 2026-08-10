@@ -230,5 +230,117 @@ class TradeRepublicSyncServiceTest {
         verify(holdingRepository, never()).save(any(AccountHolding.class));
     }
 
+    // --- Session lifecycle: refresh instead of dying at the 2h heuristic ---
+
+    @Test
+    void resync_attemptsRefreshWhenExpired() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession storedSession = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .refreshToken("enc-refresh")
+            .expiresAt(java.time.Instant.now().minusSeconds(3600)) // past the heuristic window
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(storedSession));
+        when(encryption.decrypt("enc-session")).thenReturn("plain-session");
+        when(encryption.decrypt("enc-refresh")).thenReturn("plain-refresh");
+        when(encryption.encrypt(any(String.class))).thenAnswer(inv -> "enc:" + inv.getArgument(0));
+
+        when(trPort.fetchAccounts("plain-session"))
+            .thenThrow(new com.picsou.exception.SyncException("SESSION_EXPIRED"));
+        when(trPort.refreshSession("plain-refresh"))
+            .thenReturn(new TradeRepublicPort.TrTokens("new-session", "new-refresh"));
+        when(trPort.fetchAccounts("new-session")).thenReturn(List.of());
+
+        service.resyncIfSessionActive(memberId);
+
+        verify(trPort).refreshSession("plain-refresh");
+        verify(trPort).fetchAccounts("new-session");
+        verify(sessionRepository).save(storedSession);
+        verify(sessionRepository, never()).delete(any(TradeRepublicSession.class));
+        assertThat(storedSession.getSessionToken()).isEqualTo("enc:new-session");
+        assertThat(storedSession.getRefreshToken()).isEqualTo("enc:new-refresh");
+    }
+
+    @Test
+    void refreshFailure_transient_keepsSession() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession storedSession = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .refreshToken("enc-refresh")
+            .expiresAt(java.time.Instant.now().minusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(storedSession));
+        when(encryption.decrypt("enc-session")).thenReturn("plain-session");
+        when(encryption.decrypt("enc-refresh")).thenReturn("plain-refresh");
+
+        when(trPort.fetchAccounts("plain-session"))
+            .thenThrow(new com.picsou.exception.SyncException("SESSION_EXPIRED"));
+        when(trPort.refreshSession("plain-refresh"))
+            .thenThrow(new com.picsou.exception.SyncException(
+                "Trade Republic authentication service is unavailable. Please make sure tr-auth is running on port 8001."));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.sync(memberId))
+            .isInstanceOf(com.picsou.exception.SyncException.class)
+            .hasMessageContaining("unavailable");
+
+        verify(sessionRepository, never()).delete(any(TradeRepublicSession.class));
+    }
+
+    @Test
+    void refreshFailure_expired_clearsSession() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession storedSession = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .refreshToken("enc-refresh")
+            .expiresAt(java.time.Instant.now().minusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(storedSession));
+        when(encryption.decrypt("enc-session")).thenReturn("plain-session");
+        when(encryption.decrypt("enc-refresh")).thenReturn("plain-refresh");
+
+        when(trPort.fetchAccounts("plain-session"))
+            .thenThrow(new com.picsou.exception.SyncException("SESSION_EXPIRED"));
+        when(trPort.refreshSession("plain-refresh"))
+            .thenThrow(new com.picsou.exception.SyncException("SESSION_EXPIRED"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.sync(memberId))
+            .isInstanceOf(com.picsou.exception.SyncException.class)
+            .hasMessageContaining("reconnect");
+
+        verify(sessionRepository).delete(storedSession);
+    }
+
+    @Test
+    void getSessionStatus_activeWhenRefreshTokenPresent() {
+        Long memberId = 7L;
+        FamilyMember member = FamilyMember.builder().id(memberId).displayName("Owner").build();
+
+        TradeRepublicSession expiredWithRefresh = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .refreshToken("enc-refresh")
+            .expiresAt(java.time.Instant.now().minusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(expiredWithRefresh));
+        assertThat(service.getSessionStatus(memberId).isActive()).isTrue();
+
+        TradeRepublicSession expiredNoRefresh = TradeRepublicSession.builder()
+            .member(member)
+            .sessionToken("enc-session")
+            .expiresAt(java.time.Instant.now().minusSeconds(3600))
+            .build();
+        when(sessionRepository.findByMemberId(memberId)).thenReturn(Optional.of(expiredNoRefresh));
+        assertThat(service.getSessionStatus(memberId).isActive()).isFalse();
+    }
+
     private static BigDecimal bd(String v) { return new BigDecimal(v); }
 }

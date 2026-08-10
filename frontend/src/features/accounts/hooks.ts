@@ -133,6 +133,10 @@ export function usePortfolio() {
       return enriched
     },
     staleTime: QUERY_STALE_TIMES.accountDetail,
+    // Keep live prices actually live in an open tab (refetchOnWindowFocus is
+    // globally off). PriceFreshnessDot's 3 min "live" threshold deliberately
+    // sits above this 2 min interval (+ latency) so the dot doesn't flicker.
+    refetchInterval: QUERY_STALE_TIMES.accountDetail,
   })
 }
 
@@ -153,14 +157,9 @@ export function useAccount(id: number) {
   })
 }
 
-export function useAccountHoldings(id: number) {
-  return useQuery({
-    queryKey: ['accounts', id, 'holdings'],
-    queryFn: () => accountsApi.holdings(id),
-    staleTime: QUERY_STALE_TIMES.accountDetail,
-    enabled: !!id,
-  })
-}
+// (useAccountHoldings was removed: it was unused and shared the query key
+// ['accounts', id, 'holdings'] with useHoldingsWithLivePrices while running a
+// different queryFn — a cache-collision trap.)
 
 export function useAccountPositions(id: number) {
   return useQuery({
@@ -200,6 +199,8 @@ export function useHoldingsWithLivePrices(id: number) {
       }
     },
     staleTime: QUERY_STALE_TIMES.accountDetail,
+    // Same rationale as usePortfolio: the "live" dot must not outlive the data.
+    refetchInterval: QUERY_STALE_TIMES.accountDetail,
     enabled: !!id,
   })
 }

@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
+  AlertTriangle,
   Loader2,
   RefreshCw,
   ExternalLink,
@@ -49,9 +50,12 @@ import {
   useSyncBourso,
   useInitiateBoursoAuth,
   useCompleteBoursoAuth,
+  useReconnectBankSync,
 } from '@/features/sync/hooks'
 import { useAccounts } from '@/features/accounts/hooks'
 import { formatTimeAgo } from '@/lib/utils'
+import { formatApiError, formatTrAuthError, isTrSessionDeadError } from '@/lib/errors'
+import { syncKeys } from '@/features/sync/hooks'
 import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 
 type SyncConnection = {
@@ -126,6 +130,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const syncBoursoMutation   = useSyncBourso()
   const initiateBoursoMutation = useInitiateBoursoAuth()
   const completeBoursoMutation = useCompleteBoursoAuth()
+  const reconnectBankMutation = useReconnectBankSync()
 
   // Track syncing state per connection
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set())
@@ -136,6 +141,10 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const [trPin, setTrPin] = useState('')
   const [trTan, setTrTan] = useState('')
   const [trProcessId, setTrProcessId] = useState<string | null>(null)
+  const [trAuthError, setTrAuthError] = useState<string | null>(null)
+
+  // Per-connection sync/retry errors, keyed by connection id
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
 
   // BoursoBank inline auth state
   const [boursoAuthStep, setBoursoAuthStep] = useState<'idle' | 'credentials' | 'mfa'>('idle')
@@ -226,6 +235,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const handleSync = useCallback((connection: SyncConnection) => {
     // TR without active session: open inline auth instead of syncing
     if (connection.providerType === 'tr' && !trStatus?.isActive) {
+      setTrAuthError(null)
       setTrAuthStep('phone')
       return
     }
@@ -237,60 +247,57 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
 
     setSyncingIds(prev => new Set(prev).add(connection.id))
 
+    const clearSyncing = () => setSyncingIds(prev => {
+      const next = new Set(prev)
+      next.delete(connection.id)
+      return next
+    })
+    const clearRowError = () => setRowErrors(prev => {
+      if (!(connection.id in prev)) return prev
+      const next = { ...prev }
+      delete next[connection.id]
+      return next
+    })
+    /** Row-scoped mutation callbacks: clear the spinner, and show the row's error on failure. */
+    const rowCallbacks = (formatError: (err: unknown) => string) => ({
+      onSettled: clearSyncing,
+      onSuccess: clearRowError,
+      onError: (err: unknown) => setRowErrors(prev => ({ ...prev, [connection.id]: formatError(err) })),
+    })
+    const formatGeneric = (err: unknown) => formatApiError(err, t, 'common.errors.serverError')
+
     switch (connection.providerType) {
       case 'bank':
-        if (connection.syncId !== undefined) retryBankMutation.mutate(connection.syncId, {
-          onSettled: () => setSyncingIds(prev => {
-            const next = new Set(prev)
-            next.delete(connection.id)
-            return next
-          }),
-        })
+        if (connection.syncId !== undefined) retryBankMutation.mutate(connection.syncId, rowCallbacks(formatGeneric))
         break
       case 'exchange':
-        if (connection.syncId !== undefined) syncExchangeMutation.mutate(connection.syncId, {
-          onSettled: () => setSyncingIds(prev => {
-            const next = new Set(prev)
-            next.delete(connection.id)
-            return next
-          }),
-        })
+        if (connection.syncId !== undefined) syncExchangeMutation.mutate(connection.syncId, rowCallbacks(formatGeneric))
         break
       case 'wallet':
-        if (connection.syncId !== undefined) syncWalletMutation.mutate(connection.syncId, {
-          onSettled: () => setSyncingIds(prev => {
-            const next = new Set(prev)
-            next.delete(connection.id)
-            return next
-          }),
-        })
+        if (connection.syncId !== undefined) syncWalletMutation.mutate(connection.syncId, rowCallbacks(formatGeneric))
         break
       case 'tr':
         syncTrMutation.mutate(undefined, {
-          onSettled: () => setSyncingIds(prev => {
-            const next = new Set(prev)
-            next.delete(connection.id)
-            return next
-          }),
+          onSettled: clearSyncing,
+          onSuccess: clearRowError,
+          onError: (err: unknown) => {
+            setRowErrors(prev => ({ ...prev, [connection.id]: formatTrAuthError(err, t) }))
+            // Session truly dead (refresh rejected or session cleared): refetch
+            // the now-inactive status and fall back to the inline phone/PIN form.
+            if (isTrSessionDeadError(err)) {
+              queryClient.invalidateQueries({ queryKey: syncKeys.tr() })
+              setTrAuthStep('phone')
+            }
+          },
         })
         break
       case 'bourso':
-        syncBoursoMutation.mutate(undefined, {
-          onSettled: () => setSyncingIds(prev => {
-            const next = new Set(prev)
-            next.delete(connection.id)
-            return next
-          }),
-        })
+        syncBoursoMutation.mutate(undefined, rowCallbacks(formatGeneric))
         break
       case 'finary':
         navigate('/sync?tab=finary')
         onOpenChange(false)
-        setSyncingIds(prev => {
-          const next = new Set(prev)
-          next.delete(connection.id)
-          return next
-        })
+        clearSyncing()
         break
     }
   }, [
@@ -303,6 +310,8 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     syncBoursoMutation,
     navigate,
     onOpenChange,
+    queryClient,
+    t,
   ])
 
   const handleSyncAll = useCallback(() => {
@@ -329,6 +338,10 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     .every(c => syncingIds.has(c.id))
 
   // --- TR inline auth ---
+  // Error-state semantics (see docs/features/trade-republic.md): an initiate
+  // failure has no valid processId, so stay on the phone/PIN step and clear
+  // pending state; a complete failure keeps the processId so the user can
+  // retry the code without re-entering phone/PIN.
   function handleTrInitiate(e: React.FormEvent) {
     e.preventDefault()
     initiateTrMutation.mutate(
@@ -337,6 +350,13 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         onSuccess: (data) => {
           setTrProcessId(data.processId)
           setTrAuthStep('tan')
+          setTrAuthError(null)
+        },
+        onError: (err: unknown) => {
+          setTrAuthError(formatTrAuthError(err, t))
+          setTrProcessId(null)
+          setTrTan('')
+          setTrAuthStep('phone')
         },
       },
     )
@@ -354,10 +374,14 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
           setTrPin('')
           setTrTan('')
           setTrProcessId(null)
-          // Sync runs in background — invalidate to pick up results
-          queryClient.invalidateQueries({ queryKey: ['accounts'] })
-          queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-          queryClient.invalidateQueries({ queryKey: ['sync', 'tr', 'status'] })
+          setTrAuthError(null)
+          // Query invalidation (status, accounts, dashboard) is handled by
+          // useCompleteTrAuth itself; the background sync results arrive via
+          // the existing refetch intervals.
+        },
+        onError: (err: unknown) => {
+          setTrAuthError(formatTrAuthError(err, t))
+          setTrTan('')
         },
       },
     )
@@ -369,6 +393,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     setTrPin('')
     setTrTan('')
     setTrProcessId(null)
+    setTrAuthError(null)
   }
 
   // --- BoursoBank inline auth ---
@@ -488,23 +513,58 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                           <p className="text-xs text-muted-foreground">
                             {t('sync.all.lastSync')}: {formatTimeAgo(connection.lastSyncedAt)}
                           </p>
+                          {rowErrors[connection.id] && (
+                            <p className="flex items-center gap-1.5 text-xs text-destructive">
+                              <AlertTriangle className="size-3 shrink-0" />
+                              {rowErrors[connection.id]}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        disabled={isSyncing}
-                        onClick={() => handleSync(connection)}
-                        title={isFinary ? t('sync.all.openFinary') : undefined}
-                      >
-                        {isSyncing ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : isFinary ? (
-                          <ExternalLink className="size-4" />
-                        ) : (
-                          <RefreshCw className="size-4" />
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {connection.providerType === 'bank' && connection.status === 'FAILED' && connection.syncId !== undefined && (() => {
+                          // Pending state scoped to THIS row — the mutation is shared,
+                          // so isPending alone would spin every bank's button at once.
+                          const isReconnecting =
+                            reconnectBankMutation.isPending && reconnectBankMutation.variables === connection.syncId
+                          return (
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              title={t('sync.banks.reconnect')}
+                              disabled={isReconnecting}
+                              onClick={() => reconnectBankMutation.mutate(connection.syncId!, {
+                                onSuccess: (data) => {
+                                  if (data.authLink) window.location.href = data.authLink
+                                },
+                                onError: (err: unknown) => setRowErrors(prev => ({
+                                  ...prev,
+                                  [connection.id]: formatApiError(err, t, 'sync.banks.initiateError'),
+                                })),
+                              })}
+                            >
+                              {isReconnecting
+                                ? <Loader2 className="size-4 animate-spin" />
+                                : <ExternalLink className="size-4" />}
+                            </Button>
+                          )
+                        })()}
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={isSyncing}
+                          onClick={() => handleSync(connection)}
+                          title={isFinary ? t('sync.all.openFinary') : undefined}
+                        >
+                          {isSyncing ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : isFinary ? (
+                            <ExternalLink className="size-4" />
+                          ) : (
+                            <RefreshCw className="size-4" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
 
                     {/* BoursoBank inline auth form */}
@@ -594,6 +654,12 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         <p className="mb-3 text-xs text-muted-foreground">
                           {t('sync.all.trSlowWarning')}
                         </p>
+                        {trAuthError && (
+                          <p className="mb-3 flex items-center gap-2 text-xs text-destructive">
+                            <AlertTriangle className="size-3.5 shrink-0" />
+                            {trAuthError}
+                          </p>
+                        )}
                         {trAuthStep === 'phone' && (
                           <form onSubmit={handleTrInitiate} className="space-y-3">
                             <div className="space-y-1">

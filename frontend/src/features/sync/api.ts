@@ -37,8 +37,10 @@ export const bankSyncApi = {
       .post<{ requisitionId: string; authLink: string }>('/sync/initiate', { institutionId, institutionName })
       .then(r => r.data),
 
-  complete: (code: string) =>
-    api.post<Account[]>('/sync/complete', { code }).then(r => r.data),
+  complete: (code: string, state?: string | null) =>
+    api
+      .get<Account[]>('/sync/complete', { params: { code, state: state ?? undefined } })
+      .then(r => r.data),
 
   getStatus: () =>
     api
@@ -57,6 +59,9 @@ export const bankSyncApi = {
 
   retry: (id: number) =>
     api.post<Account[]>(`/sync/${id}/retry`).then(r => r.data),
+
+  reconnect: (id: number) =>
+    api.post<{ requisitionId: string; authLink: string }>(`/sync/${id}/reconnect`).then(r => r.data),
 
   deleteConnection: (id: number) =>
     api.delete(`/sync/${id}`),
@@ -90,7 +95,7 @@ export const trApi = {
   },
 
   clearSession: () =>
-    api.post('/tr/logout'),
+    api.delete('/tr/session'),
 }
 
 // --- Crypto Exchanges ---

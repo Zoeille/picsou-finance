@@ -1,11 +1,14 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TriangleAlert } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import type { Account, PropertyKind } from '@/types/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { AccountTypeBadge } from '@/components/shared/AccountTypeBadge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { formatCurrency, formatDate, localeFromLanguage } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatCurrency, formatDate, formatTimeAgo, localeFromLanguage } from '@/lib/utils'
 import { providerLogoUrl } from '@/lib/provider-logos'
 import { PROPERTY_KIND_ICONS } from '@/lib/property-icons'
 
@@ -13,6 +16,13 @@ interface AccountCardProps {
   account: Account
   onClick?: () => void
 }
+
+/**
+ * Synced accounts whose data is older than this are flagged: live prices keep
+ * the numbers moving, so without an explicit signal a dead provider session
+ * (e.g. Trade Republic) looks perfectly healthy.
+ */
+const SYNC_STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000
 
 /**
  * The provider's own logo when the connector supplied one (Enable Banking), otherwise the
@@ -72,10 +82,26 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
         .filter(Boolean)
         .join(' · ')
     : account.provider
+
+  // Lazy initializer keeps the impure Date.now() out of render; the slow tick
+  // lets a long-lived tab cross the 48h threshold without a remount (the whole
+  // point of the badge is catching sessions that die while the app sits open).
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
+  const isSyncStale =
+    !account.isManual &&
+    account.lastSyncedAt != null &&
+    now - new Date(account.lastSyncedAt).getTime() > SYNC_STALE_THRESHOLD_MS
+
+  // Only a sync date can go stale: a valuation date comes from a manual account the
+  // staleness badge deliberately ignores, and an old estimate is not a dead session.
   const freshness = property?.lastValuedAt
-    ? { label: t('accounts.lastValuation'), date: property.lastValuedAt }
+    ? { label: t('accounts.lastValuation'), date: property.lastValuedAt, stale: false }
     : account.lastSyncedAt
-      ? { label: t('accounts.lastSync'), date: account.lastSyncedAt }
+      ? { label: t('accounts.lastSync'), date: account.lastSyncedAt, stale: isSyncStale }
       : null
 
   return (
@@ -120,9 +146,23 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
             </p>
           )}
           {freshness && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {freshness.label}: {formatDate(freshness.date)}
-            </p>
+            freshness.stale ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                      <TriangleAlert className="size-3 shrink-0" />
+                      {t('accounts.syncStale', { time: formatTimeAgo(freshness.date) })}
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">{t('accounts.syncStaleTooltip')}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {freshness.label}: {formatDate(freshness.date)}
+              </p>
+            )
           )}
         </div>
       </CardContent>

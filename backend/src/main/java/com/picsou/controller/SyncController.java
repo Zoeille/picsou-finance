@@ -70,9 +70,17 @@ public class SyncController {
         return ResponseEntity.ok(response);
     }
 
+    /** OAuth callback completion — rate-limited on its own bucket like initiate/reconnect (exchangeCode + fetchBalances hit the provider). */
     @GetMapping("/complete")
-    public List<AccountResponse> complete(@RequestParam String code) {
-        return syncService.completeConnection(code, userContext.currentMemberId());
+    public ResponseEntity<?> complete(
+        @RequestParam String code,
+        @RequestParam(required = false) String state,
+        HttpServletRequest httpReq
+    ) {
+        if (!checkSyncRateLimit(httpReq, "complete")) {
+            return tooManyRequests();
+        }
+        return ResponseEntity.ok(syncService.completeConnection(code, state, userContext.currentMemberId()));
     }
 
     @GetMapping("/status")
@@ -84,6 +92,15 @@ public class SyncController {
     public ResponseEntity<?> retry(@PathVariable Long id) {
         List<AccountResponse> accounts = syncService.retrySync(id, userContext.currentMemberId());
         return ResponseEntity.ok(accounts);
+    }
+
+    /** Re-initiate the OAuth flow for a dead requisition (rate-limited: triggers an outbound EB auth call). */
+    @PostMapping("/{id}/reconnect")
+    public ResponseEntity<?> reconnect(@PathVariable Long id, HttpServletRequest httpReq) {
+        if (!checkSyncRateLimit(httpReq, "reconnect")) {
+            return tooManyRequests();
+        }
+        return ResponseEntity.ok(syncService.reconnect(id, userContext.currentMemberId()));
     }
 
     @DeleteMapping("/{id}")
@@ -104,7 +121,7 @@ public class SyncController {
         return bucket.tryConsume(1);
     }
 
-    private ResponseEntity<ProblemDetail> tooManyRequests() {
+    private static ResponseEntity<ProblemDetail> tooManyRequests() {
         ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
         detail.setDetail("Too many sync requests. Please wait a moment.");
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(detail);

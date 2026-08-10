@@ -92,10 +92,42 @@ type TFunc = (key: string) => string
  * {@link safeBackendMessage}.
  */
 /**
+ * Maps a backend `detail` string to a translated TR error message, or `null`
+ * when it carries no known Trade Republic error code. Single source for both
+ * the 422 and 5xx branches of {@link formatTrAuthError} so they can't drift.
+ */
+function matchTrDetail(detail: string, t: TFunc): string | null {
+  if (detail.includes('authentication service is unavailable')) return t('sync.tr.errors.serviceUnavailable')
+  if (detail.includes('VALIDATION_CODE_INVALID') || detail.includes('verification code is invalid')) return t('sync.tr.errors.invalidTan')
+  if (detail.includes('NUMBER_INVALID')) return t('sync.tr.errors.invalidPhoneNumber')
+  if (detail.includes('PIN_INVALID')) return t('sync.tr.errors.invalidPin')
+  if (detail.includes('AUTHENTICATION_ERROR')) return t('sync.tr.errors.authenticationFailed')
+  if (detail.includes('expired')) return t('sync.tr.errors.authenticationFailed')
+  return null
+}
+
+/**
+ * True when a TR sync/auth error means the stored session is genuinely dead
+ * (rejected refresh, cleared session) — the caller should offer re-auth.
+ * Matches the exact backend messages from TradeRepublicSyncService; kept next
+ * to {@link formatTrAuthError} so the two substring taxonomies evolve together.
+ */
+export function isTrSessionDeadError(err: unknown): boolean {
+  const detail = getErrorDetail(err) || ''
+  return (
+    detail.includes('expired') ||
+    detail.includes('reconnect') ||
+    detail.includes('No Trade Republic session')
+  )
+}
+
+/**
  * Maps Trade Republic auth errors (credentials initiation / TAN completion) to
- * translated messages. TR rejections surface as 5xx from the backend proxy with
- * the upstream error code embedded in the `detail` string. Shared by
- * AddAccountModal and TradeRepublicTab so the mappings can't drift.
+ * translated messages. TR rejections are `SyncException`s, which the backend
+ * maps to HTTP 422 with the upstream error code in the ProblemDetail `detail`
+ * (5xx only occurs for unmapped/proxy failures, kept for robustness). Shared
+ * by AddAccountModal, TradeRepublicTab and SyncAllModal so the mappings can't
+ * drift.
  */
 export function formatTrAuthError(err: unknown, t: TFunc): string {
   const status = getErrorStatus(err)
@@ -104,15 +136,13 @@ export function formatTrAuthError(err: unknown, t: TFunc): string {
 
   if (status === 500 || status === 502 || status === 503) {
     const detail = getErrorDetail(err) || ''
-    if (detail.includes('authentication service is unavailable')) return t('sync.tr.errors.serviceUnavailable')
-    if (detail.includes('VALIDATION_CODE_INVALID') || detail.includes('verification code is invalid')) return t('sync.tr.errors.invalidTan')
-    if (detail.includes('NUMBER_INVALID')) return t('sync.tr.errors.invalidPhoneNumber')
-    if (detail.includes('PIN_INVALID')) return t('sync.tr.errors.invalidPin')
-    if (detail.includes('AUTHENTICATION_ERROR')) return t('sync.tr.errors.authenticationFailed')
-    return t('sync.tr.errors.serverError')
+    return matchTrDetail(detail, t) ?? t('sync.tr.errors.serverError')
   }
 
   if (status === 422) {
+    const detail = getErrorDetail(err) || ''
+    const matched = matchTrDetail(detail, t)
+    if (matched) return matched
     const errors =
       (err as { response?: { data?: { errors?: Record<string, unknown> } } })?.response?.data
         ?.errors ?? {}

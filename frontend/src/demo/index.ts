@@ -472,13 +472,19 @@ handlers.set(key('POST', '/sync/initiate'), () => ({
   authLink: 'https://demo.enablebanking.com/auth?demo=true',
 }))
 
-// Sync - complete
-handlers.set(key('POST', '/sync/complete'), () => ([
+// Sync - complete (real backend: GET /api/sync/complete?code=...&state=...)
+handlers.set(key('GET', '/sync/complete'), () => ([
   { id: 100, name: 'Demo Bank Account', type: 'CHECKING' as const, provider: 'Demo Bank', currency: 'EUR', currentBalance: 5000, currentBalanceEur: 5000, lastSyncedAt: new Date().toISOString(), isManual: false, color: '#3b82f6', ticker: null, createdAt: new Date().toISOString() }
 ]))
 
 // Sync - retry
 handlers.set(key('POST', '/sync/1/retry'), () => [])
+
+// Sync - reconnect (re-initiate OAuth for a dead requisition)
+handlers.set(key('POST', '/sync/1/reconnect'), () => ({
+  requisitionId: 'demo-req-reconnect',
+  authLink: 'https://demo.enablebanking.com/auth?demo=true',
+}))
 
 // Sync - delete
 handlers.set(key('DELETE', '/sync/1'), () => null)
@@ -527,8 +533,8 @@ handlers.set(key('POST', '/tr/sync'), () => [])
 // Trade Republic - import CSV
 handlers.set(key('POST', '/tr/import'), () => [])
 
-// Trade Republic - logout
-handlers.set(key('POST', '/tr/logout'), () => null)
+// Trade Republic - clear session (real backend: DELETE /api/tr/session)
+handlers.set(key('DELETE', '/tr/session'), () => null)
 
 // Crypto exchange - add. Echoes the chosen exchange rather than hardcoding one, so the demo
 // reflects whichever exchange the user picked.
@@ -730,6 +736,14 @@ export function createDemoAdapter() {
   return (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const k = key(config.method || 'GET', config.url || '')
     const handler = handlers.get(k)
+
+    if (!handler) {
+      // Deliberately still resolves 200 {} — several demo screens lean on the
+      // permissive fallback. The warning is what keeps frontend/backend
+      // endpoint drift visible: a mismatched method/path (e.g. the old
+      // POST /tr/logout) used to "succeed" here while 404ing in production.
+      console.warn(`[demo] no handler registered for "${k}" — returning empty 200`)
+    }
 
     return new Promise((resolve) => {
       setTimeout(() => {

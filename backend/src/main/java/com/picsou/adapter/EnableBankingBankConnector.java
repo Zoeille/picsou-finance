@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.security.PrivateKey;
@@ -85,6 +86,21 @@ public class EnableBankingBankConnector implements BankConnectorPort {
     }
 
     /**
+     * Maps every failure of an Enable Banking call to {@link SyncException}:
+     * HTTP errors carry the response body, everything else (timeouts,
+     * connection errors) the exception message. This keeps external failures on
+     * the service layer's stable sync-error contract; retry-critical requisition
+     * state is persisted independently by {@code RequisitionLifecycleWriter}.
+     */
+    private static <T> Mono<T> mapToSyncException(Mono<T> mono, String context) {
+        return mono
+            .onErrorMap(WebClientResponseException.class,
+                ex -> new SyncException(context + ": " + ex.getResponseBodyAsString(), ex))
+            .onErrorMap(ex -> !(ex instanceof SyncException),
+                ex -> new SyncException(context + ": " + ex.getMessage(), ex));
+    }
+
+    /**
      * Names the single missing credential rather than claiming Enable Banking is
      * entirely unconfigured — the four pieces (Application ID, Key ID, redirect
      * URL, private key) are stored/loaded independently, so a generic message
@@ -99,30 +115,28 @@ public class EnableBankingBankConnector implements BankConnectorPort {
     // ─── BankConnectorPort ────────────────────────────────────────────────────
 
     @Override
-    public InitiateResult initiateConnection(String institutionId) {
+    public InitiateResult initiateConnection(String institutionId, String state) {
         InstitutionRef ref = parseInstitutionId(institutionId);
 
         var body = Map.of(
             "access", Map.of("valid_until", Instant.now().plus(90, ChronoUnit.DAYS).toString()),
             "aspsp", Map.of("name", ref.bankName(), "country", ref.country()),
-            "state", applicationId() + "_" + System.currentTimeMillis(),
+            "state", state,
             "redirect_url", redirectUri(),
             // Must match the ASPSP's own psu_types, otherwise the bank presents the
             // wrong login page (or rejects the request outright).
             "psu_type", ref.psuType()
         );
 
-        AuthStartResponse auth = webClient.post()
-            .uri("/auth")
-            .header("Authorization", "Bearer " + buildJwt())
-            .bodyValue(body)
-            .retrieve()
-            .bodyToMono(AuthStartResponse.class)
-            .timeout(TIMEOUT)
-            .onErrorMap(WebClientResponseException.class,
-                ex -> new SyncException("Enable Banking auth failed: " + ex.getResponseBodyAsString(), ex))
-            .onErrorMap(ex -> !(ex instanceof SyncException),
-                ex -> new SyncException("Enable Banking auth error: " + ex.getMessage(), ex))
+        AuthStartResponse auth = mapToSyncException(
+            webClient.post()
+                .uri("/auth")
+                .header("Authorization", "Bearer " + buildJwt())
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(AuthStartResponse.class)
+                .timeout(TIMEOUT),
+            "Enable Banking auth failed")
             .block();
 
         if (auth == null || auth.url() == null) {
@@ -136,24 +150,22 @@ public class EnableBankingBankConnector implements BankConnectorPort {
     @Override
     public String exchangeCode(String oauthCode) {
         log.info("Exchanging OAuth code for Enable Banking session");
-        SessionCreateResponse session = webClient.post()
-            .uri("/sessions")
-            .header("Authorization", "Bearer " + buildJwt())
-            .bodyValue(Map.of("code", oauthCode))
-            .retrieve()
-            .bodyToMono(SessionCreateResponse.class)
-            .timeout(TIMEOUT)
-            .onErrorMap(WebClientResponseException.class,
-                ex -> new SyncException("Enable Banking code exchange failed: " + ex.getResponseBodyAsString(), ex))
-            .onErrorMap(ex -> !(ex instanceof SyncException),
-                ex -> new SyncException("Enable Banking code exchange error: " + ex.getMessage(), ex))
+        SessionCreateResponse session = mapToSyncException(
+            webClient.post()
+                .uri("/sessions")
+                .header("Authorization", "Bearer " + buildJwt())
+                .bodyValue(Map.of("code", oauthCode))
+                .retrieve()
+                .bodyToMono(SessionCreateResponse.class)
+                .timeout(TIMEOUT),
+            "Enable Banking code exchange failed")
             .block();
 
         if (session == null || session.sessionId() == null) {
             throw new SyncException("Empty session response from Enable Banking /sessions");
         }
 
-        log.info("Enable Banking session created: {}", session.sessionId());
+        log.info("Enable Banking session created");
         return session.sessionId();
     }
 
@@ -183,24 +195,24 @@ public class EnableBankingBankConnector implements BankConnectorPort {
         int delayMs = 1_500;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            SessionResponse session = webClient.get()
-                .uri("/sessions/{id}", sessionId)
-                .header("Authorization", "Bearer " + buildJwt())
-                .retrieve()
-                .bodyToMono(SessionResponse.class)
-                .timeout(TIMEOUT)
-                .onErrorMap(WebClientResponseException.class,
-                    ex -> new SyncException("Failed to fetch session: " + ex.getResponseBodyAsString(), ex))
+            SessionResponse session = mapToSyncException(
+                webClient.get()
+                    .uri("/sessions/{id}", sessionId)
+                    .header("Authorization", "Bearer " + buildJwt())
+                    .retrieve()
+                    .bodyToMono(SessionResponse.class)
+                    .timeout(TIMEOUT),
+                "Failed to fetch session")
                 .block();
 
             if (session != null && session.accounts() != null && !session.accounts().isEmpty()) {
-                log.info("Session {} has {} accounts (attempt {}, status={})",
-                    sessionId, session.accounts().size(), attempt, session.status());
+                log.info("Enable Banking session has {} accounts (attempt {}, status={})",
+                    session.accounts().size(), attempt, session.status());
                 return session.accounts();
             }
 
-            log.info("Session {} has no accounts yet (attempt {}/{}, status={})",
-                sessionId, attempt, maxAttempts,
+            log.info("Enable Banking session has no accounts yet (attempt {}/{}, status={})",
+                attempt, maxAttempts,
                 session != null ? session.status() : "null");
 
             if (attempt < maxAttempts) {
@@ -208,8 +220,8 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             }
         }
 
-        log.warn("Session {} still has no accounts after {} attempts — returning empty so the caller can retry asynchronously",
-            sessionId, maxAttempts);
+        log.warn("Enable Banking session still has no accounts after {} attempts — returning empty so the caller can retry asynchronously",
+            maxAttempts);
         return List.of();
     }
 
@@ -384,20 +396,24 @@ public class EnableBankingBankConnector implements BankConnectorPort {
     }
 
     private AccountData fetchAccountData(String accountId) {
-        BalancesResponse balances = webClient.get()
-            .uri("/accounts/{id}/balances", accountId)
-            .header("Authorization", "Bearer " + buildJwt())
-            .retrieve()
-            .bodyToMono(BalancesResponse.class)
-            .timeout(TIMEOUT)
+        BalancesResponse balances = mapToSyncException(
+            webClient.get()
+                .uri("/accounts/{id}/balances", accountId)
+                .header("Authorization", "Bearer " + buildJwt())
+                .retrieve()
+                .bodyToMono(BalancesResponse.class)
+                .timeout(TIMEOUT),
+            "Failed to fetch account balances")
             .block();
 
-        AccountDetailsResponse details = webClient.get()
-            .uri("/accounts/{id}/details", accountId)
-            .header("Authorization", "Bearer " + buildJwt())
-            .retrieve()
-            .bodyToMono(AccountDetailsResponse.class)
-            .timeout(TIMEOUT)
+        AccountDetailsResponse details = mapToSyncException(
+            webClient.get()
+                .uri("/accounts/{id}/details", accountId)
+                .header("Authorization", "Bearer " + buildJwt())
+                .retrieve()
+                .bodyToMono(AccountDetailsResponse.class)
+                .timeout(TIMEOUT),
+            "Failed to fetch account details")
             .block();
 
         BigDecimal balance = BigDecimal.ZERO;

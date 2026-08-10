@@ -225,4 +225,31 @@ describe('AccountCard', () => {
       expect(container.querySelector('.text-emerald-500')).not.toBeInTheDocument()
     })
   })
+
+  describe('stale sync badge', () => {
+    it('flags a non-manual account not synced for more than 48h', async () => {
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      const account = { ...baseAccount, lastSyncedAt: threeDaysAgo }
+      const { findByText } = render(<AccountCard account={account} />)
+
+      expect(await findByText('accounts.syncStale')).toBeInTheDocument()
+    })
+
+    it('shows the normal last-sync line for a recently synced account', async () => {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      const account = { ...baseAccount, lastSyncedAt: oneHourAgo }
+      const { queryByText, findByText } = render(<AccountCard account={account} />)
+
+      expect(await findByText(/accounts\.lastSync/)).toBeInTheDocument()
+      expect(queryByText('accounts.syncStale')).not.toBeInTheDocument()
+    })
+
+    it('never flags a manual account', () => {
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      const account = { ...baseAccount, isManual: true, lastSyncedAt: threeDaysAgo }
+      const { queryByText } = render(<AccountCard account={account} />)
+
+      expect(queryByText('accounts.syncStale')).not.toBeInTheDocument()
+    })
+  })
 })

@@ -187,10 +187,16 @@ public class TradeRepublicSyncService {
             log.info("TR session refreshed -- retrying sync");
             return syncWithToken(newTokens.sessionToken(), null, memberId); // null = no retry on next expiry
         } catch (SyncException ex) {
-            log.warn("TR refresh failed -- clearing session");
-            sessionRepository.findByMemberId(memberId).ifPresent(sessionRepository::delete);
-            throw new SyncException(
-                "Your Trade Republic session has expired and could not be refreshed. Please reconnect.");
+            if ("SESSION_EXPIRED".equals(ex.getMessage())) {
+                log.warn("TR refresh rejected -- clearing session");
+                sessionRepository.findByMemberId(memberId).ifPresent(sessionRepository::delete);
+                throw new SyncException(
+                    "Your Trade Republic session has expired and could not be refreshed. Please reconnect.");
+            }
+            // Transient failure (sidecar down, timeout): keep the session so the
+            // next sync can retry the refresh instead of forcing a re-auth.
+            log.warn("TR refresh failed transiently -- keeping session: {}", ex.getMessage());
+            throw ex;
         }
     }
 
@@ -278,7 +284,11 @@ public class TradeRepublicSyncService {
             return new SessionStatusResponse(false, null);
         }
         TradeRepublicSession s = session.get();
-        boolean active = s.getExpiresAt() == null || s.getExpiresAt().isAfter(Instant.now());
+        // A session past its (heuristic) expiry is still operationally active as
+        // long as a refresh token exists: the next sync refreshes it transparently,
+        // and a genuinely rejected refresh deletes the row — making this false.
+        boolean withinWindow = s.getExpiresAt() == null || s.getExpiresAt().isAfter(Instant.now());
+        boolean active = withinWindow || s.getRefreshToken() != null;
         return new SessionStatusResponse(active, s.getExpiresAt());
     }
 
@@ -289,17 +299,17 @@ public class TradeRepublicSyncService {
 
     // --- Scheduler entry point ---
 
-    /** Called by SchedulerService. No-op if no active session for this member. */
+    /**
+     * Called by SchedulerService. No-op if no session exists for this member.
+     * An expired session token is not a reason to skip: syncWithToken routes
+     * SESSION_EXPIRED through refreshAndRetry using the stored refresh token,
+     * which is the normal path for any sync happening hours after auth.
+     */
     public void resyncIfSessionActive(Long memberId) {
         Optional<TradeRepublicSession> session = sessionRepository.findByMemberId(memberId);
         if (session.isEmpty()) return;
 
         TradeRepublicSession s = session.get();
-        if (s.getExpiresAt() != null && !s.getExpiresAt().isAfter(Instant.now())) {
-            log.warn("Trade Republic session expired for member {} -- skipping auto-sync. Re-authenticate via the UI.", memberId);
-            return;
-        }
-
         try {
             syncWithToken(encryption.decrypt(s.getSessionToken()), s, memberId);
         } catch (Exception ex) {

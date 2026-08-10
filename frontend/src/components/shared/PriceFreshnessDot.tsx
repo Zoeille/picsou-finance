@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatDate, formatTimeAgo } from '@/lib/utils'
@@ -17,7 +17,11 @@ interface PriceFreshnessDotProps {
   staleAsOf?: string | null
 }
 
-const LIVE_THRESHOLD_MS = 2 * 60 * 1000 // 2 minutes
+// Strictly greater than the holdings/portfolio refetchInterval (2 min) plus
+// tick + network latency, so the dot doesn't flicker to stale right before
+// each scheduled refetch lands.
+const LIVE_THRESHOLD_MS = 3 * 60 * 1000
+const TICK_MS = 30 * 1000
 
 /**
  * The label is also the element's accessible name: a bare coloured dot conveys nothing to a
@@ -38,9 +42,14 @@ function Dot({ className, label }: { className: string; label: string }) {
 
 export function PriceFreshnessDot({ priceUpdatedAt, staleAsOf = null }: PriceFreshnessDotProps) {
   const { t } = useTranslation()
-  // Snapshot "now" once at mount — freshness doesn't need to tick live, and
-  // reading Date.now() during render is an impure call the compiler rejects.
-  const [now] = useState(() => Date.now())
+  // Lazy initializer keeps the impure Date.now() out of render; the interval
+  // keeps the clock ticking so a tab left open cannot show "live" forever on
+  // a timestamp that stopped moving.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => clearInterval(id)
+  }, [])
 
   // Checked first, and independently of priceUpdatedAt: those are different facts. The latter
   // says when the position was last synced, this one says the price on screen is not today's.

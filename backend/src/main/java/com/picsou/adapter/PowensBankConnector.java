@@ -86,8 +86,10 @@ public class PowensBankConnector implements BankConnectorPort {
      * If connectorId is a numeric Powens connector ID, the webview opens directly on that bank.
      */
     @Override
-    public InitiateResult initiateConnection(String connectorId) {
-        String state = UUID.randomUUID().toString();
+    public InitiateResult initiateConnection(String connectorId, String callerState) {
+        // Forward the caller's correlation nonce when provided; keep a local
+        // random state otherwise (experimental adapter, disabled in 1.0.0).
+        String state = callerState != null && !callerState.isBlank() ? callerState : UUID.randomUUID().toString();
         try {
             StringBuilder url = new StringBuilder("https://")
                 .append(domain).append(".biapi.pro/2.0/auth/webview/redirect")

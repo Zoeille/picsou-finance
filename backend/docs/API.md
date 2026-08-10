@@ -24,8 +24,7 @@
 | Endpoint group | Limit |
 |---------------|-------|
 | Login (`/api/auth/login`) | 5 requests / IP / 15 min |
-| Bank sync (`/api/sync/initiate`) | Throttled |
-| Bank sync (`/api/sync/countries`) | Throttled (own bucket, separate from `/initiate`) |
+| Bank sync (`/api/sync/initiate`, `/complete`, `/{id}/reconnect`, `/countries`) | Throttled — each on its own bucket, keyed by `ip + endpoint` |
 | TR auth (`/api/tr/auth/initiate`) | Throttled |
 
 ## Shared Enums

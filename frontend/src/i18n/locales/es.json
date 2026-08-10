@@ -128,7 +128,14 @@
     "recentAccounts": "Cuentas recientes",
     "viewAll": "Ver todo",
     "totalLiabilities": "Total de pasivos",
-    "totalAssets": "Total de activos"
+    "totalAssets": "Total de activos",
+    "evolution": {
+      "net": "Evolución del patrimonio neto",
+      "gross": "Evolución de los activos brutos",
+      "financial": "Evolución de los activos financieros"
+    },
+    "liabilitiesTitle": "Pasivos",
+    "liabilitiesDescription": "Deuda pendiente por cuenta"
   },
   "accounts": {
     "title": "Cuentas",
@@ -158,6 +165,8 @@
     "priceLive": "Precio en directo",
     "priceStale": "Precio de {{time}}",
     "priceAsOf": "Precio del {{date}} — el proveedor de precios no respondió",
+    "syncStale": "Sincronizado {{time}}",
+    "syncStaleTooltip": "Esta cuenta no se ha sincronizado recientemente. Inicia una sincronización o vuelve a conectar el proveedor.",
     "history": "Historial",
     "manual": "Manual",
     "allTypes": "Todos los tipos",
@@ -432,6 +441,7 @@
       "noConnections": "Sin conexiones bancarias",
       "connect": "Conectar",
       "retry": "Reintentar",
+      "reconnect": "Volver a conectar el banco",
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar esta conexión bancaria?",
       "callbackCompleting": "Recuperando cuentas...",
