@@ -8,9 +8,9 @@ import java.util.List;
  * through an unofficial, reverse-engineered API. Unlike the other broker ports,
  * there is no long-lived session: DEGIRO's cookie times out after ~30 minutes of
  * inactivity and there is no refresh token, so {@link #fetchPortfolio} can throw
- * a {@link com.picsou.exception.SyncException} with message {@code SESSION_EXPIRED}
- * at any time — callers must surface this as a re-authentication prompt, never
- * retry silently. See docs/decisions/2026-08-05-degiro-session-only-no-stored-totp.md.
+ * a {@link com.picsou.exception.DegiroSessionExpiredException} at any time —
+ * callers must surface this as a re-authentication prompt, never retry silently.
+ * See docs/decisions/2026-08-05-degiro-session-only-no-stored-totp.md.
  */
 public interface DegiroPort {
 
@@ -34,9 +34,8 @@ public interface DegiroPort {
      * Fetches the current portfolio valuation and open positions.
      *
      * @param sessionBlob opaque blob returned by the auth flow
-     * @throws com.picsou.exception.SyncException with message {@code SESSION_EXPIRED}
-     *         when DEGIRO rejects the session (expired) — never interpreted as an
-     *         empty portfolio.
+     * @throws com.picsou.exception.DegiroSessionExpiredException when DEGIRO rejects
+     *         the session (expired) — never interpreted as an empty portfolio.
      */
     DegiroPortfolioData fetchPortfolio(String sessionBlob);
 

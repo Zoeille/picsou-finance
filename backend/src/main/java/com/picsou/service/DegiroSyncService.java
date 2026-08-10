@@ -124,7 +124,17 @@ public class DegiroSyncService {
         log.info("DEGIRO session stored for member {}", memberId);
 
         try {
-            syncWithBlob(plainBlob, memberId);
+            doSync(plainBlob, memberId);
+        } catch (DegiroSessionExpiredException ex) {
+            // Deliberately NOT statusWriter here, unlike syncWithBlob: the row above was
+            // written by *this* still-uncommitted transaction, so a REQUIRES_NEW write
+            // would either miss it entirely (fresh row, not yet visible to another
+            // connection) or block on its lock until the DB times out. Nothing rethrows
+            // past this point, so this transaction commits and a direct write on the
+            // managed entity is both sufficient and safe.
+            log.warn("DEGIRO session expired during the initial sync for member {} — marking REAUTH_REQUIRED", memberId);
+            session.setStatus(DegiroSessionStatus.REAUTH_REQUIRED);
+            session.setLastError("SESSION_EXPIRED");
         } catch (Exception ex) {
             log.warn("DEGIRO initial sync after auth failed for member {}: {}", memberId, ex.getMessage());
         }
@@ -144,17 +154,28 @@ public class DegiroSyncService {
         return syncWithBlob(encryption.decrypt(stored.getSessionBlob()), memberId);
     }
 
+    /**
+     * The sync itself, with no expiry bookkeeping. Callers decide how an expired
+     * session is recorded: {@link #syncWithBlob} writes it through {@code statusWriter}
+     * because it rethrows into a rollback, whereas the post-auth path in
+     * {@link #storeSessionAndSync} writes the managed entity directly (see the comment
+     * there — its row is not committed yet, so a REQUIRES_NEW write cannot see it).
+     */
+    private AccountResponse doSync(String plainBlob, Long memberId) {
+        DegiroPortfolioData data = degiroPort.fetchPortfolio(plainBlob);
+        AccountResponse response = upsertAccount(data, memberId);
+        sessionRepository.findByMemberId(memberId).ifPresent(s -> {
+            s.setLastSyncedAt(Instant.now());
+            s.setStatus(DegiroSessionStatus.ACTIVE);
+            s.setLastError(null);
+        });
+        log.info("DEGIRO sync complete for member {}", memberId);
+        return response;
+    }
+
     private AccountResponse syncWithBlob(String plainBlob, Long memberId) {
         try {
-            DegiroPortfolioData data = degiroPort.fetchPortfolio(plainBlob);
-            AccountResponse response = upsertAccount(data, memberId);
-            sessionRepository.findByMemberId(memberId).ifPresent(s -> {
-                s.setLastSyncedAt(Instant.now());
-                s.setStatus(DegiroSessionStatus.ACTIVE);
-                s.setLastError(null);
-            });
-            log.info("DEGIRO sync complete for member {}", memberId);
-            return response;
+            return doSync(plainBlob, memberId);
         } catch (DegiroSessionExpiredException e) {
             log.warn("DEGIRO session expired for member {} — marking REAUTH_REQUIRED", memberId);
             // Written through statusWriter, not this managed entity: rethrowing marks this
@@ -172,7 +193,10 @@ public class DegiroSyncService {
     public SessionStatusResponse getSessionStatus(Long memberId) {
         Optional<DegiroSession> session = sessionRepository.findByMemberId(memberId);
         if (session.isEmpty()) {
-            return new SessionStatusResponse(false, DegiroSessionStatus.FAILED, null);
+            // null, not FAILED: "never connected" and "a sync failed" are different states,
+            // and FAILED carries a stored last_error the migration's CHECK constraint
+            // requires — there is no error to report when there is no session at all.
+            return new SessionStatusResponse(false, null, null);
         }
         DegiroSession s = session.get();
         boolean active = s.getStatus() == DegiroSessionStatus.ACTIVE;

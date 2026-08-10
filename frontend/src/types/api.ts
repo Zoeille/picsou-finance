@@ -283,7 +283,8 @@ export type DegiroSessionStatusValue = 'ACTIVE' | 'REAUTH_REQUIRED' | 'FAILED'
 
 export interface DegiroSessionStatus {
   isActive: boolean
-  status: DegiroSessionStatusValue
+  /** `null` when no session has ever been stored for this member. */
+  status: DegiroSessionStatusValue | null
   lastSyncedAt: string | null
 }
 

@@ -14,6 +14,7 @@ import {
   useSyncDegiro,
 } from "@/features/sync/hooks"
 import { extractErrorMessage, getErrorDetail, getErrorStatus } from "@/lib/errors"
+import { formatDate } from "@/lib/utils"
 
 type AuthState = "IDLE" | "AWAITING_TOTP" | "ERROR"
 
@@ -55,11 +56,14 @@ export function DegiroPanel({ onConnected }: DegiroPanelProps = {}) {
   const statusError = status.isError ? formatError(status.error) : null
   const visibleError = error ?? statusError
 
+  // Depends on `connected`, not just `onConnected`: the ref is flipped inside a
+  // mutation callback, so without a dep that actually changes when the session
+  // goes live this effect never re-runs and the host modal never closes.
   useEffect(() => {
-    if (!notifyConnectedOnSuccess.current) return
+    if (!connected || !notifyConnectedOnSuccess.current) return
     notifyConnectedOnSuccess.current = false
     onConnected?.()
-  }, [onConnected])
+  }, [onConnected, connected])
 
   if (status.isLoading) {
     return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
@@ -69,17 +73,24 @@ export function DegiroPanel({ onConnected }: DegiroPanelProps = {}) {
     <div className="space-y-6">
       <Card size="sm">
         <CardContent className="py-4">
-          {connected ? (
-            <Badge className="bg-green-500/10 text-green-600 dark:text-green-400">
-              {t("sync.degiro.sessionActive")}
-            </Badge>
-          ) : needsReauth ? (
-            <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
-              {t("sync.degiro.reauthRequired")}
-            </Badge>
-          ) : (
-            <Badge variant="outline">{t("sync.degiro.noSession")}</Badge>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {connected ? (
+              <Badge className="bg-green-500/10 text-green-600 dark:text-green-400">
+                {t("sync.degiro.sessionActive")}
+              </Badge>
+            ) : needsReauth ? (
+              <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                {t("sync.degiro.reauthRequired")}
+              </Badge>
+            ) : (
+              <Badge variant="outline">{t("sync.degiro.noSession")}</Badge>
+            )}
+            {status.data?.lastSyncedAt && (
+              <span className="text-sm text-muted-foreground">
+                {t("sync.degiro.lastSyncedAt")} {formatDate(status.data.lastSyncedAt)}
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 

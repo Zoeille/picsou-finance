@@ -9,6 +9,10 @@ import com.picsou.service.DegiroSyncService.SessionStatusResponse;
 import com.picsou.service.UserContext;
 import io.github.bucket4j.Bucket;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -41,23 +45,34 @@ public class DegiroController {
      */
     @PostMapping("/auth/initiate")
     public ResponseEntity<?> initiateAuth(
-        @RequestBody InitiateAuthRequest req,
+        @Valid @RequestBody InitiateAuthRequest req,
         HttpServletRequest request
     ) {
         if (!checkRateLimit(request)) {
-            ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
-            detail.setDetail("Too many authentication attempts. Please wait a moment and try again.");
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(detail);
+            return rateLimited();
         }
 
         AuthInitResponse init = degiroService.initiateAuth(req.username(), req.password(), userContext.currentMemberId());
         return ResponseEntity.ok(init);
     }
 
-    /** Step 2 (TOTP only): submit the current 6-digit authenticator code. */
+    /**
+     * Step 2 (TOTP only): submit the current 6-digit authenticator code.
+     * Throttled like {@code /auth/initiate}: the TOTP space is only 1M, so an
+     * unthrottled verify endpoint is brute-forceable once a processId is known.
+     */
     @PostMapping("/auth/complete")
-    public SessionStatusResponse completeAuth(@RequestBody CompleteAuthRequest req) {
-        return degiroService.completeAuth(req.processId(), req.code(), userContext.currentMemberId());
+    public ResponseEntity<?> completeAuth(
+        @Valid @RequestBody CompleteAuthRequest req,
+        HttpServletRequest request
+    ) {
+        if (!checkRateLimit(request)) {
+            return rateLimited();
+        }
+
+        return ResponseEntity.ok(
+            degiroService.completeAuth(req.processId(), req.code(), userContext.currentMemberId())
+        );
     }
 
     /**
@@ -90,7 +105,19 @@ public class DegiroController {
         return bucket.tryConsume(1);
     }
 
-    record InitiateAuthRequest(String username, String password) {}
+    private ResponseEntity<ProblemDetail> rateLimited() {
+        ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
+        detail.setDetail("Too many DEGIRO authentication attempts. Please wait before retrying.");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(detail);
+    }
 
-    record CompleteAuthRequest(String processId, String code) {}
+    record InitiateAuthRequest(
+        @NotBlank @Size(max = 100) String username,
+        @NotBlank @Size(max = 100) String password
+    ) {}
+
+    record CompleteAuthRequest(
+        @NotBlank @Size(max = 100) String processId,
+        @NotBlank @Pattern(regexp = "\\d{6}") String code
+    ) {}
 }

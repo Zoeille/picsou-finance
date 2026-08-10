@@ -37,6 +37,7 @@ Bucket4j (`io.github.bucket4j`) enforces per-IP rate limits. Buckets are created
 | `POST /api/sync/initiate`                     | Throttled                                   |
 | `POST /api/tr/auth/initiate`                  | Throttled                                   |
 | `POST /api/bourse-direct/auth/initiate`, `/complete` | Throttled                            |
+| `POST /api/degiro/auth/initiate`, `/complete` | Throttled (anti-bruteforce on 6-digit code) |
 | `GET /api/me/export`                          | Throttled (GDPR export)                     |
 
 When a limit is exceeded, the controller returns a 429 ProblemDetail directly (not via the exception handler).

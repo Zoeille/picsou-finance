@@ -13,13 +13,16 @@ CREATE TABLE degiro_session (
     -- ON DELETE CASCADE, matching what V61 retrofitted onto bourse_direct_session:
     -- without it, deleting a family member fails outright once they have a stored
     -- DEGIRO session, since nothing in the member-deletion path clears this row first.
-    member_id       BIGINT NOT NULL UNIQUE REFERENCES family_member(id) ON DELETE CASCADE,
+    member_id       BIGINT NOT NULL,
     session_blob    VARCHAR(4000) NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     last_synced_at  TIMESTAMPTZ,
     last_error      VARCHAR(40),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_degiro_session_member UNIQUE (member_id),
+    CONSTRAINT fk_degiro_session_member
+        FOREIGN KEY (member_id) REFERENCES family_member(id) ON DELETE CASCADE,
     CONSTRAINT ck_degiro_session_status
         CHECK (status IN ('ACTIVE', 'REAUTH_REQUIRED', 'FAILED')),
     CONSTRAINT ck_degiro_session_failed_error

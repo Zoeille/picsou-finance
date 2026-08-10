@@ -1101,3 +1101,87 @@ Domain failures use `422` RFC 7807 responses with a stable `code` property:
 `APP_VALIDATION_TIMEOUT`, `AUTH_ATTEMPT_EXPIRED`, `SESSION_EXPIRED`,
 `PORTFOLIO_INCOMPLETE`, `UPSTREAM_FORMAT_CHANGED`, `UPSTREAM_UNAVAILABLE`,
 `INVALID_DATA`, or `INTERNAL_ERROR`. Authentication rate limiting returns `429`.
+
+---
+
+### 13. DEGIRO — `/api/degiro`
+
+The connector is read-only and **session-only**: DEGIRO's session cookie expires
+after ~30 minutes of inactivity and Picsou never stores the account's TOTP
+secret, so there is no scheduled background resync — every sync is user-initiated
+and may require reconnecting. See
+[`docs/decisions/2026-08-05-degiro-session-only-no-stored-totp.md`](../../docs/decisions/2026-08-05-degiro-session-only-no-stored-totp.md).
+
+#### `POST /api/degiro/auth/initiate`
+
+- **Auth:** Required
+- **Rate limit:** Per IP — 5 attempts / 15 min
+
+**Request body:**
+```json
+{ "username": "client-id", "password": "secret" }
+```
+
+**Response `200` — `DegiroAuthInitResponse`:**
+```json
+{ "processId": "uuid", "totpRequired": true }
+```
+
+When `totpRequired` is false, the encrypted session is already stored and a
+first portfolio import has run.
+
+---
+
+#### `POST /api/degiro/auth/complete`
+
+- **Auth:** Required
+- **Rate limit:** Per IP — 5 attempts / 15 min (anti-bruteforce on the 6-digit code)
+
+**Request body:**
+```json
+{ "processId": "uuid", "code": "123456" }
+```
+
+**Response `200` — `DegiroSessionStatus`.**
+
+---
+
+#### `POST /api/degiro/sync`
+
+- **Auth:** Required
+- **Body:** none
+
+**Response `200` — `AccountResponse`.** Synchronous: the portfolio is fetched
+with the stored session and the account is returned. Fails with `422` when the
+session has expired, and the stored status flips to `REAUTH_REQUIRED`.
+
+---
+
+#### `GET /api/degiro/status`
+
+- **Auth:** Required
+
+**Response `200` — `DegiroSessionStatus`:**
+```json
+{
+  "isActive": true,
+  "status": "ACTIVE",
+  "lastSyncedAt": "2026-08-05T10:00:00Z"
+}
+```
+
+`status` is one of `ACTIVE`, `REAUTH_REQUIRED`, or `FAILED`. `REAUTH_REQUIRED`
+is an expected, frequent state for this integration — not an error.
+
+---
+
+#### `DELETE /api/degiro/session`
+
+- **Auth:** Required
+
+**Response `204`.** Imported accounts and history are retained.
+
+Domain failures use `422` RFC 7807 responses. Unlike Bourse Direct and Amundi,
+DEGIRO does not yet set a stable `code` property — clients should treat the
+absence of a code as a generic sync failure rather than parsing `detail`.
+Authentication rate limiting returns `429`.
