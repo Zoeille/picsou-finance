@@ -9,19 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Meria crypto exchange sync.** Connect a Meria account with the single
-  read-only API key from `dashboard.meria.com/account/api` — no API secret, and
-  the add-exchange form now hides that field for exchanges that don't use one
-  (`CryptoExchangePort.requiresApiSecret()`, enforced server-side in all four
-  locales). Picsou sums spot wallets, staking and lending contracts per coin,
-  counting a contract as its held amount — Meria's `reward` is cumulative
-  interest already reflected there — then
-  values the total in EUR through the existing price path; coins were added
-  to the CoinGecko ticker map so Meria balances aren't silently unvalued. A
-  failed sub-call fails the whole sync rather than writing a shrunken balance
-  into the net-worth history. The account page groups its positions by product —
-  Spot / Staking / Lending — and shows principal, accrued interest and total for
-  each yield-bearing line. See [feature notes](docs/features/crypto-tracking.md).
 - **Amundi Épargne Salariale sync.** Connect an Amundi account and import every
   funded employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own
   account, leaving emptied and closed dispositifs out,
@@ -36,6 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all four locales, and its accounts carry the Amundi logo rather than a color
   circle. See [feature notes](docs/features/amundi-epargne-salariale.md)
   and the [ADR](docs/decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
+- **Meria crypto exchange sync.** Connect a Meria account with the single
+  read-only API key from `dashboard.meria.com/account/api` — no API secret, and
+  the add-exchange form now hides that field for exchanges that don't use one
+  (`CryptoExchangePort.requiresApiSecret()`, enforced server-side in all four
+  locales). Picsou sums spot wallets, staking and lending contracts per coin,
+  counting a contract as its held amount — Meria's `reward` is cumulative
+  interest already reflected there — then
+  values the total in EUR through the existing price path; coins were added
+  to the CoinGecko ticker map so Meria balances aren't silently unvalued. A
+  failed sub-call fails the whole sync rather than writing a shrunken balance
+  into the net-worth history. The account page groups its positions by product —
+  Spot / Staking / Lending — and shows principal, accrued interest and total for
+  each yield-bearing line. See [feature notes](docs/features/crypto-tracking.md).
 - **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
   handles login and the six-digit security code, then imports PEA/CTO positions,
   average cost, current price, valuation and account cash. Credentials and OTPs
@@ -116,6 +116,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Business-oriented banks never appeared in the bank search.** Picsou asked
+  Enable Banking only for retail (`personal`) institutions, so BaaS and
+  professional banks — Swan among them — were invisible in the picker even
+  though the account existed and the credentials were valid, with nothing to
+  distinguish that from a misconfiguration. The catalog is now fetched
+  unfiltered, each bank's PSU type is read from the provider and carried through
+  the connection flow so the consent page presents the right login, and
+  business-only banks are marked with a **Pro** badge in both bank pickers.
+  See [feature notes](docs/features/bank-sync.md).
 - **A price provider outage no longer blanks positions, invents a loss, or writes
   a zero into your history.** After a restart, a rate-limited CoinGecko left the
   largest lines of a crypto account with no price: they dropped out of the account's
@@ -136,15 +145,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accounts (previously only account-level ones, i.e. never the crypto ones), and the
   startup backfill skips history it already has instead of re-downloading a year of
   it at every boot.
-- **Business-oriented banks never appeared in the bank search.** Picsou asked
-  Enable Banking only for retail (`personal`) institutions, so BaaS and
-  professional banks — Swan among them — were invisible in the picker even
-  though the account existed and the credentials were valid, with nothing to
-  distinguish that from a misconfiguration. The catalog is now fetched
-  unfiltered, each bank's PSU type is read from the provider and carried through
-  the connection flow so the consent page presents the right login, and
-  business-only banks are marked with a **Pro** badge in both bank pickers.
-  See [feature notes](docs/features/bank-sync.md).
 - **The GitHub link in Settings → About now points to the right repository.** It
   linked to `github.com/zoeille/picsou`, which does not exist; the repository is
   `github.com/zoeille/picsou-finance`.

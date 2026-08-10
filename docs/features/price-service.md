@@ -24,10 +24,12 @@ Both providers implement `PriceProviderPort` with `supports(ticker)` and `getPri
 `PriceService.resolve(tickers, cryptoOnly)` answers every on-demand read, in this order:
 
 1. **In-memory cache** — `ConcurrentHashMap<String, CachedPrice>` keyed by uppercase ticker, 900 s TTL. Hits are returned as a live `Quote` dated today.
-2. **One batched provider call** for everything still missing — CoinGecko takes the whole crypto set in a single request, Yahoo is per-ticker (it has no batch endpoint). Skipped for a ticker whose last attempt failed less than 60 s ago (the *negative cache*), and skipped entirely while `CoinGeckoPriceProvider` is in its post-429 cooldown.
+2. **One batched provider call** for everything still missing — CoinGecko takes the whole crypto set in a single request, Yahoo is per-ticker (it has no batch endpoint). Skipped for a ticker whose last attempt came back empty and is still within the miss TTL (the *negative cache*, below), and skipped entirely while `CoinGeckoPriceProvider` is in its post-429 cooldown.
 3. **Last recorded price** — `price_snapshot`, most recent row per ticker within 7 days, one query for the whole set (`findRecentByTickers`). Returned as a `Quote` with `live = false` and `asOf` = the snapshot's date.
 
-Anything still unresolved returns nothing, and the ticker is marked in the negative cache so the next read does not repeat the request.
+Anything still unresolved returns nothing.
+
+**Failures are cached too**, in that same map, as a `CachedPrice` with a `null` price and a shorter TTL of 300 seconds (5 minutes). Without this, a ticker the provider cannot resolve was re-fetched on *every* read: the dashboard, the account cards, the holdings table and the history chart each iterate the same holdings, so one permanently-unresolvable ticker produced dozens of identical Yahoo 404s per minute across Tomcat threads (GH issue #76). The miss TTL is deliberately shorter than the hit TTL — a miss is more likely to be transient (rate limiting) than a hit is to be stale, so recovery stays fast while the storm collapses to one call per ticker per 5 minutes. A cached miss does not end resolution: step 3 still runs, so an outage degrades a price's *age* rather than its existence.
 
 **Failures are remembered, not just successes.** Without step 2's negative cache, a ticker the provider cannot resolve was re-fetched on *every* read: the dashboard, the account cards, the holdings table and the history chart each iterate the same holdings, so one permanently-unresolvable ticker produced dozens of identical Yahoo 404s per minute across Tomcat threads (GH issue #76). The 60 s window is deliberately far shorter than the 900 s hit TTL — a miss is more likely to be transient (rate limiting) than a hit is to be stale, so recovery stays fast while the storm collapses to one call per ticker per minute. Batching the whole page's tickers into a single call is the other half of the same fix.
 

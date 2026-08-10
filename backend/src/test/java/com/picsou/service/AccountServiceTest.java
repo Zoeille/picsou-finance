@@ -255,6 +255,28 @@ class AccountServiceTest {
         assertThat(result).isEqualByComparingTo("1840"); // 5 × 200 + broker's 840
     }
 
+    /**
+     * The value/cost pairing for a broker-valued line. Adding its EUR value while skipping its
+     * cost basis reports a gain the exact size of the position — the -85% mismatch with the sign
+     * flipped — and dailySnapshots would write that into balance_snapshot.
+     */
+    @Test
+    void valuation_countsTheCostBasisOfABrokerValuedLine_notJustItsValue() {
+        Account account = ownedAccount();
+        AccountHolding brokerValued = AccountHolding.builder()
+            .ticker("PHYMF").quantity(new BigDecimal("10"))
+            .providerValueEur(new BigDecimal("840"))
+            .providerPnlEur(new BigDecimal("40"))   // cost basis = 840 - 40 = 800
+            .build();
+        when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(brokerValued));
+        stubQuotes("PHYMF", null);
+
+        AccountService.Valuation valuation = accountService.valuation(account);
+
+        assertThat(valuation.liveEur()).isEqualByComparingTo("840");
+        assertThat(valuation.investedEur()).isEqualByComparingTo("800");
+    }
+
     @Test
     void liveBalanceEur_cashAccount_convertsStoredBalance() {
         Account cash = Account.builder()
