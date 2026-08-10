@@ -150,6 +150,22 @@ account card (see [accounts-overview.md](./accounts-overview.md#account-card-ana
   throwing.
 - **DGFiP reuse conditions** forbid re-identification and search-engine indexing. Demo mode
   must therefore never ship real DVF records — a demo build is public by definition.
+- **Each property in the monthly refresh commits on its own.** `refreshAllForMember` is
+  deliberately *not* `@Transactional`; it drives a `TransactionTemplate` per property. The
+  per-property try/catch alone does not isolate a database failure — JPA marks the transaction
+  rollback-only when the provider raises, so a single surrounding transaction would throw
+  `UnexpectedRollbackException` at commit and discard every property that had already
+  succeeded. A test using a plain `IllegalStateException` cannot show this; the regression test
+  throws a `DataAccessException` and counts the transaction boundaries.
+- **The disclosed breakdown is capped alongside the total.** `additiveSqm` scales the
+  garage/parking/land lines down proportionally when the 60 m²-equivalent ceiling bites. It
+  used to record them at full size while capping only the total, so the "how this figure is
+  built" panel added up to more than what went into the estimate — and that disclosure is what
+  the ADR leans on to make a heuristic figure auditable.
+- **The cost-basis floor is the one place the MANUAL lock does not hold.** `withCostBasisFloor`
+  seeds the balance in `MANUAL` mode too, on the monthly job as well as a manual refresh. It is
+  intentional — the lock protects a figure the user gave, and a zero is the absence of one —
+  and it only ever lifts a zero. See `ValuationMode`'s javadoc.
 - **`lastValuedAt` is a valuation date, not a sync date.** Nothing writes `lastSyncedAt` on a
   property account — a property described but never valued has neither, and its card renders
   without a freshness line, like any other manual account.
@@ -175,9 +191,11 @@ account card (see [accounts-overview.md](./accounts-overview.md#account-card-ana
 - `PropertyValuationServiceTest` — MANUAL lock, status paths, re-indexing, per-property guard
 - `PropertyAdjustmentsTest` — direction, bounds, no double-counting of energy vs era, and
   `applyTo` reproducing the headline transform, keeping the band around the estimate in both
-  clamp directions, and passing a null bound through
+  clamp directions, and passing a null bound through; the capped breakdown reconciling with the
+  amount actually applied, and an uncapped one reported at full size
 - `PropertyValuationServiceTest` — the persisted band brackets the estimate once the
-  adjustments apply, and still does after re-indexing
+  adjustments apply, and still does after re-indexing; a `DataAccessException` on one property
+  rolls back only that property's transaction while the others commit
 - `RealEstateSummaryServiceTest` — gross/net, multiple loans, divergent property/loan shares
 - `RealEstateValuationMigrationTest` — Testcontainers; existing properties survive V66
 - `PropertyValuationCard.test.tsx` — status rendering, manual mode, method disclosure
