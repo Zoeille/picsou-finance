@@ -22,6 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -86,7 +89,6 @@ class RealEstateSummaryServiceTest {
         when(metadataRepository.findByAccountId(10L))
             .thenReturn(Optional.of(metadata(house, "300000", "24000")));
         when(debtRepository.findByLinkedAccountId(10L)).thenReturn(List.of(debt));
-        when(accessResolver.shareFor(eq(loan), eq(1L))).thenReturn(FULL);
         when(loanAmortizationService.computeRemainingBalance(eq(debt), any(LocalDate.class)))
             .thenReturn(new BigDecimal("150000"));
 
@@ -138,7 +140,6 @@ class RealEstateSummaryServiceTest {
         when(accountService.liveBalanceEur(house)).thenReturn(new BigDecimal("400000"));
         when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.empty());
         when(debtRepository.findByLinkedAccountId(10L)).thenReturn(List.of(debt));
-        when(accessResolver.shareFor(eq(loan), eq(1L))).thenReturn(new BigDecimal("50"));
         when(loanAmortizationService.computeRemainingBalance(eq(debt), any(LocalDate.class)))
             .thenReturn(new BigDecimal("150000"));
 
@@ -165,7 +166,6 @@ class RealEstateSummaryServiceTest {
         when(accountService.liveBalanceEur(house)).thenReturn(new BigDecimal("400000"));
         when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.empty());
         when(debtRepository.findByLinkedAccountId(10L)).thenReturn(List.of(mainDebt, worksDebt));
-        when(accessResolver.shareFor(any(), eq(1L))).thenReturn(FULL);
         when(loanAmortizationService.computeRemainingBalance(eq(mainDebt), any(LocalDate.class)))
             .thenReturn(new BigDecimal("150000"));
         when(loanAmortizationService.computeRemainingBalance(eq(worksDebt), any(LocalDate.class)))
@@ -186,12 +186,12 @@ class RealEstateSummaryServiceTest {
             .borrowedAmount(new BigDecimal("200000")).build();
 
         when(accessResolver.readableAccounts(1L)).thenReturn(List.of(house));
-        when(accessResolver.sharesFor(any(), eq(1L))).thenReturn(Map.of(10L, FULL));
+        // Bob's personal loan reduces the household's equity but not Alice's.
+        when(accessResolver.sharesFor(any(), eq(1L)))
+            .thenReturn(Map.of(10L, FULL, bobsLoan.getId(), BigDecimal.ZERO));
         when(accountService.liveBalanceEur(house)).thenReturn(new BigDecimal("400000"));
         when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.empty());
         when(debtRepository.findByLinkedAccountId(10L)).thenReturn(List.of(debt));
-        // Bob's personal loan reduces the household's equity but not Alice's.
-        when(accessResolver.shareFor(eq(bobsLoan), eq(1L))).thenReturn(BigDecimal.ZERO);
 
         RealEstateSummaryResponse result = service.summarize(1L);
 
@@ -213,7 +213,6 @@ class RealEstateSummaryServiceTest {
         when(accountService.liveBalanceEur(house)).thenReturn(new BigDecimal("150000"));
         when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.empty());
         when(debtRepository.findByLinkedAccountId(10L)).thenReturn(List.of(debt));
-        when(accessResolver.shareFor(eq(loan), eq(1L))).thenReturn(FULL);
         when(loanAmortizationService.computeRemainingBalance(eq(debt), any(LocalDate.class)))
             .thenReturn(new BigDecimal("180000"));
 
@@ -251,5 +250,32 @@ class RealEstateSummaryServiceTest {
         assertThat(result.grossValue()).isEqualByComparingTo("0");
         assertThat(result.netValue()).isEqualByComparingTo("0");
         assertThat(result.properties()).isEmpty();
+    }
+
+    @Test
+    void summarize_resolvesLoanSharesInOneQueryPerProperty() {
+        // loansFor runs per property, so a per-loan share lookup costs properties x loans.
+        Account house = property(10L, "400000");
+        Account main = loanAccount(20L, ALICE);
+        Account works = loanAccount(21L, ALICE);
+        Debt mainDebt = Debt.builder().account(main).linkedAccount(house).member(ALICE)
+            .borrowedAmount(new BigDecimal("200000")).build();
+        Debt worksDebt = Debt.builder().account(works).linkedAccount(house).member(ALICE)
+            .borrowedAmount(new BigDecimal("30000")).build();
+
+        when(accessResolver.readableAccounts(1L)).thenReturn(List.of(house, main, works));
+        when(accessResolver.sharesFor(any(), eq(1L)))
+            .thenReturn(Map.of(10L, FULL, 20L, FULL, 21L, FULL));
+        when(accountService.liveBalanceEur(house)).thenReturn(new BigDecimal("400000"));
+        when(metadataRepository.findByAccountId(10L)).thenReturn(Optional.empty());
+        when(debtRepository.findByLinkedAccountId(10L)).thenReturn(List.of(mainDebt, worksDebt));
+        when(loanAmortizationService.computeRemainingBalance(any(Debt.class), any(LocalDate.class)))
+            .thenReturn(new BigDecimal("100000"));
+
+        service.summarize(1L);
+
+        // One for the readable accounts, one for this property's loans -- not one per loan.
+        verify(accessResolver, times(2)).sharesFor(any(), eq(1L));
+        verify(accessResolver, never()).shareFor(any(), any());
     }
 }

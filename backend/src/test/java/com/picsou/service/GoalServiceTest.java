@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,7 +60,16 @@ class GoalServiceTest {
     void stubOwnershipShares() {
         // No fixture splits an account, so every one resolves to the owning member's 100%.
         // Tests that care about co-ownership override this.
-        lenient().when(accessResolver.shareFor(any(), any())).thenReturn(new BigDecimal("100"));
+        // Mirrors the batch resolver: every fixture account is wholly owned, so weighting is the
+        // identity and these tests keep measuring what they were written to measure.
+        lenient().when(accessResolver.sharesFor(any(), any())).thenAnswer(inv -> {
+            java.util.Collection<com.picsou.model.Account> accounts = inv.getArgument(0);
+            java.util.Map<Long, java.math.BigDecimal> shares = new java.util.HashMap<>();
+            for (com.picsou.model.Account a : accounts) {
+                shares.put(a.getId(), new java.math.BigDecimal("100"));
+            }
+            return shares;
+        });
     }
 
     @Test
@@ -110,6 +120,33 @@ class GoalServiceTest {
         assertThat(progress.monthlyNeeded()).isEqualByComparingTo(
             new BigDecimal("15000").divide(BigDecimal.valueOf(monthsLeft), 2, RoundingMode.HALF_UP));
         assertThat(progress.percentComplete()).isEqualByComparingTo("25.0000");
+    }
+
+    @Test
+    void progressCalculation_resolvesSharesInOneQuery() {
+        // toProgressResponse runs for every goal on the page, so a per-account share lookup
+        // multiplies out across the list. Two accounts, still one query.
+        Account lep = Account.builder().id(1L).name("LEP").type(AccountType.LEP)
+            .currency("EUR").currentBalance(new BigDecimal("5000")).color("#6366f1").build();
+        Account livret = Account.builder().id(2L).name("Livret").type(AccountType.SAVINGS)
+            .currency("EUR").currentBalance(new BigDecimal("3000")).color("#22c55e").build();
+        Goal goal = Goal.builder()
+            .member(GOAL_OWNER)
+            .id(1L)
+            .name("Apport immobilier")
+            .targetAmount(new BigDecimal("20000"))
+            .deadline(LocalDate.now().plusMonths(6))
+            .accounts(List.of(lep, livret))
+            .build();
+
+        when(accountService.signedLiveBalanceEur(lep)).thenReturn(new BigDecimal("5000"));
+        when(accountService.signedLiveBalanceEur(livret)).thenReturn(new BigDecimal("3000"));
+
+        GoalProgressResponse progress = goalService.toProgressResponse(goal);
+
+        assertThat(progress.currentTotal()).isEqualByComparingTo("8000");
+        verify(accessResolver, times(1)).sharesFor(any(), any());
+        verify(accessResolver, never()).shareFor(any(), any());
     }
 
     @Test

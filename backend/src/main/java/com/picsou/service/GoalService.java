@@ -137,10 +137,13 @@ public class GoalService {
         // Weighted by the goal owner's share, so a goal backed by a half-owned property
         // does not report twice the progress actually available to them.
         Long goalMemberId = goal.getMember().getId();
+        // One query for the goal's accounts rather than one each: this runs for every goal on
+        // the goals page, so the per-account form multiplies out.
+        Map<Long, BigDecimal> shares = accessResolver.sharesFor(goal.getAccounts(), goalMemberId);
         BigDecimal currentTotal = goal.getAccounts().stream()
             .map(a -> AccountAccessResolver.weigh(
                 accountService.signedLiveBalanceEur(a),
-                accessResolver.shareFor(a, goalMemberId)))
+                shares.get(a.getId())))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal target = goal.getTargetAmount();

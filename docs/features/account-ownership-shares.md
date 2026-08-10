@@ -99,6 +99,14 @@ PUT /accounts/{id}/ownership
   redistribution would be a guess about a real-world event Picsou knows nothing about.
 - **`/family/members` is admin-only.** The ownership editor fetches the roster only for
   admins — a non-admin owner edits the members already in the split.
+- **`shareFor` is for a single account, `sharesFor` for a set — never `shareFor` in a loop.**
+  `shareFor` issues one `findByAccountId` per call, so a loop turns into one round trip per
+  account; `sharesFor` answers the whole set with one `IN` clause. It matters most where the
+  loops nest: `FamilyViewService` iterates accounts *inside* a loop over every family member,
+  and `GoalService.toProgressResponse` / `RealEstateSummaryService.loansFor` run once per goal
+  and per property respectively. All four were migrated on 2026-08-10, and each carries a test
+  that verifies `sharesFor` is called once and `shareFor` not at all — nothing else fails if
+  the per-account form comes back, since the numbers are identical either way.
 - **Write guards are `requireOwner`, read guards are `requireReadable`.** Mixing them up is
   how a co-owner ends up able to rewrite someone else's net worth.
 
@@ -115,7 +123,9 @@ PUT /accounts/{id}/ownership
   trap it was written around — a `replace` that ran earlier in the same context leaves the
   owner loaded, so the association resolves to that managed instance and the proxy never
   appears; only a cold context (every HTTP request) reproduces the failure
-- `RealEstateSummaryServiceTest` — divergent property/loan shares
+- `RealEstateSummaryServiceTest` — divergent property/loan shares, and loan shares resolved in
+  one query per property
+- `FamilyViewServiceTest` / `GoalServiceTest` — shares resolved in a single batch call
 - `RealEstateValuationMigrationTest` — constraint bounds and cascade behaviour
 
 ## Links

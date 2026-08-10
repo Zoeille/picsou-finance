@@ -159,6 +159,11 @@ public class RealEstateSummaryService {
 
         BigDecimal total = BigDecimal.ZERO;
         List<LinkedLoan> lines = new ArrayList<>(debts.size());
+        // Resolved for every linked loan in one query. This method runs per property, so the
+        // per-loan form costs properties x loans round trips.
+        Map<Long, BigDecimal> loanShares = accessResolver.sharesFor(
+            debts.stream().map(Debt::getAccount).filter(java.util.Objects::nonNull).toList(),
+            memberId);
         for (Debt debt : debts) {
             Account loanAccount = debt.getAccount();
             if (loanAccount == null) {
@@ -166,7 +171,7 @@ public class RealEstateSummaryService {
             }
             // A loan the viewer holds no share of contributes nothing to their equity, even
             // though it does reduce the household's.
-            BigDecimal loanShare = accessResolver.shareFor(loanAccount, memberId);
+            BigDecimal loanShare = loanShares.getOrDefault(loanAccount.getId(), BigDecimal.ZERO);
             if (loanShare.signum() <= 0) {
                 continue;
             }
