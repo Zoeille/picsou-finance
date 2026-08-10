@@ -299,7 +299,7 @@ public class EnableBankingBankConnector implements BankConnectorPort {
      */
     static InstitutionRef parseInstitutionId(String institutionId) {
         String[] parts = institutionId.split("::");
-        String country = parts.length > 1 && !parts[1].isBlank() ? parts[1] : "FR";
+        String country = parts.length > 1 && !parts[1].isBlank() ? parts[1] : DEFAULT_COUNTRY;
         String psuType = parts.length > 2 && !parts[2].isBlank() ? parts[2] : PSU_PERSONAL;
         if (!PSU_PERSONAL.equals(psuType) && !PSU_BUSINESS.equals(psuType)) psuType = PSU_PERSONAL;
         return new InstitutionRef(parts[0], country, psuType);
