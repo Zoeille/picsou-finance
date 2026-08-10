@@ -312,8 +312,12 @@ public class TradeRepublicSyncService {
         TradeRepublicSession s = session.get();
         try {
             syncWithToken(encryption.decrypt(s.getSessionToken()), s, memberId);
-        } catch (Exception ex) {
+        } catch (SyncException ex) {
+            // Expected upstream flakiness (expired session, sidecar down) — WARN, as elsewhere.
             log.warn("Trade Republic auto-sync failed for member {}: {}", memberId, ex.getMessage());
+        } catch (RuntimeException ex) {
+            // Anything else is a bug: the message alone is "null" for an NPE, so log the trace.
+            log.error("Unexpected Trade Republic auto-sync failure for member {}", memberId, ex);
         }
     }
 

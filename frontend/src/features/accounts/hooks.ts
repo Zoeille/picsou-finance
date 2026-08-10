@@ -54,29 +54,29 @@ export function usePortfolio() {
 
       // Accounts with holdings — expand each holding as a line
       const holdingAccounts = accounts.filter(a => HOLDING_ACCOUNT_TYPES.includes(a.type))
+      // No per-account catch: dropping a failed account's holdings silently understated
+      // every total built from these lines (portfolio value, allocation, P&L) with nothing
+      // on screen saying so. A failure now rejects the query and the surfaces render their
+      // error state instead of a plausible-looking wrong number.
       const holdingResults = await Promise.all(
         holdingAccounts.map(async (account): Promise<PortfolioLine[]> => {
-          try {
-            const holdings = await accountsApi.holdings(account.id)
-            return holdings.map(h => ({
-              id: `${account.id}-${h.ticker}`,
-              name: h.name ?? h.ticker,
-              ticker: h.ticker,
-              quantity: h.quantity,
-              accountName: account.name,
-              accountType: account.type,
-              accountColor: account.color,
-              valueEur: h.currentValueEur ?? 0,
-              costBasisEur: h.costBasisEur,
-              averageBuyIn: h.averageBuyIn,
-              quoteCurrency: h.quoteCurrency ?? null,
-              pnlEur: h.pnlEur,
-              pnlPercent: h.pnlPercent,
-              priceUpdatedAt: h.priceUpdatedAt,
-            }))
-          } catch {
-            return []
-          }
+          const holdings = await accountsApi.holdings(account.id)
+          return holdings.map(h => ({
+            id: `${account.id}-${h.ticker}`,
+            name: h.name ?? h.ticker,
+            ticker: h.ticker,
+            quantity: h.quantity,
+            accountName: account.name,
+            accountType: account.type,
+            accountColor: account.color,
+            valueEur: h.currentValueEur ?? 0,
+            costBasisEur: h.costBasisEur,
+            averageBuyIn: h.averageBuyIn,
+            quoteCurrency: h.quoteCurrency ?? null,
+            pnlEur: h.pnlEur,
+            pnlPercent: h.pnlPercent,
+            priceUpdatedAt: h.priceUpdatedAt,
+          }))
         }),
       )
       lines.push(...holdingResults.flat())

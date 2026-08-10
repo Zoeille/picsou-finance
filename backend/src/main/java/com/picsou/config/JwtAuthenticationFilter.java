@@ -9,6 +9,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,6 +20,8 @@ import java.io.IOException;
 import java.util.List;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtUtil jwtUtil;
     private final AppUserRepository userRepository;
@@ -57,7 +61,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                 }
             } catch (JwtException ex) {
-                // Invalid token — continue unauthenticated
+                // Continue unauthenticated. DEBUG, not WARN: an expired access_token is the
+                // normal prelude to a refresh, so this is diagnostics rather than an incident.
+                log.debug("Rejected access_token on {} {}: {}",
+                    request.getMethod(), request.getRequestURI(), ex.getMessage());
             }
         }
 

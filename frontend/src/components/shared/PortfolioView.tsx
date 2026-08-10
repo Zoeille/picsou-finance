@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
+import { formatApiError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Search } from 'lucide-react'
 
@@ -85,7 +87,7 @@ function PortfolioItem({ line }: { line: PortfolioLine }) {
 
 export function PortfolioView() {
   const { t } = useTranslation()
-  const { data: lines, isLoading } = usePortfolio()
+  const { data: lines, isLoading, isError, error, refetch } = usePortfolio()
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('value')
 
@@ -132,6 +134,25 @@ export function PortfolioView() {
               <Skeleton key={i} className="h-16 w-full rounded-xl" />
             ))}
           </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Before the empty check: a failed load has no lines either, and "no holdings" is the
+  // one message that must never stand in for "we could not read your holdings".
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('portfolio.title')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ErrorState
+            title={t('error.crashTitle')}
+            message={formatApiError(error, t)}
+            onRetry={() => void refetch()}
+          />
         </CardContent>
       </Card>
     )

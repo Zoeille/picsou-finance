@@ -3,16 +3,17 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-const { holdings, prices } = vi.hoisted(() => ({
+const { holdings, prices, list } = vi.hoisted(() => ({
   holdings: vi.fn(),
   prices: vi.fn(),
+  list: vi.fn(),
 }))
 
 vi.mock('./api', () => ({
-  accountsApi: { holdings, prices },
+  accountsApi: { holdings, prices, list },
 }))
 
-const { useHoldingsWithLivePrices } = await import('./hooks')
+const { useHoldingsWithLivePrices, usePortfolio } = await import('./hooks')
 
 function makeWrapper() {
   const client = new QueryClient({
@@ -61,5 +62,57 @@ describe('useHoldingsWithLivePrices', () => {
       pnlEur: 50,
     })
     expect(result.current.data?.[0].pnlPercent).toBeCloseTo(35.714, 3)
+  })
+})
+
+describe('usePortfolio', () => {
+  beforeEach(() => {
+    holdings.mockReset()
+    prices.mockReset()
+    list.mockReset()
+  })
+
+  const brokerage = {
+    id: 1,
+    name: 'PEA',
+    type: 'PEA',
+    color: '#000',
+    currentBalanceEur: 1000,
+  }
+
+  it('fails the query when an account\'s holdings cannot be loaded', async () => {
+    list.mockResolvedValue([brokerage])
+    holdings.mockRejectedValue(new Error('boom'))
+    prices.mockResolvedValue({})
+
+    const { result } = renderHook(() => usePortfolio(), { wrapper: makeWrapper() })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.data).toBeUndefined()
+  })
+
+  it('keeps backend values when only the live-price call fails', async () => {
+    list.mockResolvedValue([brokerage])
+    holdings.mockResolvedValue([
+      {
+        ticker: 'AAA',
+        name: 'Fund',
+        quantity: 1,
+        averageBuyIn: 10,
+        currentPrice: 12,
+        quoteCurrency: 'EUR',
+        currentValueEur: 12,
+        costBasisEur: 10,
+        pnlEur: 2,
+        pnlPercent: 20,
+        priceUpdatedAt: '2026-07-20T08:00:00Z',
+      },
+    ])
+    prices.mockRejectedValue(new Error('price provider down'))
+
+    const { result } = renderHook(() => usePortfolio(), { wrapper: makeWrapper() })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.[0]).toMatchObject({ valueEur: 12, pnlEur: 2 })
   })
 })

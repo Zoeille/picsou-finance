@@ -1,6 +1,6 @@
 # Feature: Live Prices in Holdings
 
-> Last updated: 2026-07-21
+> Last updated: 2026-08-10
 
 ## Context
 
@@ -33,6 +33,13 @@ HoldingsTable renders with live prices
 If the prices API fails, the hook keeps the backend response. For Bourse Direct
 holdings that response can include the last reconciled broker valuation in EUR,
 even when Yahoo cannot resolve the native quote.
+
+The two failure modes are deliberately not symmetric. `usePortfolio` fetches
+holdings per account in a `Promise.all`, and a rejected holdings call fails the
+whole query: `PortfolioView` and `HoldingsCard` render `ErrorState` with
+`formatApiError` and a retry. Swallowing it per account (the previous
+`catch { return [] }`) silently dropped that account from the portfolio total,
+allocation and P&L, with a "no holdings" empty state as the only hint.
 
 ### Live-price recompute formula (single source of truth)
 
@@ -114,6 +121,7 @@ For each past date, both `total` and `invested` are read from `balance_snapshot`
 | Two separate API calls (holdings + prices) | Prices API is reusable and navigation can refresh a cached backend value | A dedicated enriched-holdings endpoint |
 | Client-side merge | Refreshes the existing currency-explicit `HoldingResponse` without another domain DTO | New dedicated endpoint returning enriched holdings |
 | Graceful degradation on price failure | Better UX than showing errors for non-critical price data | Throwing error / blocking page render |
+| Holdings failure propagates instead | A missing *price* leaves the position visible with a stale value; a missing *holdings* response removes the position from every total | Returning `[]` for the failed account |
 
 ## Gotchas / Pitfalls
 

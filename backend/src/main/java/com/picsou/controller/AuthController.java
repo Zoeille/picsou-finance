@@ -22,6 +22,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +42,8 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final AppUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -284,9 +288,11 @@ public class AuthController {
                         return ResponseEntity.ok(userPayload(user));
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (RuntimeException ex) {
                 // Falls through: an invalid/expired refresh_token doesn't necessarily mean
-                // "logged out" -- see the persistentPrincipal branch below.
+                // "logged out" -- see the persistentPrincipal branch below. Logged at DEBUG so
+                // a refresh loop can still be traced to the token that caused it.
+                log.debug("Refresh token rejected, falling through to persistent token: {}", ex.toString());
             }
         }
 

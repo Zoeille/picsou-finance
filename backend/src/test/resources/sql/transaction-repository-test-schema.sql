@@ -8,20 +8,30 @@
 -- Transaction entity maps (Hibernate includes all mapped columns in generated INSERTs
 -- regardless of what a given test cares about).
 --
--- `account` deliberately carries only `id` and `deleted_at`: this test never persists or queries
--- the Account entity through JPA (see getReference() usage in the test), only via this seed row,
--- so it never touches Account's Postgres-only `account_type` native-enum column. `deleted_at` is
--- required despite that: Account carries a class-level @SQLRestriction("deleted_at IS NULL"),
--- which Hibernate folds into the JOIN ON clause for *any* query that traverses the `account`
--- association -- including a plain `t.account.id` path in a derived query -- so the column must
--- exist even though this test never sets it (NULL, matching the restriction).
+-- `account` deliberately carries only the columns these queries actually read: this test never
+-- persists or queries the Account entity through JPA (see getReference() usage in the test), only
+-- via these seed rows, so it never touches Account's Postgres-only `account_type` native-enum
+-- column. `deleted_at` is required despite that: Account carries a class-level
+-- @SQLRestriction("deleted_at IS NULL"), which Hibernate folds into the JOIN ON clause for *any*
+-- query that traverses the `account` association -- including a plain `t.account.id` path in a
+-- derived query -- so the column must exist even though this test never sets it (NULL, matching
+-- the restriction). `is_manual` is read by the ISIN-repair queries, which must leave the rows of
+-- a synced account alone.
+
+-- Dropped first: @Sql runs this script before *each* test method while the in-memory database
+-- lives for the whole class, and DDL is not rolled back with the test transaction. Recreating
+-- from scratch also guarantees each method starts from the seed rows alone.
+DROP TABLE IF EXISTS transaction;
+DROP TABLE IF EXISTS account;
 
 CREATE TABLE account (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    is_manual  BOOLEAN NOT NULL DEFAULT TRUE,
     deleted_at TIMESTAMP
 );
 
-INSERT INTO account (id) VALUES (1);
+INSERT INTO account (id, is_manual) VALUES (1, TRUE);
+INSERT INTO account (id, is_manual) VALUES (2, FALSE);
 
 CREATE TABLE transaction (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,

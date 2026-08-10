@@ -249,8 +249,12 @@ public class CryptoExchangeSyncService {
             // rethrows, so a save here would be rolled back on the manual path and the session
             // would keep reading CONNECTED. See CryptoExchangeStatusWriter.
             markErrorWhenThisTransactionEnds(session.getId());
-            log.warn("Crypto exchange sync failed for {}: {}", session.getExchangeType(), ex.getMessage());
-            throw new SyncException("Could not sync your " + session.getExchangeType() + " account. Please try again later.");
+            // ERROR with the stack trace: nothing expected reaches this branch (SyncException is
+            // handled above), so the message alone — "null" for an NPE — left genuine bugs
+            // undiagnosable behind the generic text below.
+            log.error("Crypto exchange sync failed for {}", session.getExchangeType(), ex);
+            throw new SyncException(
+                "Could not sync your " + session.getExchangeType() + " account. Please try again later.", ex);
         }
     }
 

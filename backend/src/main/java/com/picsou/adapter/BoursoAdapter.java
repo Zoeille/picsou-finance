@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -153,11 +154,13 @@ public class BoursoAdapter implements BoursoPort {
             }
 
             List<BoursoTransaction> transactions = new ArrayList<>();
+            int skippedTransactions = 0;
             for (JsonNode t : acc.path("transactions")) {
                 LocalDate txDate;
                 try {
                     txDate = LocalDate.parse(t.path("date").asText());
-                } catch (Exception ex) {
+                } catch (DateTimeParseException ex) {
+                    skippedTransactions++;
                     continue;
                 }
                 transactions.add(new BoursoTransaction(
@@ -166,6 +169,11 @@ public class BoursoAdapter implements BoursoPort {
                     BigDecimal.valueOf(t.path("amount").asDouble(0)),
                     t.path("category").asText("")
                 ));
+            }
+
+            if (skippedTransactions > 0) {
+                log.warn("BoursoBank account {}: dropped {} transaction(s) with an unparsable date",
+                    externalId, skippedTransactions);
             }
 
             result.add(new BoursoAccountData(externalId, name, type, balance, positions, transactions));
@@ -179,6 +187,7 @@ public class BoursoAdapter implements BoursoPort {
         try {
             return AccountType.valueOf(s);
         } catch (IllegalArgumentException ex) {
+            log.warn("BoursoBank returned unknown account type '{}' — mapping it to OTHER", s);
             return AccountType.OTHER;
         }
     }

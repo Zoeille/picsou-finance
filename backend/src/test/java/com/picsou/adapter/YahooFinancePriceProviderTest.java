@@ -1,5 +1,6 @@
 package com.picsou.adapter;
 
+import com.picsou.port.SymbolCatalogPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
@@ -328,6 +329,94 @@ class YahooFinancePriceProviderTest {
         Map<String, BigDecimal> prices = provider.getPricesEur(Set.of("AIRBAL 14.5 08/14/29 REGS"));
 
         assertThat(prices).isEmpty();
+        assertThat(calls.get()).isZero();
+    }
+
+    // ─── hasQuote / searchSymbols: is this symbol one Yahoo carries? ────────────
+    // Used by OpenFigiIsinConverter to verify the listing it derived from an ISIN before that
+    // symbol is persisted on a holding and every later valuation depends on it (GH issues #74, #78).
+
+    private static final String SEARCH_IE000BI8OT95 = """
+            {"quotes":[
+              {"symbol":"MWRD.PA","shortname":"Amundi Core MSCI World UCITS ET","exchange":"PAR",
+               "quoteType":"ETF","isYahooFinance":true},
+              {"symbol":"IE000BI8OT95.SG","shortname":"Amundi MSCI World UCITS ETF - U",
+               "exchange":"STU","quoteType":"MUTUALFUND","isYahooFinance":true}],"count":2}""";
+
+    @Test
+    void hasQuote_isTrue_whenYahooReturnsAPrice_andNeedsNoFxCall() {
+        AtomicInteger calls = new AtomicInteger();
+        var provider = providerWith(url -> url.contains("/AAPL") ? AAPL_USD : null, calls);
+
+        assertThat(provider.hasQuote("AAPL")).isTrue();
+        // The probe asks "does this symbol exist", not "what is it worth": an unavailable EUR rate
+        // says nothing about the symbol, and a second call per candidate would double the cost.
+        assertThat(calls.get()).isEqualTo(1);
+    }
+
+    @Test
+    void hasQuote_isFalse_forADelistedSymbol() {
+        // MWRDF: "No data found, symbol may be delisted" — a 404 from the chart endpoint.
+        var provider = providerWith(url -> null, null);
+
+        assertThat(provider.hasQuote("MWRDF")).isFalse();
+    }
+
+    @Test
+    void hasQuote_isFalse_withoutCallingYahoo_forAnIsinOrNonSymbol() {
+        AtomicInteger calls = new AtomicInteger();
+        var provider = providerWith(url -> null, calls);
+
+        assertThat(provider.hasQuote("IE000BI8OT95")).isFalse();
+        assertThat(provider.hasQuote("AIRBAL 14.5 08/14/29 REGS")).isFalse();
+        assertThat(provider.hasQuote(null)).isFalse();
+
+        assertThat(calls.get()).isZero();
+    }
+
+    @Test
+    void searchSymbols_returnsYahoosOwnSymbolsForAnIsin_inItsRelevanceOrder() {
+        var provider = providerWith(url -> url.contains("/v1/finance/search") ? SEARCH_IE000BI8OT95 : null, null);
+
+        List<SymbolCatalogPort.SymbolMatch> matches = provider.searchSymbols("IE000BI8OT95");
+
+        assertThat(matches).extracting(SymbolCatalogPort.SymbolMatch::symbol)
+            .containsExactly("MWRD.PA", "IE000BI8OT95.SG");
+        assertThat(matches.get(0).name()).isEqualTo("Amundi Core MSCI World UCITS ET");
+    }
+
+    @Test
+    void searchSymbols_prefersTheLongName_whenYahooProvidesOne() {
+        var provider = providerWith(url -> """
+            {"quotes":[{"symbol":"MC.PA","shortname":"LVMH","longname":"LVMH Moet Hennessy Louis Vuitton",
+              "isYahooFinance":true}]}""", null);
+
+        assertThat(provider.searchSymbols("FR0000121014").get(0).name())
+            .isEqualTo("LVMH Moet Hennessy Louis Vuitton");
+    }
+
+    @Test
+    void searchSymbols_dropsEntriesYahooDoesNotQuoteItself() {
+        // isYahooFinance=false marks a private company / research entity with no quote page;
+        // requesting it would be one guaranteed 404 per candidate.
+        var provider = providerWith(url -> """
+            {"quotes":[{"symbol":"PRIVATECO","shortname":"Some Private Company","isYahooFinance":false},
+                       {"symbol":"MWRD.PA","shortname":"Amundi Core MSCI World","isYahooFinance":true}]}""",
+            null);
+
+        assertThat(provider.searchSymbols("IE000BI8OT95"))
+            .extracting(SymbolCatalogPort.SymbolMatch::symbol)
+            .containsExactly("MWRD.PA");
+    }
+
+    @Test
+    void searchSymbols_returnsEmpty_whenYahooKnowsNothingOrFails() {
+        assertThat(providerWith(url -> """
+            {"explains":[],"count":0,"quotes":[]}""", null).searchSymbols("XX0000000000")).isEmpty();
+        assertThat(providerWith(url -> null, null).searchSymbols("IE000BI8OT95")).isEmpty();
+
+        AtomicInteger calls = new AtomicInteger();
+        assertThat(providerWith(url -> null, calls).searchSymbols("  ")).isEmpty();
         assertThat(calls.get()).isZero();
     }
 }

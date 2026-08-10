@@ -206,8 +206,12 @@ public class BoursoSyncService {
 
         try {
             syncWithCookies(encryption.decrypt(s.getSessionCookies()), memberId);
-        } catch (Exception ex) {
+        } catch (SyncException ex) {
+            // Expected upstream flakiness (expired cookies, sidecar down) — WARN, as elsewhere.
             log.warn("BoursoBank auto-sync failed for member {}: {}", memberId, ex.getMessage());
+        } catch (RuntimeException ex) {
+            // Anything else is a bug: the message alone is "null" for an NPE, so log the trace.
+            log.error("Unexpected BoursoBank auto-sync failure for member {}", memberId, ex);
         }
     }
 

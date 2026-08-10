@@ -17,6 +17,7 @@ import reactor.netty.http.client.HttpClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -219,7 +220,8 @@ public class BoursoramaCompositionProvider implements EtfCompositionProvider {
         if (!m.find()) return null;
         try {
             return LocalDate.of(Integer.parseInt(m.group(3)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(1)));
-        } catch (Exception ex) {
+        } catch (DateTimeException | NumberFormatException ex) {
+            log.debug("Boursorama composition as-of date '{}' is not a valid date", m.group(0));
             return null;
         }
     }

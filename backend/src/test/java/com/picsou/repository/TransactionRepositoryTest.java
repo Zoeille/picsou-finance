@@ -87,4 +87,54 @@ class TransactionRepositoryTest {
         assertThat(first).extracting(Transaction::getId).containsExactly(sell.getId(), buy.getId());
         assertThat(second).extracting(Transaction::getId).containsExactly(sell.getId(), buy.getId());
     }
+
+    // ─── ISIN repair queries ────────────────────────────────────────────────────
+    // A ticker that is still a raw ISIN is one an earlier resolution failed to convert; it can
+    // never be priced, so the whole position drops out of its account's value (GH issue #74).
+    // What must not be swept up: rows a provider owns, and legitimate 12-character symbols.
+
+    private Transaction row(long accountId, String ticker, boolean manual) {
+        return transactionRepository.save(Transaction.builder()
+            .account(testEntityManager.getEntityManager().getReference(Account.class, accountId))
+            .date(LocalDate.of(2026, 7, 1))
+            .description(ticker)
+            .amount(BigDecimal.ZERO)
+            .txType(TransactionType.BUY)
+            .ticker(ticker)
+            .isManual(manual)
+            .quantity(BigDecimal.ONE)
+            .build());
+    }
+
+    @Test
+    void isinLengthTickers_areScopedToManualRowsOfManualAccounts() {
+        row(1L, "IE000BI8OT95", true);
+        row(1L, "MWRD.PA", true);           // already resolved
+        row(1L, "123456789012", true);      // 12 chars but not an ISIN — the caller's shape check
+        row(1L, "LU1681043599", false);     // synced row: its provider re-resolves on each sync
+        row(2L, "IE00B4L5Y983", true);      // synced account: same reason
+
+        testEntityManager.flush();
+        testEntityManager.clear();
+
+        assertThat(transactionRepository.findManualTransactionsWithIsinLengthTicker())
+            .extracting(Transaction::getTicker)
+            // "123456789012" comes back on purpose: LENGTH is all the database can check, and
+            // OpenFigiIsinConverter.isIsin() is what rejects it in the caller.
+            .containsExactlyInAnyOrder("IE000BI8OT95", "123456789012");
+    }
+
+    @Test
+    void manualAccountIds_areFoundByTheTickersAboutToBeRewritten() {
+        row(1L, "IE000BI8OT95", true);
+        row(1L, "IE000BI8OT95", true);   // same instrument, two buys — one account, not two
+        row(2L, "IE000BI8OT95", true);   // synced account: never recomputed from transactions
+
+        testEntityManager.flush();
+        testEntityManager.clear();
+
+        assertThat(transactionRepository.findManualAccountIdsByTickerIn(List.of("IE000BI8OT95")))
+            .containsExactly(1L);
+        assertThat(transactionRepository.findManualAccountIdsByTickerIn(List.of("MWRD.PA"))).isEmpty();
+    }
 }

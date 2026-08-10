@@ -114,6 +114,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   locale registry (`SUPPORTED_LOCALES`); selectors and `Intl` formatting derive
   from it (#32).
 - **Build version surfaced** in Settings → About and `/actuator/info`.
+- **More logos on account cards.** Trade Republic accounts now carry the broker's
+  mark, and on-chain wallets — whose provider is a bare ticker, so no provider
+  logo can match — show a blockchain mark by default. A wallet held on a Ledger
+  can be switched to the Ledger logo from the account form, next to the color
+  picker; the choice is stored on the account, so it follows every device and
+  family member. Existing wallets are backfilled by a migration.
+  See [feature notes](docs/features/bank-logos.md).
 
 ### Changed
 
@@ -144,6 +151,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A PEA held through ETFs could display 0 €, graph included.** Picsou asked OpenFIGI
+  which listings an ISIN maps to and picked one by exchange priority — but OpenFIGI
+  returns every listing of an instrument and knows nothing about which one Yahoo quotes,
+  and no ordering predicts it: `IE000BI8OT95` (Amundi Core MSCI World) resolved to a US
+  OTC ticker Yahoo has delisted, while two other Irish ETFs need exactly that US OTC
+  listing to be priced at all. A holding that cannot be priced is excluded from its
+  account's total, so an account whose every line resolved that way was worth nothing —
+  which is what a PEA of UCITS ETFs, all domiciled in Ireland or Luxembourg, looks like.
+  The pick is now verified against Yahoo, and when it has no quote, Yahoo's own search
+  for the ISIN decides; a pick is only ever replaced by a symbol that actually quotes, so
+  a rate-limited Yahoo can never downgrade a working one. Positions already stored with a
+  raw ISIN as their ticker — what an OpenFIGI outage or its 25 requests/min keyless limit
+  leaves behind, and which nothing ever revisited — are re-resolved once at startup.
+  See [feature notes](docs/features/ISIN_TO_TICKER_CONVERSION.md) and the
+  [ADR](docs/decisions/2026-08-10-yahoo-verified-isin-tickers.md).
 - **Business-oriented banks never appeared in the bank search.** Picsou asked
   Enable Banking only for retail (`personal`) institutions, so BaaS and
   professional banks — Swan among them — were invisible in the picker even

@@ -225,6 +225,25 @@ class CryptoExchangeSyncServiceTest {
     }
 
     @Test
+    void sync_keepsTheOriginalCauseWhenWrappingAnUnexpectedAdapterFailure() {
+        // The user-facing text is deliberately generic, so the cause is the only thing left that
+        // says what actually broke. Dropping it turned every bug in the sync path into an
+        // untraceable "please try again later".
+        CryptoExchangePort adapter = singleKeyAdapter();
+        CryptoExchangeSession session = session(ExchangeType.MERIA, "enc:" + KEY, null);
+        when(sessionRepository.findByIdAndMemberId(7L, MEMBER_ID)).thenReturn(Optional.of(session));
+        when(encryption.decrypt("enc:" + KEY)).thenReturn(KEY);
+        when(encryption.decrypt(null)).thenReturn(null);
+        IllegalStateException boom = new IllegalStateException("connection pool exhausted");
+        when(adapter.fetchPositions(KEY, null)).thenThrow(boom);
+
+        assertThatThrownBy(() -> serviceWith(adapter).sync(7L, MEMBER_ID))
+            .isInstanceOf(SyncException.class)
+            .hasMessageContaining("Please try again later")
+            .hasCause(boom);
+    }
+
+    @Test
     void sync_marksTheSessionErrorAndLeavesTheAccountUntouchedWhenTheAdapterFails() {
         // The all-or-nothing contract seen from the service: a failed read must not reach
         // upsertHolding or upsertSnapshot, or it would write a shrunken balance into history.

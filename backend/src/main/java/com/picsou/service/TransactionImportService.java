@@ -14,7 +14,6 @@ import com.picsou.imports.csv.CsvReader;
 import com.picsou.imports.csv.CsvValueParser;
 import com.picsou.imports.csv.DecimalStyle;
 import com.picsou.model.Account;
-import com.picsou.model.AccountType;
 import com.picsou.model.Transaction;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.TransactionRepository;
@@ -32,7 +31,6 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -48,9 +46,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TransactionImportService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionImportService.class);
-
-    private static final Set<AccountType> INVESTMENT_TYPES =
-        Set.of(AccountType.PEA, AccountType.COMPTE_TITRES, AccountType.CRYPTO);
 
     private static final int SAMPLE_ROWS = 15;
 
@@ -142,14 +137,14 @@ public class TransactionImportService {
     private Account getInvestmentAccount(Long accountId, Long memberId) {
         Account account = accountRepository.findByIdAndMemberId(accountId, memberId)
             .orElseThrow(() -> ResourceNotFoundException.account(accountId));
-        if (!INVESTMENT_TYPES.contains(account.getType())) {
+        if (!account.getType().isInvestment()) {
             throw new IllegalArgumentException(
                 "CSV transaction import is only available for investment accounts (PEA, CTO, crypto)");
         }
         return account;
     }
 
-    private static String readContent(MultipartFile file) {
+    private String readContent(MultipartFile file) {
         try {
             String content = new String(file.getBytes(), StandardCharsets.UTF_8);
             if (content.isBlank()) {
@@ -157,7 +152,10 @@ public class TransactionImportService {
             }
             return content;
         } catch (IOException ex) {
-            throw new IllegalArgumentException("Could not read the uploaded file");
+            // The 400 stays deliberately vague; the cause is what tells an operator whether the
+            // upload was truncated or the temp store is broken.
+            log.warn("Could not read uploaded transaction file '{}'", file.getOriginalFilename(), ex);
+            throw new IllegalArgumentException("Could not read the uploaded file", ex);
         }
     }
 
@@ -169,8 +167,8 @@ public class TransactionImportService {
         if (dto != null && dto.decimal() != null) {
             try {
                 decimal = DecimalStyle.valueOf(dto.decimal().trim().toUpperCase());
-            } catch (IllegalArgumentException ignored) {
-                // keep the DOT default
+            } catch (IllegalArgumentException ex) {
+                log.warn("Unknown CSV decimal style '{}' — falling back to DOT", dto.decimal());
             }
         }
 
@@ -179,7 +177,7 @@ public class TransactionImportService {
         try {
             DateTimeFormatter.ofPattern(dateFormat);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid date format pattern '" + dateFormat + "'");
+            throw new IllegalArgumentException("Invalid date format pattern '" + dateFormat + "'", ex);
         }
         return new CsvDialect(delimiter, decimal, dateFormat);
     }

@@ -510,6 +510,34 @@ class WalletSyncServiceTest {
         // No ticker on the account: the balance is already EUR, so a ticker here would
         // make liveBalanceEur convert it a second time.
         assertThat(account.getTicker()).isNull();
+        // provider is the native ticker, so the frontend's provider -> logo map can never
+        // match a wallet. This key is the only thing that gives it one (V75 backfilled the
+        // wallets that predate it).
+        assertThat(account.getLogoKey()).isEqualTo(WalletSyncService.DEFAULT_LOGO_KEY);
+    }
+
+    @Test
+    void sync_keepsTheLogoAUserPicked_whenTheAccountAlreadyExists() {
+        // resolveAccount refreshes only balance/lastSyncedAt/ticker on an account it finds --
+        // re-seeding the default here would drag every Ledger back to the generic mark on the
+        // next scheduled sync, silently and daily.
+        WalletAddress wallet = wallet(1L, Chain.EVM, "0xabc");
+        when(walletRepository.findByIdAndMemberId(1L, MEMBER_ID)).thenReturn(Optional.of(wallet));
+
+        WalletPort adapter = mock(WalletPort.class);
+        when(adapter.chain()).thenReturn(Chain.EVM);
+        when(adapter.fetchBalances(any())).thenReturn(List.of(new WalletBalance("ETH", BigDecimal.ONE)));
+        when(priceService.refreshPrices(any())).thenReturn(Map.of("ETH", new BigDecimal("2000")));
+        Account existing = Account.builder().id(100L).logoKey("ledger").build();
+        when(accountRepository.findByExternalAccountIdAndMemberId("wallet_evm_1", MEMBER_ID))
+            .thenReturn(Optional.of(existing));
+        when(accountRepository.save(any())).thenReturn(existing);
+
+        serviceWith(adapter).sync(1L, MEMBER_ID);
+
+        ArgumentCaptor<Account> saved = ArgumentCaptor.forClass(Account.class);
+        verify(accountRepository).save(saved.capture());
+        assertThat(saved.getValue().getLogoKey()).isEqualTo("ledger");
     }
 
     @Test

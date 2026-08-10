@@ -22,6 +22,8 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ErrorState } from '@/components/shared/ErrorState'
+import { formatApiError } from '@/lib/errors'
 import { HoldingDetailModal } from '@/components/shared/HoldingDetailModal'
 import type { Account } from '@/types/api'
 
@@ -93,7 +95,7 @@ function HoldingsItem({ line, onClick }: { line: PortfolioLine; onClick: () => v
 
 export function HoldingsCard() {
   const { t } = useTranslation()
-  const { data: lines, isLoading } = usePortfolio()
+  const { data: lines, isLoading, isError, error, refetch } = usePortfolio()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterType>('all')
   const [selectedLine, setSelectedLine] = useState<PortfolioLine | null>(null)
@@ -135,6 +137,25 @@ export function HoldingsCard() {
               <Skeleton key={i} className="h-16 w-full rounded-xl" />
             ))}
           </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Rendered rather than hidden: an empty dashboard card reads as "nothing to show",
+  // which is exactly the wrong conclusion when the holdings could not be loaded.
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('dashboard.holdings')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ErrorState
+            title={t('error.crashTitle')}
+            message={formatApiError(error, t)}
+            onRetry={() => void refetch()}
+          />
         </CardContent>
       </Card>
     )

@@ -108,6 +108,32 @@ not be parsed.
   `422` as defense-in-depth. The business rule still holds — this is a technical, not a
   business, exception. See [`docs/features/crypto-tracking.md`](../features/crypto-tracking.md).
 
+## Swallowing rules (backend)
+
+A `catch` that neither rethrows nor logs is a bug unless the failure is *expected
+and irrelevant* (a POSIX `chmod` on Windows, a non-numeric cell while sniffing a
+CSV header). Everything else follows two rules:
+
+- **Keep the cause.** Wrapping (`SyncException`, `MfaException`,
+  `IllegalArgumentException`) always passes the original exception as the cause.
+  The user-facing message is deliberately generic, so the cause is the only
+  remaining record of what actually broke.
+- **Log at the level the failure deserves.** Expected upstream flakiness →
+  `log.warn` with the message. Anything that reaches a `catch (Exception |
+  RuntimeException)` fallback is a bug → `log.error(msg, ex)` *with the
+  exception object*, never `ex.getMessage()` alone (which prints `null` for an
+  NPE). Auto-sync entry points (`resyncIfSessionActive`) split the two: a
+  `SyncException` is WARN, any other `RuntimeException` is ERROR with a trace.
+
+## Swallowing rules (frontend)
+
+Degrade only when the degraded state is *honest*: a failed live-price call keeps
+the backend prices (values stay right, only freshness is lost), a failed
+clipboard write leaves text the user can select. Never degrade in a way that
+turns missing data into a plausible number — a failed holdings fetch must reject
+its query so the surface renders `ErrorState`, not a portfolio total that quietly
+omits an account.
+
 ## Frontend display
 
 All user-facing error strings derived from an Axios error MUST go through

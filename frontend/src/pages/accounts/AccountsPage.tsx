@@ -68,6 +68,7 @@ type AccountFormData = {
   isManual: boolean
   color: string
   ticker?: string
+  logoKey?: string
   borrowedAmount?: number
   interestRatePct?: number
   monthlyPayment?: number
@@ -155,6 +156,7 @@ export function AccountsPage() {
       color: meta.color,
       ticker: null,
       logoUrl: null,
+      logoKey: null,
       createdAt: '',
     }))
   }, [accounts, filter, t])
@@ -237,6 +239,9 @@ export function AccountsPage() {
       isManual: data.isManual,
       color: data.color,
       ticker: data.ticker || undefined,
+      // Empty rather than absent for every account without a logo choice; the backend keeps
+      // whatever it already stores when this is undefined.
+      logoKey: data.logoKey || undefined,
     }
     await updateAccount.mutateAsync({ id: editingAccount.id, data: request })
     if (data.type === 'LOAN' && data.borrowedAmount && data.borrowedAmount > 0) {
@@ -279,6 +284,7 @@ export function AccountsPage() {
       isManual: editingAccount.isManual,
       color: editingAccount.color,
       ticker: editingAccount.ticker ?? '',
+      logoKey: editingAccount.logoKey ?? '',
       ...(debt
         ? {
             borrowedAmount: debt.borrowedAmount,

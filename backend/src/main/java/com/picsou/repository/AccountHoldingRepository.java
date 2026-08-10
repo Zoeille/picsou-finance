@@ -24,6 +24,17 @@ public interface AccountHoldingRepository extends JpaRepository<AccountHolding, 
     void deleteByAccountIdAndTickerNotIn(Long accountId, Collection<String> tickers);
 
     /**
+     * Drops the holdings of {@code accountIds} that are keyed by one of {@code tickers}.
+     *
+     * <p>For the ISIN repair pass: {@code HoldingComputeService.recomputeHoldings} rebuilds a
+     * holding for every ticker its transactions mention, but leaves alone one whose ticker they no
+     * longer mention at all — deliberately, since a synced account owns holdings no transaction
+     * backs. Renaming a ticker makes the old key exactly that kind of orphan, so the pass that
+     * renames it is the one that has to remove it.
+     */
+    void deleteByAccountIdInAndTickerIn(Collection<Long> accountIds, Collection<String> tickers);
+
+    /**
      * Every ticker held in a <em>live</em> account.
      *
      * <p>The join and the {@code deletedAt} filter are load-bearing: deleting an account only

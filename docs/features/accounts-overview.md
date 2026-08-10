@@ -15,7 +15,7 @@ rhythm whatever the asset:
 
 | Line | Bank / broker / crypto account | Property (`REAL_ESTATE`) |
 |---|---|---|
-| Mark | connector logo, bundled brand asset, or color circle — see [bank-logos.md](./bank-logos.md) | the property-kind glyph on a tint of the account color |
+| Mark | wallet logo key, connector logo, bundled brand asset, or color circle — see [bank-logos.md](./bank-logos.md) | the property-kind glyph on a tint of the account color |
 | Name | `name` + type badge + co-ownership share | same |
 | Subtitle | `provider` | property kind and city, joined by ` · ` |
 | Balance | `currentBalanceEur` (negated and red for a `LOAN`) | same |

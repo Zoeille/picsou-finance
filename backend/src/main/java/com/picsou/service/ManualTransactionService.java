@@ -5,7 +5,6 @@ import com.picsou.dto.TransactionResponse;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.finary.FinaryPersistenceHelper;
 import com.picsou.model.Account;
-import com.picsou.model.AccountType;
 import com.picsou.model.Transaction;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.TransactionRepository;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -25,9 +23,6 @@ public class ManualTransactionService {
     private final HoldingComputeService holdingComputeService;
     private final FinaryPersistenceHelper finaryPersistenceHelper;
     private final InstrumentFieldResolver instrumentFieldResolver;
-
-    private static final Set<AccountType> INVESTMENT_TYPES =
-        Set.of(AccountType.PEA, AccountType.COMPTE_TITRES, AccountType.CRYPTO);
 
     @Transactional
     public TransactionResponse addTransaction(Long accountId, Long memberId, TransactionRequest req) {
@@ -113,7 +108,7 @@ public class ManualTransactionService {
      * provider-written snapshots.
      */
     private void recomputeDerivedState(Account account) {
-        if (INVESTMENT_TYPES.contains(account.getType())) {
+        if (account.getType().isInvestment()) {
             holdingComputeService.recomputeHoldings(account);
         } else if (account.isManual()) {
             recomputeCashBalance(account);
