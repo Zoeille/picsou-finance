@@ -12,15 +12,30 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 public class PriceService {
 
     private static final Logger log = LoggerFactory.getLogger(PriceService.class);
     private static final long CACHE_TTL_SECONDS = 900; // 15 minutes
-    private static final long MISS_CACHE_TTL_SECONDS = 300; // 5 minutes
+
+    /**
+     * How stale a {@code price_snapshot} row may be before it stops being an acceptable answer.
+     * A day-old crypto price is a slightly wrong number; a month-old one is fiction, and would
+     * be worse than the honest "unknown" it replaces.
+     */
+    private static final int MAX_FALLBACK_AGE_DAYS = 7;
+
+    /**
+     * The longest hole a recorded history may contain before the backfill considers it incomplete.
+     * Sized for closed markets, not for outages: a weekend is two days, and an Easter or Christmas
+     * week can reach five.
+     */
+    private static final int MAX_HISTORY_GAP_DAYS = 7;
 
     private final CoinGeckoPriceProvider coinGecko;
     private final YahooFinancePriceProvider yahoo;
@@ -37,40 +52,252 @@ public class PriceService {
     }
 
     /**
+     * A EUR price together with how current it is.
+     *
+     * @param price the EUR price, never null
+     * @param asOf  the day the price is for — today for a live quote, the snapshot's date for a
+     *              fallback
+     * @param live  true when the number came from the provider (or its 15-minute cache), false
+     *              when it is the last price we ever managed to record
+     */
+    public record Quote(BigDecimal price, LocalDate asOf, boolean live) {}
+
+    /**
      * Returns EUR price for the given ticker.
      * Returns BigDecimal.ONE if ticker is "EUR" (no conversion needed).
-     * Returns null if price unavailable.
+     * Returns null if no price is available at all — not even a recent recorded one.
      */
     public BigDecimal getPriceEur(String ticker) {
+        Quote quote = getQuote(ticker);
+        return quote == null ? null : quote.price();
+    }
+
+    /**
+     * Like {@link #getPriceEur}, for a ticker known to be crypto: an asset CoinGecko doesn't map
+     * returns {@code null} instead of being valued at the share price of the equity trading under
+     * the same symbol. See {@link #refreshCryptoPrices}.
+     */
+    public BigDecimal getCryptoPriceEur(String ticker) {
+        Quote quote = getCryptoQuote(ticker);
+        return quote == null ? null : quote.price();
+    }
+
+    /** {@link #getPriceEur} with the freshness attached. Null when nothing can be resolved. */
+    public Quote getQuote(String ticker) {
+        return singleQuote(ticker, false);
+    }
+
+    /** {@link #getCryptoPriceEur} with the freshness attached. Null when nothing can be resolved. */
+    public Quote getCryptoQuote(String ticker) {
+        return singleQuote(ticker, true);
+    }
+
+    /** Resolve a whole set at once — one provider round-trip instead of one per ticker. */
+    public Map<String, Quote> getQuotes(Set<String> tickers) {
+        return resolve(tickers, false);
+    }
+
+    /** {@link #getQuotes} restricted to CoinGecko, never falling through to Yahoo Finance. */
+    public Map<String, Quote> getCryptoQuotes(Set<String> tickers) {
+        return resolve(tickers, true);
+    }
+
+    private Quote singleQuote(String ticker, boolean cryptoOnly) {
         if (ticker == null || ticker.isBlank() || "EUR".equalsIgnoreCase(ticker)) {
-            return BigDecimal.ONE;
+            return new Quote(BigDecimal.ONE, LocalDate.now(), true);
+        }
+        return resolve(Set.of(ticker), cryptoOnly).get(ticker.toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * Resolves EUR prices for {@code tickers}, in order: the in-memory cache, then one batched
+     * provider call for whatever is left, then the last recorded {@code price_snapshot}.
+     *
+     * <p>The third step is what keeps a rate-limited morning from blanking the interface. Every
+     * priced ticker already has a daily row in {@code price_snapshot}, so a provider outage now
+     * degrades the number's <em>age</em> rather than its existence — and the callers that used
+     * to drop an unpriced asset from a total (and from its daily snapshot) get something to
+     * value it with. A tickers absent from that table too — a coin with no CoinGecko mapping,
+     * a currency we never priced — still resolves to nothing, which callers must keep handling.
+     *
+     * <p>{@code cryptoOnly} keeps the crypto side away from both Yahoo Finance <em>and</em> the
+     * snapshot table: the fallback is keyed by ticker alone, exactly like the cache, so an
+     * unmapped symbol must never be allowed to read a row that a stock of the same name wrote.
+     */
+    private Map<String, Quote> resolve(Set<String> tickers, boolean cryptoOnly) {
+        if (tickers.isEmpty()) return Map.of();
+
+        LocalDate today = LocalDate.now();
+        Map<String, Quote> resolved = new HashMap<>();
+        Set<String> pending = new TreeSet<>();
+        Set<String> missCached = new TreeSet<>();
+
+        for (String ticker : tickers) {
+            if (ticker == null || ticker.isBlank()) continue;
+            String upper = ticker.toUpperCase(Locale.ROOT);
+
+            if ("EUR".equals(upper)) {
+                resolved.put(upper, new Quote(BigDecimal.ONE, today, true));
+                continue;
+            }
+            if (cryptoOnly && !coinGecko.supports(upper)) {
+                continue;
+            }
+            CachedPrice cached = priceCache.get(upper);
+            if (cached != null && !cached.isExpired() && cached.price() != null) {
+                resolved.put(upper, new Quote(cached.price(), today, true));
+                continue;
+            }
+            // A cached entry with no price is a remembered miss: the provider was asked
+            // recently and had nothing. Skip the network -- that is what the shorter
+            // MISS_CACHE_TTL_SECONDS buys -- and go straight to the recorded fallback.
+            if (cached != null && !cached.isExpired()) {
+                missCached.add(upper);
+            }
+            pending.add(upper);
         }
 
-        String upper = ticker.toUpperCase(Locale.ROOT);
+        if (pending.isEmpty()) return resolved;
 
-        // Check cache
-        CachedPrice cached = priceCache.get(upper);
-        if (cached != null && !cached.isExpired()) {
-            return cached.price();
+        Set<String> fetchable = pending.stream()
+            .filter(t -> !missCached.contains(t))
+            .collect(Collectors.toCollection(TreeSet::new));
+
+        if (!fetchable.isEmpty()) {
+            Map<String, BigDecimal> live = fetchLive(fetchable, cryptoOnly);
+            Instant fetchedAt = Instant.now();
+            for (String ticker : fetchable) {
+                BigDecimal price = live.get(ticker);
+                // Misses are cached too: that null entry *is* the negative cache, and it
+                // expires on its own shorter TTL.
+                priceCache.put(ticker, new CachedPrice(price, fetchedAt));
+                if (price != null) {
+                    resolved.put(ticker, new Quote(price, today, true));
+                }
+            }
         }
 
-        // Fetch from appropriate provider
-        Set<String> singleTicker = Set.of(upper);
-        Map<String, BigDecimal> prices;
+        Set<String> unresolved = pending.stream()
+            .filter(t -> !resolved.containsKey(t))
+            .collect(Collectors.toCollection(TreeSet::new));
+        if (unresolved.isEmpty()) return resolved;
 
-        if (coinGecko.supports(upper)) {
-            prices = coinGecko.getPricesEur(singleTicker);
-        } else {
-            prices = yahoo.getPricesEur(singleTicker);
+        Map<String, PriceSnapshot> lastKnown = lastKnownPrices(unresolved, today);
+        lastKnown.forEach((ticker, snapshot) ->
+            resolved.put(ticker, new Quote(snapshot.getPriceEur(), snapshot.getDate(), false)));
+
+        // Only trace the attempts that actually reached out: the negative cache means the same
+        // outage would otherwise log on every page render for as long as it lasts.
+        Set<String> tried = fetchable.stream()
+            .filter(t -> !resolved.containsKey(t) || !resolved.get(t).live())
+            .collect(Collectors.toCollection(TreeSet::new));
+        if (!tried.isEmpty()) {
+            Set<String> stale = tried.stream().filter(lastKnown::containsKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+            Set<String> unknown = tried.stream().filter(t -> !lastKnown.containsKey(t))
+                .collect(Collectors.toCollection(TreeSet::new));
+            if (!stale.isEmpty()) {
+                log.warn("No live price for {} -- falling back to the last recorded one ({})",
+                    stale, stale.stream().map(t -> t + "=" + lastKnown.get(t).getDate()).toList());
+            }
+            if (!unknown.isEmpty()) {
+                log.warn("No price at all for {} -- not from the provider, and nothing recorded "
+                    + "in the last {} days", unknown, MAX_FALLBACK_AGE_DAYS);
+            }
         }
 
-        BigDecimal price = prices.get(upper);
-        priceCache.put(upper, new CachedPrice(price, Instant.now()));
-        return price;
+        return resolved;
+    }
+
+    /** One batched provider call, routed the same way {@link #refreshPrices} routes. */
+    private Map<String, BigDecimal> fetchLive(Set<String> tickers, boolean cryptoOnly) {
+        Set<String> crypto = tickers.stream().filter(coinGecko::supports)
+            .collect(Collectors.toCollection(TreeSet::new));
+        Set<String> stocks = cryptoOnly ? Set.of() : tickers.stream()
+            .filter(t -> !coinGecko.supports(t))
+            .collect(Collectors.toCollection(TreeSet::new));
+
+        Map<String, BigDecimal> live = new HashMap<>();
+        if (!crypto.isEmpty()) live.putAll(coinGecko.getPricesEur(crypto));
+        if (!stocks.isEmpty()) live.putAll(yahoo.getPricesEur(stocks));
+        return live;
+    }
+
+    /**
+     * The most recent {@code price_snapshot} per ticker within {@link #MAX_FALLBACK_AGE_DAYS},
+     * in one query. The reduction is order-independent on purpose — relying on the query's
+     * {@code ORDER BY} would make the fallback silently pick the wrong row if that clause were
+     * ever edited.
+     */
+    private Map<String, PriceSnapshot> lastKnownPrices(Set<String> tickers, LocalDate today) {
+        Map<String, PriceSnapshot> latest = new HashMap<>();
+        for (PriceSnapshot snapshot : priceSnapshotRepository.findRecentByTickers(
+            tickers, today.minusDays(MAX_FALLBACK_AGE_DAYS), today)) {
+            latest.merge(snapshot.getTicker(), snapshot,
+                (a, b) -> a.getDate().isAfter(b.getDate()) ? a : b);
+        }
+        return latest;
+    }
+
+    /**
+     * Bulk fetch and refresh cache for tickers known to be crypto.
+     *
+     * <p>Same as {@link #refreshPrices} except that a ticker CoinGecko doesn't know is left
+     * <em>unpriced</em> instead of being handed to Yahoo Finance. That fallback is right for a
+     * mixed portfolio but wrong for an exchange or wallet: dozens of coins share a symbol with a
+     * listed equity (SUI, ATOM, TIA…), so an unmapped coin would be valued at the share price of
+     * an unrelated company and written into the balance and its daily snapshot, with nothing in
+     * the logs to reveal it. Callers already treat a missing price as "not valued this cycle".
+     */
+    public Map<String, BigDecimal> refreshCryptoPrices(Set<String> tickers) {
+        return refreshPrices(tickers, true);
+    }
+
+    /**
+     * {@link #refreshCryptoPrices} with the last-known-price fallback applied to whatever the
+     * provider could not deliver, and with each result's freshness attached.
+     *
+     * <p>For sync paths, which both value an account <em>and</em> write that valuation into its
+     * daily {@code BalanceSnapshot}. Dropping an asset there does not merely blank a cell: it
+     * shrinks a number that is then engraved in the net-worth history, where nothing later
+     * corrects it. A day-old price is a far better record of the day than a hole.
+     *
+     * <p>Only live prices reach {@code price_snapshot} (that write lives in
+     * {@link #refreshPrices}); re-recording a fallback under today's date would launder a stale
+     * price into a fresh-looking one and let the fallback drift forward forever.
+     */
+    public Map<String, Quote> refreshCryptoQuotes(Set<String> tickers) {
+        Map<String, BigDecimal> live = refreshPrices(tickers, true);
+        LocalDate today = LocalDate.now();
+
+        Map<String, Quote> quotes = new HashMap<>();
+        live.forEach((ticker, price) -> quotes.put(ticker, new Quote(price, today, true)));
+
+        Set<String> unresolved = tickers.stream()
+            .map(t -> t.toUpperCase(Locale.ROOT))
+            .filter(coinGecko::supports)
+            .filter(t -> !quotes.containsKey(t))
+            .collect(Collectors.toCollection(TreeSet::new));
+        if (unresolved.isEmpty()) return quotes;
+
+        Map<String, PriceSnapshot> lastKnown = lastKnownPrices(unresolved, today);
+        lastKnown.forEach((ticker, snapshot) ->
+            quotes.put(ticker, new Quote(snapshot.getPriceEur(), snapshot.getDate(), false)));
+
+        if (!lastKnown.isEmpty()) {
+            log.warn("No live price for {} -- valuing from the last recorded price instead ({})",
+                lastKnown.keySet(),
+                lastKnown.values().stream().map(s -> s.getTicker() + "=" + s.getDate()).toList());
+        }
+        return quotes;
     }
 
     /** Bulk fetch and refresh cache for all provided tickers. */
     public Map<String, BigDecimal> refreshPrices(Set<String> tickers) {
+        return refreshPrices(tickers, false);
+    }
+
+    private Map<String, BigDecimal> refreshPrices(Set<String> tickers, boolean cryptoOnly) {
         if (tickers.isEmpty()) return Map.of();
 
         Map<String, BigDecimal> result = new HashMap<>();
@@ -84,6 +311,9 @@ public class PriceService {
                 result.put(upper, BigDecimal.ONE);
             } else if (coinGecko.supports(upper)) {
                 cryptoTickers.add(upper);
+            } else if (cryptoOnly) {
+                log.warn("No CoinGecko mapping for crypto ticker {} -- leaving it unpriced rather "
+                    + "than valuing it as the stock trading under that symbol", upper);
             } else {
                 stockTickers.add(upper);
             }
@@ -167,10 +397,16 @@ public class PriceService {
         LocalDate to = LocalDate.now();
         int saved = 0;
         int failed = 0;
+        int skipped = 0;
 
         for (String ticker : tickers) {
             String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) continue;
+
+            if (alreadyCovered(upper, from, to)) {
+                skipped++;
+                continue;
+            }
 
             // Guard per ticker: this runs from PriceBackfillRunner, an ApplicationRunner, so
             // an unguarded throw here would fail Spring Boot startup outright.
@@ -208,20 +444,58 @@ public class PriceService {
         // and the returned count alone cannot distinguish "1 of 1" from "1 of 100". Summarise
         // so a sparse backfill is visible without grepping for individual failures.
         if (failed > 0) {
-            log.error("Historical price backfill completed with {} of {} tickers failing ({} prices saved)",
-                failed, tickers.size(), saved);
+            log.error("Historical price backfill completed with {} of {} tickers failing ({} prices saved, {} already covered)",
+                failed, tickers.size(), saved, skipped);
         } else {
-            log.info("Historical price backfill completed for {} tickers ({} prices saved)",
-                tickers.size(), saved);
+            log.info("Historical price backfill completed for {} tickers ({} prices saved, {} already covered)",
+                tickers.size(), saved, skipped);
         }
 
         return saved;
     }
 
+    /**
+     * Whether {@code ticker} already has continuous history over the requested range, in which
+     * case the backfill has nothing to add and the provider call is pure waste.
+     *
+     * <p>This runs at every boot, once per held ticker, against providers whose free tiers count
+     * requests per IP — and the previous version re-requested twelve months of history for tickers
+     * that already had all of it, only to discard every row as a duplicate. On this instance that
+     * burned the whole rate-limit budget seconds after startup and left the price cache (which
+     * does not survive a restart) with nothing to fill itself from.
+     *
+     * <p>It scans the whole range rather than probing its two ends. Checking the edges alone
+     * declares a ticker covered as soon as it has an old row and a recent one, so an instance that
+     * was off for three months — leaving a hole with history on both sides of it — would skip that
+     * ticker at every boot and never fill the hole, while {@code HistoryService} flat-lines the
+     * chart across it at the last pre-outage price. One query returns the range (at most ~370 rows,
+     * one per day by {@code uk_price_snapshot_ticker_date}) and the gaps are measured in memory.
+     *
+     * <p>Gaps are tolerated up to {@link #MAX_HISTORY_GAP_DAYS} because markets close: a weekend is
+     * a two-day hole in every equity series, and an Easter or Christmas week can stretch that to
+     * five. A ticker whose history simply starts late — an asset younger than the range — is
+     * reported uncovered and re-requested each boot, which is the pre-existing behaviour: we
+     * cannot tell "the provider has nothing before this date" from "we never fetched it" without
+     * asking.
+     */
+    private boolean alreadyCovered(String ticker, LocalDate from, LocalDate to) {
+        List<PriceSnapshot> rows =
+            priceSnapshotRepository.findByTickerInAndDateBetween(Set.of(ticker), from, to);
+        if (rows.isEmpty()) return false;
+
+        // The query orders by date ascending; walk from the range start so a missing head, a
+        // missing tail and an interior hole are all the same check.
+        LocalDate cursor = from;
+        for (PriceSnapshot row : rows) {
+            if (ChronoUnit.DAYS.between(cursor, row.getDate()) > MAX_HISTORY_GAP_DAYS) return false;
+            cursor = row.getDate();
+        }
+        return ChronoUnit.DAYS.between(cursor, to) <= MAX_HISTORY_GAP_DAYS;
+    }
+
     private record CachedPrice(BigDecimal price, Instant cachedAt) {
         boolean isExpired() {
-            long ttl = price == null ? MISS_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS;
-            return Instant.now().isAfter(cachedAt.plusSeconds(ttl));
+            return Instant.now().isAfter(cachedAt.plusSeconds(CACHE_TTL_SECONDS));
         }
     }
 

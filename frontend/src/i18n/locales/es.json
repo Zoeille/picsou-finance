@@ -156,6 +156,7 @@
     "assetNamePlaceholder": "Ej.: iShares Core MSCI World",
     "priceLive": "Precio en directo",
     "priceStale": "Precio de {{time}}",
+    "priceAsOf": "Precio del {{date}} — el proveedor de precios no respondió",
     "history": "Historial",
     "manual": "Manual",
     "allTypes": "Todos los tipos",
@@ -192,9 +193,9 @@
     "compteTitres": "Cuenta de valores",
     "crypto": "Cripto",
     "realEstate": "Inmobiliario",
-    "employeeSavings": "Ahorro salarial",
     "loan": "Préstamo",
-    "other": "Otro"
+    "other": "Otro",
+    "employeeSavings": "Ahorro salarial"
   },
   "realEstate": {
     "purchasePrice": "Precio de compra",
@@ -335,6 +336,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Capital",
+    "interest": "Intereses",
+    "total": "Total"
+  },
   "goals": {
     "title": "Objetivos",
     "addGoal": "Nuevo objetivo",
@@ -394,13 +405,14 @@
     "syncingDesc": "Estamos recuperando tus últimas transacciones. Suele tardar unos segundos.",
     "desc": {
       "banks": "Conecta tus bancos vía OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sincronizar tus cuentas PEA y de valores",
-      "amundi": "PEE, PEG, PERCO, PER en Amundi",
+      "degiro": "Sincronizar tu cuenta de valores DEGIRO",
       "finary": "Importar desde Finary",
-      "manual": "Crear una cuenta manualmente"
+      "manual": "Crear una cuenta manualmente",
+      "amundi": "PEE, PEG, PERCO, PER en Amundi"
     }
   },
   "sync": {
@@ -412,8 +424,6 @@
       "countriesLoadError": "No se pudieron cargar todos los países — solo Francia disponible.",
       "searchPlaceholder": "p. ej. BNP Paribas...",
       "searchError": "No se pueden buscar bancos en este momento.",
-      "proBadge": "Pro",
-      "proBadgeTitle": "Cuenta de empresa — este banco solo atiende a clientes profesionales",
       "connected": "Conexiones activas",
       "noConnections": "Sin conexiones bancarias",
       "connect": "Conectar",
@@ -424,7 +434,9 @@
       "callbackDone": "¡Cuentas sincronizadas!",
       "callbackError": "Error de sincronización",
       "initiateError": "Fallo al conectar",
-      "psd2ScopeNote": "Enable Banking solo sincroniza cuentas corrientes (limitación PSD2). Para PEA, seguros de vida, ahorro: usa Trade Republic, Boursobank, Finary o añádelos manualmente."
+      "psd2ScopeNote": "Enable Banking solo sincroniza cuentas corrientes (limitación PSD2). Para PEA, seguros de vida, ahorro: usa Trade Republic, Boursobank, Finary o añádelos manualmente.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Cuenta de empresa — este banco solo atiende a clientes profesionales"
     },
     "tr": {
       "title": "Trade Republic",
@@ -481,8 +493,12 @@
       "type": "Tipo de exchange",
       "apiKey": "Clave API",
       "apiSecret": "Secreto API",
+      "apiKeyOnly": "Meria se conecta con una única clave API de solo lectura — no hace falta secreto.",
+      "showSecret": "Mostrar el secreto API",
+      "hideSecret": "Ocultar el secreto API",
       "connect": "Conectar",
       "connectError": "No se pudo conectar el exchange. Comprueba tu clave API y tu secreto.",
+      "connectErrorKeyOnly": "No se pudo conectar el exchange. Comprueba tu clave API.",
       "sync": "Sincronizar",
       "remove": "Eliminar",
       "removeConfirm": "¿Eliminar este exchange?",
@@ -579,6 +595,57 @@
         "serverError": "Error del servidor de BoursoBank. Inténtalo de nuevo."
       }
     },
+    "degiro": {
+      "title": "DEGIRO",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "totpCode": "Código del autenticador",
+      "connect": "Conectar",
+      "sync": "Sincronizar",
+      "clearSession": "Desconectar",
+      "noSession": "Sin sesión activa",
+      "sessionActive": "Sesión activa",
+      "reauthRequired": "Reconexión necesaria",
+      "lastSyncedAt": "Última sincronización el",
+      "totpPrompt": "Introduce el código de 6 dígitos de tu aplicación de autenticación",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espera un momento.",
+        "invalidCredentials": "Credenciales incorrectas.",
+        "invalidTotpCode": "Código del autenticador no válido o caducado.",
+        "sessionExpired": "Sesión caducada. Vuelve a conectarte.",
+        "serverError": "Error del servidor de DEGIRO. Inténtalo de nuevo."
+      }
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct",
+      "login": "Usuario",
+      "password": "Contraseña",
+      "otpCode": "Código de seguridad de 6 dígitos",
+      "otpPrompt": "Introduce el código enviado por Bourse Direct. Este dispositivo no se marcará como de confianza.",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "validate": "Validar código",
+      "validating": "Validando…",
+      "sync": "Sincronizar",
+      "queued": "Sincronización en cola…",
+      "syncing": "Sincronizando…",
+      "syncSuccess": "Cartera sincronizada.",
+      "clearSession": "Desconectar",
+      "noSession": "No hay sesión activa",
+      "sessionActive": "Sesión activa",
+      "scope": "Sincroniza posiciones, coste medio, cotización, valoración y efectivo de cuentas PEA y de valores.",
+      "errors": {
+        "tooManyAttempts": "Demasiados intentos. Espera un momento.",
+        "invalidCredentials": "Credenciales de Bourse Direct no válidas.",
+        "invalidCode": "Código de seguridad no válido o caducado. Reinicia el acceso.",
+        "authAttemptExpired": "El intento de autenticación ha caducado. Reinicia el acceso.",
+        "sessionExpired": "La sesión de Bourse Direct ha caducado. Vuelve a conectarte.",
+        "portfolioIncomplete": "Bourse Direct devolvió una cartera incompleta. Tus datos existentes no se modificaron.",
+        "formatChanged": "Bourse Direct cambió el formato de la cartera. Tus datos existentes no se modificaron.",
+        "invalidData": "Bourse Direct devolvió datos de cartera incoherentes. Tus datos existentes no se modificaron.",
+        "serverError": "No se pudo contactar con Bourse Direct. Inténtalo de nuevo."
+      }
+    },
     "amundi": {
       "title": "Amundi",
       "login": "Identificador",
@@ -611,36 +678,6 @@
         "formatChanged": "El formato del sitio de Amundi ha cambiado. Se han conservado sus datos existentes.",
         "invalidData": "Amundi devolvió datos incoherentes. Se han conservado sus datos existentes.",
         "serverError": "No se puede contactar con Amundi. Inténtelo de nuevo."
-      }
-    },
-    "bourseDirect": {
-      "title": "Bourse Direct",
-      "login": "Usuario",
-      "password": "Contraseña",
-      "otpCode": "Código de seguridad de 6 dígitos",
-      "otpPrompt": "Introduce el código enviado por Bourse Direct. Este dispositivo no se marcará como de confianza.",
-      "connect": "Conectar",
-      "connecting": "Conectando…",
-      "validate": "Validar código",
-      "validating": "Validando…",
-      "sync": "Sincronizar",
-      "queued": "Sincronización en cola…",
-      "syncing": "Sincronizando…",
-      "syncSuccess": "Cartera sincronizada.",
-      "clearSession": "Desconectar",
-      "noSession": "No hay sesión activa",
-      "sessionActive": "Sesión activa",
-      "scope": "Sincroniza posiciones, coste medio, cotización, valoración y efectivo de cuentas PEA y de valores.",
-      "errors": {
-        "tooManyAttempts": "Demasiados intentos. Espera un momento.",
-        "invalidCredentials": "Credenciales de Bourse Direct no válidas.",
-        "invalidCode": "Código de seguridad no válido o caducado. Reinicia el acceso.",
-        "authAttemptExpired": "El intento de autenticación ha caducado. Reinicia el acceso.",
-        "sessionExpired": "La sesión de Bourse Direct ha caducado. Vuelve a conectarte.",
-        "portfolioIncomplete": "Bourse Direct devolvió una cartera incompleta. Tus datos existentes no se modificaron.",
-        "formatChanged": "Bourse Direct cambió el formato de la cartera. Tus datos existentes no se modificaron.",
-        "invalidData": "Bourse Direct devolvió datos de cartera incoherentes. Tus datos existentes no se modificaron.",
-        "serverError": "No se pudo contactar con Bourse Direct. Inténtalo de nuevo."
       }
     }
   },
@@ -1175,7 +1212,7 @@
     },
     "crypto": {
       "title": "Cifra tus claves API de exchange",
-      "body": "Tus claves API de Binance / Kraken / Coinbase se cifran en reposo. Picsou puede generar la clave de cifrado por ti — se queda en tu disco y nunca se transmite.",
+      "body": "Tus claves API de exchange (Binance, Meria...) se cifran en reposo. Picsou puede generar la clave de cifrado por ti — se queda en tu disco y nunca se transmite.",
       "generateCta": "Generar una clave por mí",
       "generating": "Generando...",
       "existed": "Tu clave de cifrado ya existe en el disco — nada que hacer.",

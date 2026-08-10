@@ -39,6 +39,8 @@ services:
         condition: service_healthy
       bourse-direct-auth:
         condition: service_started
+      degiro-auth:
+        condition: service_started
       amundi-auth:
         condition: service_started
     networks:
@@ -82,6 +84,14 @@ services:
   #   restart: unless-stopped
   #   networks:
   #     - picsou-net
+
+  degiro-auth:
+    build:
+      context: ./services/degiro-auth
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - picsou-net
 
   frontend:
     build:

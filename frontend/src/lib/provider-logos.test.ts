@@ -24,6 +24,10 @@ describe('PROVIDER_LOGOS', () => {
 })
 
 describe('providerLogoUrl', () => {
+  it('resolves the exchange name the backend writes as provider', () => {
+    expect(providerLogoUrl('MERIA')).toBe('/exchanges/meria.svg')
+  })
+
   // Copied verbatim from AmundiSyncService.PROVIDER. If either side is renamed — or the
   // accent drifts between Unicode normalisations — this fails instead of quietly showing
   // the color circle again.
@@ -31,8 +35,14 @@ describe('providerLogoUrl', () => {
     expect(providerLogoUrl('Amundi Épargne Salariale')).toBe('/providers/amundi.png')
   })
 
+  it('resolves the exchange name the backend writes as provider', () => {
+    expect(providerLogoUrl('MERIA')).toBe('/exchanges/meria.svg')
+  })
+
   it('matches case-insensitively', () => {
+    expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
     expect(providerLogoUrl('AMUNDI ÉPARGNE SALARIALE')).toBe('/providers/amundi.png')
+    expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
   })
 
   it('returns null for a provider with no bundled logo', () => {

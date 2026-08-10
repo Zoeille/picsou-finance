@@ -1,12 +1,12 @@
 # Feature: ISIN to Yahoo Finance Ticker Conversion
 
-> Last updated: 2026-07-04
+> Last updated: 2026-08-05
 
 ## Context
 
 Trade Republic returns account holdings with ISIN codes (e.g., `IE00BYVQ9F29`), but Yahoo Finance expects ticker symbols (e.g., `IWDA.AS`). This feature converts ISINs to Yahoo-compatible tickers via the OpenFIGI API, and also resolves the display name (e.g., "ISHARES CORE MSCI WORLD") for the frontend.
 
-The converter is shared by two callers: the **Trade Republic sync** (its original use) and **manual transaction entry**, where a user can type an ISIN instead of a ticker in the *Add transaction* form (see [manual-transactions.md](./manual-transactions.md)). Both resolve at write time so an ISIN entry and the equivalent ticker entry collapse into one position.
+The converter is shared by several callers: the **Trade Republic sync** (its original use), **manual transaction entry** (a user can type an ISIN instead of a ticker in the *Add transaction* form — see [manual-transactions.md](./manual-transactions.md)), the **CSV importer**, **Bourso**, and **DEGIRO** sync. All resolve at write time so an ISIN entry and the equivalent ticker entry collapse into one position.
 
 ## How it works
 
@@ -15,6 +15,7 @@ The converter is shared by two callers: the **Trade Republic sync** (its origina
 - `backend/src/main/java/com/picsou/adapter/OpenFigiIsinConverter.java` — ISIN→ticker+name conversion via OpenFIGI `/v3/mapping` API; also exposes `public static boolean isIsin(String)`, the 12-char ISIN detector reused by callers to decide whether to resolve
 - `backend/src/main/java/com/picsou/service/TradeRepublicSyncService.java` — calls `resolve()` during sync, stores ticker and name
 - `backend/src/main/java/com/picsou/service/ManualTransactionService.java` — calls `isIsin()` + `resolve()` when a user enters an instrument by ISIN in the *Add transaction* form (`applyInstrumentFields`)
+- `backend/src/main/java/com/picsou/service/DegiroSyncService.java` — calls `resolve()` for each DEGIRO position's ISIN during sync
 - `backend/src/main/java/com/picsou/adapter/YahooFinancePriceProvider.java` — rejects unconvertible ISINs via regex in `supports()`
 - `frontend/src/components/shared/HoldingsCard.tsx` — displays name in title, ticker in square badge
 
@@ -63,6 +64,11 @@ The `XF000` marker itself lives in one place: `OpenFigiIsinConverter.isTrCryptoI
 
 OpenFIGI `exchCode` is mapped to Yahoo suffix (e.g., `GY`→`.DE`, `NA`→`.AS`, `FP`→`.PA`, `HK`→`.HK`).
 
+A 2026-08-05 attempt swapped steps 2 and 3 for Irish/Luxembourg-domiciled ISINs
+(see Gotchas) but was reverted the same day — it fixed one holding and broke
+two others on the same live portfolio. The order above is the original,
+restored one.
+
 ## Technical choices
 
 | Choice | Why | Rejected alternative |
@@ -81,11 +87,32 @@ OpenFIGI `exchCode` is mapped to Yahoo suffix (e.g., `GY`→`.DE`, `NA`→`.AS`,
 - **Yahoo Finance rejects ISIN-format strings**. `YahooFinancePriceProvider.supports()` uses regex `[A-Z]{2}[A-Z0-9]{9}[A-Z0-9]` to detect 12-char ISINs and returns false. Unconverted ISINs never get price data.
 - **Deduplication aggregates by ticker**. Multiple ISINs mapping to the same ticker are merged in `TradeRepublicSyncService` via `Map.merge()`. The name from the first ISIN wins.
 - **Some tickers may not exist on Yahoo Finance**. German-listed tickers like `6RJ0.DE` (internal Bloomberg ID) may not resolve. The home-exchange-first strategy mitigates this.
+- **`HOME_EXCHANGE` has no entry for Ireland or Luxembourg** — where most UCITS
+  ETFs are legally domiciled, even though they primarily trade on other European
+  exchanges (Paris, Amsterdam, Frankfurt...). Confirmed live: an Irish-domiciled
+  ETF (`IE000BI8OT95`, Amundi Core MSCI World) resolves to the US OTC ticker
+  `MWRDF`, which has no live Yahoo quote — `YahooFinancePriceProvider` then
+  can't price it, and `AccountService.toHoldingResponse` (per the
+  FX-conversion ADR) doesn't fall back to a stored price when the live one is
+  missing, so the holding's value drops out of the dashboard total (shows as
+  a missing "Valeur" rather than a wrong one).
+  **Tried and reverted the same day**: swapping the priority to try EU
+  exchanges before US OTC/ADR for ISINs with no home exchange. That did fix
+  `MWRD` (→ `WRDU.AS`, live on Yahoo) but broke two *other* real holdings on
+  the same test portfolio: `IE00BGSF1X88` and `IE00BD6FTQ80` resolved to
+  `IB01.AS` / `SC0L.DE`, both confirmed delisted/no-data on Yahoo, while their
+  original US OTC tickers (`ISHUF`, `IBBCF`) are live and priced. There is no
+  exchange-code heuristic found so far that reliably predicts which specific
+  ticker variant has a live Yahoo quote for a given Irish/Luxembourg ISIN — it
+  varies per instrument. Adding `IE`/`LU` to `HOME_EXCHANGE` wouldn't help
+  either, for the same reason. This remains a known, accepted gap rather than
+  a fixed bug — see `pickBest()`'s Javadoc for the full account and the
+  reverted test names in `OpenFigiIsinConverterTest`.
 - **OpenFIGI's `ticker` field is not always a symbol**. For bonds it holds the Bloomberg *description*: querying `XS2657412201` (airBaltic 14.5% 2029) returns `ticker: "AIRBAL 14.5 08/14/29 REGS"` on `exchCode: "EURONEXT-DUBLIN"`, which is absent from `EXCHANGE_SUFFIX` — so `byExchange` stayed empty and step 5 ("raw ticker from first entry") emitted that description verbatim as the holding's ticker. `pickBest()` now filters every candidate through `SYMBOL_PATTERN` (`[A-Z0-9][A-Z0-9.-]{0,14}`, checked before the exchange suffix is appended) and returns `null` when nothing plausible remains. `resolve()` then falls back to the ISIN, which `YahooFinancePriceProvider.supports()` already rejects — so an unmappable bond costs zero HTTP requests instead of one 404 per price lookup (GH issue #76).
 
 ## Tests
 
-- `OpenFigiIsinConverterTest` — 4 unit tests covering the `isIsin()` detector (valid ISINs, case/whitespace normalization, rejects tickers and non-ISIN strings, rejects null/blank), plus 3 covering the TR-native crypto short-circuit: BTC/ETH ticker+name, a generic symbol (SOL) to prove it isn't hardcoded per coin, and case/whitespace normalization consistency. The network-bound OpenFIGI fallback path still has no unit test (WebClient mock setup is complex); callers that use it (`ManualTransactionServiceTest`) mock the converter instead.
+- `OpenFigiIsinConverterTest` — 15 unit tests: the `isIsin()` detector (valid ISINs, case/whitespace normalization, rejects tickers and non-ISIN strings, rejects null/blank), the TR-native crypto short-circuit (BTC/ETH ticker+name, a generic symbol (SOL) to prove it isn't hardcoded per coin, case/whitespace normalization consistency), `pickBest()`'s exchange-priority ordering (package-private for this — US-OTC-over-EU when no home exchange matches, EU fallback when no US OTC listing exists, home exchange still wins over both, any-known-exchange fallback), and `pickBest()`'s symbol filtering (rejects a bond *description* as a ticker, still resolves real symbols on known exchanges, returns the normalized symbol rather than the raw OpenFIGI value). The ordering tests lock in the *reverted* (original) order — see Gotchas for why the EU-first variant was tried and abandoned. The network-bound OpenFIGI *request* itself still has no unit test (WebClient mock setup is complex); callers that use `resolve()` end-to-end (`ManualTransactionServiceTest`) mock the converter instead.
 - Manual verification with `curl` against OpenFIGI API:
   - `US0378331005` (Apple) → `AAPL`
   - `IE00B4L5Y983` (iShares MSCI World) → `IWDA.AS`

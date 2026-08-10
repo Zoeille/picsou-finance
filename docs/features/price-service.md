@@ -1,10 +1,12 @@
 # Feature: Price Service
 
-> Last updated: 2026-08-09
+> Last updated: 2026-08-10
 
 ## Context
 
-Picsou needs EUR prices for crypto assets (BTC, ETH, SOL, etc.) and stocks/ETFs (PEA/Compte-Titres holdings) to display account balances in a unified currency. Prices are fetched from two free providers: CoinGecko for crypto and Yahoo Finance for stocks/ETFs. A 15-minute in-memory cache prevents hammering external APIs. The scheduler refreshes prices hourly for all accounts with tickers.
+Picsou needs EUR prices for crypto assets (BTC, ETH, SOL, etc.) and stocks/ETFs (PEA/Compte-Titres holdings) to display account balances in a unified currency. Prices are fetched from two free providers: CoinGecko for crypto and Yahoo Finance for stocks/ETFs, both rate-limited per IP. The scheduler refreshes prices hourly for everything held.
+
+Because those providers can and do refuse to answer, the service is built so that a refusal degrades the *age* of a price rather than its existence: a 15-minute in-memory cache, then a batched provider call, then the last price recorded in `price_snapshot`. See [ADR 2026-08-01](../decisions/2026-08-01-last-known-price-fallback.md) for why valuing from a dated price beats valuing from nothing.
 
 ## How it works
 
@@ -17,13 +19,23 @@ Picsou needs EUR prices for crypto assets (BTC, ETH, SOL, etc.) and stocks/ETFs 
 
 Both providers implement `PriceProviderPort` with `supports(ticker)` and `getPricesEur(tickers)`.
 
-### Caching
+### Resolution chain
 
-`PriceService` maintains a `ConcurrentHashMap<String, CachedPrice>` where the key is the uppercase ticker. Each entry stores the price and the cache timestamp. Entries expire after 900 seconds (15 minutes). On a cache miss, the price is fetched from the provider and cached.
+`PriceService.resolve(tickers, cryptoOnly)` answers every on-demand read, in this order:
 
-**Failures are cached too**, as a `CachedPrice` with a `null` price and a shorter TTL of 300 seconds (5 minutes). Without this, a ticker the provider cannot resolve was re-fetched on *every* `getPriceEur` call: the dashboard, the account cards, the holdings table and the history chart each iterate the same holdings, so one permanently-unresolvable ticker produced dozens of identical Yahoo 404s per minute across Tomcat threads (GH issue #76). The miss TTL is deliberately shorter than the hit TTL — a miss is more likely to be transient (rate limiting) than a hit is to be stale, so recovery stays fast while the storm is collapsed to one call per ticker per 5 minutes.
+1. **In-memory cache** — `ConcurrentHashMap<String, CachedPrice>` keyed by uppercase ticker, 900 s TTL. Hits are returned as a live `Quote` dated today.
+2. **One batched provider call** for everything still missing — CoinGecko takes the whole crypto set in a single request, Yahoo is per-ticker (it has no batch endpoint). Skipped for a ticker whose last attempt came back empty and is still within the miss TTL (the *negative cache*, below), and skipped entirely while `CoinGeckoPriceProvider` is in its post-429 cooldown.
+3. **Last recorded price** — `price_snapshot`, most recent row per ticker within 7 days, one query for the whole set (`findRecentByTickers`). Returned as a `Quote` with `live = false` and `asOf` = the snapshot's date.
 
-`refreshPrices(Set<String> tickers)` bulk-fetches prices, partitions tickers into crypto and stock sets, calls each provider once, and updates the cache.
+Anything still unresolved returns nothing.
+
+**Failures are cached too**, in that same map, as a `CachedPrice` with a `null` price and a shorter TTL of 300 seconds (5 minutes). Without this, a ticker the provider cannot resolve was re-fetched on *every* read: the dashboard, the account cards, the holdings table and the history chart each iterate the same holdings, so one permanently-unresolvable ticker produced dozens of identical Yahoo 404s per minute across Tomcat threads (GH issue #76). The miss TTL is deliberately shorter than the hit TTL — a miss is more likely to be transient (rate limiting) than a hit is to be stale, so recovery stays fast while the storm collapses to one call per ticker per 5 minutes. A cached miss does not end resolution: step 3 still runs, so an outage degrades a price's *age* rather than its existence.
+
+**Failures are remembered, not just successes.** Without step 2's negative cache, a ticker the provider cannot resolve was re-fetched on *every* read: the dashboard, the account cards, the holdings table and the history chart each iterate the same holdings, so one permanently-unresolvable ticker produced dozens of identical Yahoo 404s per minute across Tomcat threads (GH issue #76). The 60 s window is deliberately far shorter than the 900 s hit TTL — a miss is more likely to be transient (rate limiting) than a hit is to be stale, so recovery stays fast while the storm collapses to one call per ticker per minute. Batching the whole page's tickers into a single call is the other half of the same fix.
+
+`Quote(price, asOf, live)` is the shape callers get from `getQuote`/`getCryptoQuote`/`getQuotes`/`getCryptoQuotes`. `getPriceEur`/`getCryptoPriceEur` delegate to it and drop the freshness, so existing callers gained the fallback without changing.
+
+`refreshPrices(Set<String> tickers)` is the *write* path: it bypasses both caches, always calls the providers, partitions tickers into crypto and stock sets to call each provider once, updates the cache and records the day's `price_snapshot` rows. `refreshCryptoQuotes` layers the last-known-price fallback on top for sync paths — but only live prices are ever written back to `price_snapshot`, or a stale price would be laundered into a fresh-looking one and the fallback would walk itself forward indefinitely.
 
 ### Currency conversion
 
@@ -33,11 +45,15 @@ Both providers implement `PriceProviderPort` with `supports(ticker)` and `getPri
 
 ### Scheduler
 
-`SchedulerService.refreshPrices()` runs every hour (`fixedDelay = 3600000`). It collects all tickers from accounts that have a non-null ticker, then calls `PriceService.refreshPrices()`. This keeps the cache warm for the dashboard.
+`SchedulerService.refreshPrices()` runs every hour (`fixedDelay = 3600000`). It builds **one** global set — `account.ticker` for accounts that are themselves one asset, **union** `AccountHoldingRepository.findDistinctTickers()` for everything held inside brokerage/exchange/wallet accounts — and calls `PriceService.refreshPrices()` once. Prices are global (no member scoping anywhere in the cache, the table or the providers), so iterating members would only re-fetch shared tickers once per member.
+
+Both halves are split by account type before the call: `AccountRepository.findDistinctTickersByType(CRYPTO)` joins the crypto holding tickers, and `findDistinctTickersExcludingType(CRYPTO)` feeds the rest. A manual crypto account tracking one coin carries its symbol on the account row and has no holdings at all, so reading only holdings sent it down the Yahoo Finance branch — the exact contamination the split below exists to prevent. Both are repository projections rather than `findAll()`: one column is read, and loading every account entity hourly to reach it is waste.
 
 ### Key files
 
-- `backend/src/main/java/com/picsou/service/PriceService.java` -- Price routing, caching, conversion
+- `backend/src/main/java/com/picsou/service/PriceService.java` -- Resolution chain (cache → batched provider call → last recorded price), `Quote`, conversion
+- `backend/src/main/java/com/picsou/repository/PriceSnapshotRepository.java` -- `findRecentByTickers`, the batched fallback lookup
+- `backend/src/main/java/com/picsou/service/AccountService.java` -- `valuation()`: value and cost basis from one quote map
 - `backend/src/main/java/com/picsou/service/SchedulerService.java` -- Hourly price refresh cron
 - `backend/src/main/java/com/picsou/adapter/CoinGeckoPriceProvider.java` -- CoinGecko `/simple/price` with ticker-to-ID mapping
 - `backend/src/main/java/com/picsou/adapter/YahooFinancePriceProvider.java` -- Yahoo Finance `/v8/finance/chart/{ticker}`
@@ -46,26 +62,32 @@ Both providers implement `PriceProviderPort` with `supports(ticker)` and `getPri
 ### Flow
 
 ```
-Dashboard loads --> needs EUR prices
+Account page loads --> needs EUR prices for its holdings
         |
         v
-PriceService.getPriceEur("BTC")
+AccountService.valuation(account)  --> ONE call with the whole ticker set
         |
         v
-Check cache: CachedPrice for "BTC"
+PriceService.getQuotes({BTC, SOL, ATOM, ...})
         |
-        +-- hit (not expired) --> return cached price
+        +-- in cache, not expired ------------> Quote(price, today, live=true)
         |
-        +-- miss or expired
+        +-- missing
+                |
+                +-- attempted < 60s ago, or CoinGecko cooling down --> skip the network
+                |
+                +-- otherwise: ONE batched call
+                |       GET /simple/price?ids=bitcoin,solana,cosmos&vs_currencies=eur
+                |               |
+                |               +-- answered --> cache + Quote(price, today, live=true)
                 |
                 v
-        CoinGeckoPriceProvider.supports("BTC") --> true
+        still missing --> price_snapshot, latest row <= 7 days old (one query)
                 |
-                v
-        GET api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur
+                +-- found  --> Quote(price, snapshotDate, live=false)   [UI marks it]
                 |
-                v
-        Cache result --> return price
+                +-- none   --> no quote; asset excluded from BOTH value and cost basis
+                                and remembered as a miss for 60s
 
 Scheduler (every hour):
         |
@@ -73,16 +95,16 @@ Scheduler (every hour):
 SchedulerService.refreshPrices()
         |
         v
-Collect all non-null tickers from accounts
+account tickers UNION holding tickers  (one global set)
         |
         v
-PriceService.refreshPrices(tickers)
+PriceService.refreshPrices(tickers)   --> always hits the providers
         |
         v
-Partition: crypto --> CoinGecko | stocks --> Yahoo
+Partition: crypto --> CoinGecko (batched) | stocks --> Yahoo (per ticker)
         |
         v
-Bulk fetch, update cache
+Update cache + upsert today's price_snapshot rows
 ```
 
 ## Technical choices
@@ -94,14 +116,25 @@ Bulk fetch, update cache
 | 15-minute cache TTL | Balance between freshness and API rate limits | No cache (too many requests) or 1-hour cache (stale prices) |
 | Hourly scheduler refresh | Keeps cache warm; ensures dashboard loads fast | Fetch on every dashboard request (slow) |
 | Provider partition by `supports()` | Clean separation: CoinGecko gets crypto, Yahoo gets everything else | Hardcoded crypto ticker list (duplicated, harder to maintain) |
+| `price_snapshot` as the fallback store | Already written daily, already durable, already the right shape (one EUR price per ticker per day) | A second cache table, or persisting the in-memory cache |
+| 7-day fallback ceiling | A day-old crypto price is slightly wrong; a month-old one is fiction | Unbounded (silently valuing on ancient prices) |
+| 60-second negative cache | One failed attempt per minute per ticker instead of one per read | Retrying every read (the behaviour that sustained a 429 for hours) |
 
 ## Gotchas / Pitfalls
 
 - **`supports()` enforces a symbol shape**: beyond rejecting 12-char ISINs, `YahooFinancePriceProvider.supports()` accepts an optional leading `^` for indices, then alphanumerics and the separators Yahoo uses for exchange suffixes, share classes and FX pairs (`IWDA.AS`, `BRK-B`, `USDEUR=X`), with a 20-character limit for the complete symbol. Anything containing whitespace or a slash is not a symbol. This matters because OpenFIGI returns Bloomberg *bond descriptions* in its `ticker` field (`AIRBAL 14.5 08/14/29 REGS`): WebClient percent-encodes the spaces but **not** the slashes, so the request lands on `/v8/finance/chart/AIRBAL%2014.5%2008/14/29%20REGS` — a different API path entirely — and 404s forever.
 - **`GET /api/prices` bypasses the cache**: `PriceController` calls `refreshPrices()`, which on `main` always hits the providers regardless of TTL. The negative cache only covers the `getPriceEur` path. PR #33 makes `refreshPrices` honor the TTL; this was left alone here to avoid a conflict.
 - **Yahoo Finance is unofficial**: The Yahoo Finance API is undocumented and can break or get rate-limited without notice. FX conversion is now applied inside `YahooFinancePriceProvider` using the `{CURRENCY}EUR=X` chart endpoint; `GBp`/`GBX` is treated as `GBP / 100`. If the FX call fails the ticker is omitted from the result map (no fabricated rate) — downstream consumers must tolerate a missing key.
-- **CoinGecko rate limits**: The free tier has rate limits (~30 requests/minute). The batch endpoint mitigates this, but individual cache misses could accumulate. The 15-minute cache is essential.
-- **Cache is in-memory only**: Prices are lost on restart. The scheduler will repopulate within one hour, but the first few dashboard loads after restart may trigger external API calls.
+- **CoinGecko rate limits, and how they used to sustain themselves**: the keyless free tier is throttled per IP. A 429 was previously answered with *more* traffic — nothing was cached on failure, so every holding of every account re-issued a single-ticker request on every page render, and the provider counts the calls it rejects. On 2026-08-01 that turned a startup burst into two hours of missing prices. Three things now prevent it: reads are batched (one request per set, not per holding), a failed ticker is left alone for 60 s, and `CoinGeckoPriceProvider` refuses to send anything at all until its post-429 cooldown expires (`Retry-After` when sane, else 60 s, capped at 15 min). If you add a price call, batch it and route it through `PriceService` — a direct adapter call bypasses all three.
+- **Read paths must resolve the whole set at once**: `AccountService.valuation` and `CryptoExchangeSyncService.getPositions` build their ticker set first and make one call. Reverting either to a per-holding lookup re-creates the amplification above, and the tests that pin it (`aSetOfTickersCostsOneProviderCall`, `aFailedLookupIsNotRetriedOnEveryRead`) are the only thing that will say so.
+- **Call `valuation()` once per account, never `liveBalanceEur` then `calculateInvestedAmount`**: both accessors run the whole pass, so the pair costs twice the work — and, worse, the two runs can straddle a cache expiry or the end of a 429 cooldown, so the value excludes an asset the cost basis then includes. That is the -85% disagreement rebuilt from two calls that were each individually correct. `SchedulerService.dailySnapshots` and both `HistoryService` live points take a single `Valuation`.
+- **Nothing priced is not a small balance**: `Valuation.anyPriced()` is false only when an account holds assets and none could be valued, and every caller that *persists* a valuation must refuse rather than record it — `dailySnapshots` skips the day, `CryptoExchangeSyncService` throws, `WalletSyncService` throws. A zero written into `balance_snapshot` is permanent: no later sync revisits a past date.
+- **A holding with no ticker is priced only if the connector valued it**: there is no lookup to fail, so it is not an unpriced asset in the outage sense — but `anyPriced()` must never outrun an actual figure. With a `providerValueEur` (only Bourse Direct reports one) the line is added to the value *and* its cost basis counted, and the account is priced: leaving the flag false there turned the refusal above into a permanent one, and such an account stopped receiving snapshots altogether. Without one, nothing can put a number on the line, so it leaves both sides — marking the account priced anyway would let `dailySnapshots` record a cash-only balance for an account holding real assets. `AccountServiceTest.aHoldingTheProviderValuedItselfCountsAsPriced` and `aHoldingWithNoTickerAndNoProviderValueLeavesBothSidesAlone` pin the two halves.
+- **The in-memory cache dies on restart, the fallback does not**: `PriceService` holds prices in the heap only, and `StartupSyncService` replays the whole daily sync on every boot. That combination is why a restart used to blank the interface — the cache was empty and the burst got rate-limited. `price_snapshot` is now consulted whenever the providers come back empty, so a cold JVM values from yesterday's row instead of showing nothing.
+- **The fallback is keyed by ticker alone, exactly like the cache**: so it inherits the crypto/equity symbol ambiguity. `getCryptoQuote` checks `CoinGeckoPriceProvider.supports()` **before** touching either, which is what stops an unmapped symbol (`STX`, `SNX`, `SEI`, `APT`) from reading a row a same-named stock wrote. Keep that check first.
+- **`backfillHistoricalPrices` skips tickers whose history is already there — but it scans, it does not probe**: it runs at every boot, once per held ticker, and used to re-request twelve months only to discard every row as a duplicate, exhausting the rate limit seconds after startup. Coverage is now decided by walking the whole range and rejecting any hole longer than 7 days (a weekend is 2, an Easter or Christmas week reaches 5). Checking only the two ends is the tempting simplification and it is wrong: an instance offline for three months has history on *both* sides of the hole, so every boot would declare it covered and `HistoryService` would flat-line the chart across those months forever. A ticker whose history simply starts late (an asset younger than the range) reads as uncovered and is re-requested each boot — we cannot tell "the provider has nothing earlier" from "we never asked" without asking.
+- **The hourly refresh keeps crypto and everything else apart**: `refreshPrices` routes whatever CoinGecko cannot map to Yahoo Finance **and records what it fetches** in `price_snapshot`, so feeding it a coin whose symbol is a listed equity would write that company's share price into the very table the fallback reads from — poisoning it for every account, not just the crypto one. `SchedulerService.refreshPrices` therefore resolves `AccountType.CRYPTO` holding tickers through `refreshCryptoPrices` and the rest through `refreshPrices`. Before holding tickers were warmed at all, no crypto symbol ever reached this method; adding them without splitting would have introduced the hazard.
+- **Ticker collection must exclude soft-deleted accounts**: `AccountService.delete` only stamps `deleted_at`, and holdings stay behind, so a query over `AccountHolding` alone keeps returning a deleted account's tickers forever — refreshed hourly, against a rate-limited free tier. `AccountHoldingRepository.findDistinctTickers` joins `Account` and filters on `deletedAt`.
 - **Provider priority is `supports()`-based**: CoinGecko checks a hardcoded ticker-to-ID map. If a new crypto asset is added (e.g. a new token), it must be added to `TICKER_TO_ID` in `CoinGeckoPriceProvider`.
 - **`toEur()` returns raw balance on failure**: If no price is available for a symbol, `toEur()` logs a warning and returns the unconverted balance. This can lead to incorrect dashboard values if a price provider is down.
 - **Historical/intraday series use today's FX**: `getHistoricalPricesEur` and `getIntradayPricesEur` fetch the FX rate once per call and apply it to every candle in the series. Per-day FX would multiply API calls ~250× for a one-year backfill with marginal accuracy gain — see [ADR 2026-05-19](../decisions/2026-05-19-yahoo-fx-conversion.md) for the trade-off.
@@ -109,8 +142,9 @@ Bulk fetch, update cache
 
 ## Tests
 
-- `PriceServiceTest` -- unit tests for caching, routing, conversion
-- `CoinGeckoPriceProviderTest` -- unit tests for ticker mapping
+- `PriceServiceTest` -- resolution chain (fallback to the last recorded price, its 7-day ceiling, the negative cache, one provider call per set, crypto-only never reading a snapshot), plus the backfill guard and its coverage skip
+- `CoinGeckoPriceProviderTest` -- ticker mapping, failure grading, and the post-429 cooldown (including `Retry-After` handling)
+- `AccountServiceTest` -- an unpriced holding leaves the cost basis as well as the value; a recorded price still values the account and is reported as stale
 - `YahooFinancePriceProviderTest` -- unit tests for response parsing
 
 ## Links

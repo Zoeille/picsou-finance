@@ -8,6 +8,7 @@ import {
   finaryApi,
   boursoApi,
   bourseDirectApi,
+  degiroApi,
   amundiApi,
 } from './api'
 import type {
@@ -29,6 +30,7 @@ export const syncKeys = {
   tr: () => [...syncKeys.all, 'tr'] as const,
   bourso: () => [...syncKeys.all, 'bourso'] as const,
   bourseDirect: () => [...syncKeys.all, 'bourse-direct'] as const,
+  degiro: () => [...syncKeys.all, 'degiro'] as const,
   amundi: () => [...syncKeys.all, 'amundi'] as const,
   exchanges: () => [...syncKeys.all, 'exchanges'] as const,
   wallets: () => [...syncKeys.all, 'wallets'] as const,
@@ -234,6 +236,67 @@ export function useSyncBourso() {
 }
 
 // ---------------------------------------------------------------------------
+// DEGIRO
+// ---------------------------------------------------------------------------
+
+export function useDegiroSessionStatus() {
+  return useQuery({
+    queryKey: syncKeys.degiro(),
+    queryFn: degiroApi.getStatus,
+    staleTime: 30_000,
+  })
+}
+
+export function useInitiateDegiroAuth() {
+  return useMutation({
+    mutationFn: ({ username, password }: { username: string; password: string }) =>
+      degiroApi.initiateAuth(username, password),
+  })
+}
+
+export function useCompleteDegiroAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ processId, code }: { processId: string; code: string }) =>
+      degiroApi.completeAuth(processId, code),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useSyncDegiro() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => degiroApi.sync(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+    // A sync that meets an expired session flips the stored status to
+    // REAUTH_REQUIRED server-side. Without invalidating on failure too, the
+    // cached status stays "active" until it goes stale and the UI keeps
+    // offering a Sync button that can only fail again.
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
+    },
+  })
+}
+
+export function useClearDegiroSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => degiroApi.clearSession(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Bourse Direct
 // ---------------------------------------------------------------------------
 
@@ -395,7 +458,7 @@ export function useCryptoExchangeStatuses() {
 export function useAddCryptoExchange() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ type, apiKey, apiSecret }: { type: ExchangeType; apiKey: string; apiSecret: string }) =>
+    mutationFn: ({ type, apiKey, apiSecret }: { type: ExchangeType; apiKey: string; apiSecret?: string }) =>
       cryptoExchangeApi.add(type, apiKey, apiSecret),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: syncKeys.exchanges() })

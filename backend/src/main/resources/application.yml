@@ -143,8 +143,15 @@ app:
     url: ${BOURSO_AUTH_URL:http://bourso-auth:8001}
   bourse-direct-auth:
     url: ${BOURSE_DIRECT_AUTH_URL:http://bourse-direct-auth:8001}
+  degiro-auth:
+    url: ${DEGIRO_AUTH_URL:http://degiro-auth:8001}
   amundi-auth:
     url: ${AMUNDI_AUTH_URL:http://amundi-auth:8001}
+  # Meria's public API. Overridable like every other external base URL above, which is what lets
+  # an integration environment point it at a stub without editing the packaged config.
+  # MeriaAdapter carries the same value as its @Value default, so a stripped config still boots.
+  meria:
+    base-url: ${MERIA_BASE_URL:https://api.meria.com/v1}
   enablebanking:
     application-id: ${ENABLEBANKING_APPLICATION_ID:}
     key-id: ${ENABLEBANKING_KEY_ID:}

@@ -33,6 +33,8 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -170,9 +172,11 @@ public class AccountService {
     }
 
     public List<HoldingResponse> getHoldings(Long accountId, Long memberId) {
-        getOrThrow(accountId, memberId); // validate account exists
-        return holdingRepository.findByAccountIdOrderByCurrentPriceDesc(accountId).stream()
-            .map(this::toHoldingResponse)
+        Account account = getOrThrow(accountId, memberId); // validate account exists
+        List<AccountHolding> holdings = holdingRepository.findByAccountIdOrderByCurrentPriceDesc(accountId);
+        Map<String, PriceService.Quote> quotes = quotesFor(account, holdings);
+        return holdings.stream()
+            .map(holding -> toHoldingResponse(holding, quotes))
             .toList();
     }
 
@@ -234,30 +238,11 @@ public class AccountService {
 
     /**
      * Calculate the invested amount (cost basis) for an account.
-     * For accounts with holdings: SUM(quantity × averageBuyIn).
-     * For cash accounts: same as the current balance.
+     * For accounts with holdings: SUM(quantity × averageBuyIn), excluding assets that could
+     * not be valued at all. For cash accounts: same as the current balance.
      */
     public BigDecimal calculateInvestedAmount(Account account) {
-        List<AccountHolding> holdings = holdingRepository.findByAccount_Id(account.getId());
-        if (holdings.isEmpty()) {
-            return account.getCurrentBalance();
-        }
-        BigDecimal invested = account.getCashBalance() != null
-            ? account.getCashBalance()
-            : BigDecimal.ZERO;
-        for (AccountHolding holding : holdings) {
-            BigDecimal costBasis = providerCostBasisEur(holding);
-            if (costBasis == null && holding.getAverageBuyIn() != null) {
-                costBasis = holding.getAverageBuyIn().multiply(holding.getQuantity());
-            }
-            if (costBasis == null) {
-                // A partial cost basis creates a fictitious gain. Until every
-                // position is known, use the account value as a neutral baseline.
-                return account.getCurrentBalance();
-            }
-            invested = invested.add(costBasis);
-        }
-        return invested;
+        return valuation(account).investedEur();
     }
 
     BalanceSnapshot upsertSnapshot(Account account, BigDecimal balance, LocalDate date) {
@@ -296,49 +281,196 @@ public class AccountService {
      * For cash accounts, returns the stored balance converted to EUR.
      */
     public BigDecimal liveBalanceEur(Account account) {
+        return valuation(account).liveEur();
+    }
+
+    /**
+     * What an account is worth and what it cost, derived <em>together</em> from one set of
+     * prices.
+     *
+     * @param liveEur     current value; assets that could not be priced at all are left out
+     * @param investedEur cost basis over exactly the same assets
+     * @param allPriced   false when at least one held asset had no price of any age
+     * @param anyPriced   false only when the account holds assets and <em>none</em> could be
+     *                    valued. {@code liveEur} is then not a small balance, it is a blank one —
+     *                    callers that persist a valuation must refuse rather than record it
+     * @param anyStale    true when at least one price is a recorded one rather than a live quote
+     */
+    public record Valuation(BigDecimal liveEur, BigDecimal investedEur,
+                            boolean allPriced, boolean anyPriced, boolean anyStale) {}
+
+    /**
+     * Values an account and computes its cost basis in a single pass.
+     *
+     * <p>The two figures used to be computed independently, and disagreed: the value dropped an
+     * asset it could not price while the cost basis kept that asset's full purchase cost. The
+     * account then reported a loss the size of the missing position — one rate-limited morning
+     * showed -85% on an account that had not moved. Whatever is excluded from one side is now
+     * excluded from the other by construction.
+     *
+     * <p>Prices come from one batched call rather than one lookup per holding. That is not only
+     * faster: a per-holding fan-out during an outage means a request per holding <em>per page
+     * render</em>, which is how a brief rate-limit sustains itself.
+     */
+    public Valuation valuation(Account account) {
         if (account.getType() == AccountType.LOAN) {
-            return debtRepository.findByAccountId(account.getId())
+            BigDecimal outstanding = debtRepository.findByAccountId(account.getId())
                 .map(debt -> loanAmortizationService.computeRemainingBalance(debt, LocalDate.now()))
-                .orElseGet(() -> priceService.toEur(account.getCurrentBalance(), account.getCurrency(), account.getTicker()));
+                .orElseGet(() -> priceService.toEur(
+                    account.getCurrentBalance(), account.getCurrency(), account.getTicker()));
+            return new Valuation(outstanding, account.getCurrentBalance(), true, true, false);
         }
+
         List<AccountHolding> holdings = holdingRepository.findByAccount_Id(account.getId());
         if (holdings.isEmpty()) {
-            return priceService.toEur(account.getCurrentBalance(), account.getCurrency(), account.getTicker());
+            BigDecimal cash = priceService.toEur(
+                account.getCurrentBalance(), account.getCurrency(), account.getTicker());
+            return new Valuation(cash, account.getCurrentBalance(), true, true, false);
         }
-        BigDecimal liveValue = account.getCashBalance() != null ? account.getCashBalance() : BigDecimal.ZERO;
+
+        Map<String, PriceService.Quote> quotes = quotesFor(account, holdings);
+
+        BigDecimal cashBalance = account.getCashBalance() != null
+            ? account.getCashBalance() : BigDecimal.ZERO;
+        BigDecimal liveValue = cashBalance;
+        BigDecimal invested = cashBalance;
+        // Cost basis over *every* holding, priced or not. Only the provider-valued override below
+        // uses it, and only because that override replaces the value with a total covering every
+        // holding too — pairing it with the partial basis would invent a gain the size of the
+        // positions Yahoo failed to price.
+        BigDecimal investedOverAllHoldings = cashBalance;
         boolean allHoldingsPriced = true;
+        boolean anyHoldingPriced = false;
+        boolean anyStale = false;
+        boolean anyCostBasisUnknown = false;
+
         for (AccountHolding h : holdings) {
             BigDecimal qty = h.getQuantity();
-            BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
-            if (livePrice == null) {
+            boolean hasTicker = h.getTicker() != null && !h.getTicker().isBlank();
+            PriceService.Quote quote = hasTicker
+                ? quotes.get(h.getTicker().toUpperCase(Locale.ROOT)) : null;
+
+            investedOverAllHoldings = investedOverAllHoldings.add(costBasisOf(h));
+
+            if (quote != null) {
+                anyHoldingPriced = true;
+                if (!quote.live()) anyStale = true;
+                liveValue = liveValue.add(qty.multiply(quote.price()));
+            } else if (hasTicker && h.getProviderValueEur() != null) {
+                // A ticker we could not price at any age, but the connector reported this line's
+                // own EUR value (Trade Republic, Bourse Direct). Use it rather than dropping the
+                // line. The lookup did fail, so allHoldingsPriced goes false — that is what makes
+                // the provider-valued override below prefer the provider's own total. But the
+                // line itself is valued, so it counts as priced and its cost basis is counted
+                // below: adding the value while dropping the cost is the mismatch that reports a
+                // gain the size of the position, the -85% incident with the sign flipped.
                 allHoldingsPriced = false;
-                BigDecimal providerValue = h.getProviderValueEur();
-                if (providerValue != null) {
-                    liveValue = liveValue.add(providerValue);
-                    continue;
-                }
+                liveValue = liveValue.add(h.getProviderValueEur());
+                anyHoldingPriced = true;
+            } else if (hasTicker) {
+                allHoldingsPriced = false;
                 // Skipping is deliberate -- a held-but-unpriced asset must not be valued at a
-                // guess -- but it is not free: during a price-provider outage the balance (and
-                // any snapshot taken from it) silently shrinks by whatever those holdings were
-                // worth. Log it so the dip is explicable rather than mysterious.
+                // guess -- but it is not free: the balance (and any snapshot taken from it)
+                // silently shrinks by whatever those holdings were worth. Log it so the dip is
+                // explicable rather than mysterious. Note this is now the residual case only:
+                // PriceService falls back to the last recorded price first, so reaching here
+                // means the asset has no price of any age -- typically a coin with no CoinGecko
+                // mapping.
                 // signum() != 0 (not > 0): omitting an unpriced SHORT overstates the
                 // balance — a liability valued at 0 — which deserves the trace at least
                 // as much as the understated long.
                 if (qty != null && qty.signum() != 0) {
-                    log.warn("No EUR price for holding {} (account {}) -- excluding it from the live balance",
-                        h.getTicker(), account.getId());
+                    log.warn("No EUR price for holding {} (account {}) -- excluding it from both "
+                        + "the live balance and the cost basis", h.getTicker(), account.getId());
                 }
+                // And out of the cost basis too. Keeping it there while its value is gone is
+                // what reported an untouched account as an 85% loss: the whole cost of the
+                // positions that failed to price stayed in the denominator.
+                continue;
+            } else if (h.getProviderValueEur() != null) {
+                // No ticker to price, but the connector reported the line's EUR value itself
+                // (Bourse Direct is the only one that does). That is a valuation, so count it and
+                // its cost basis below, and treat the account as priced: there was no lookup to
+                // fail here, and leaving the flag false turned dailySnapshots' one-outage refusal
+                // into a permanent one — such an account simply stopped receiving snapshots.
+                liveValue = liveValue.add(h.getProviderValueEur());
+                anyHoldingPriced = true;
+            } else {
+                // No ticker *and* no reported value: nothing can put a number on this line. Drop
+                // it from both sides, exactly as for a ticker the providers could not price —
+                // keeping its cost while its value is missing is the asymmetry that reported an
+                // untouched account as an 85% loss, and calling the account priced anyway would
+                // let dailySnapshots engrave that gap.
+                allHoldingsPriced = false;
                 continue;
             }
-            liveValue = liveValue.add(qty.multiply(livePrice));
+
+            BigDecimal costBasis = providerCostBasisEur(h);
+            if (costBasis == null && h.getAverageBuyIn() != null) {
+                costBasis = h.getAverageBuyIn().multiply(qty);
+            }
+            if (costBasis == null) {
+                anyCostBasisUnknown = true;
+            } else {
+                invested = invested.add(costBasis);
+            }
+        }
+
+        if (anyCostBasisUnknown) {
+            // A partial cost basis creates a fictitious gain. Until every
+            // position is known, use the account value as a neutral baseline.
+            invested = account.getCurrentBalance();
+            investedOverAllHoldings = account.getCurrentBalance();
         }
         // Some providers report an authoritative total in EUR. If Yahoo/OpenFIGI cannot
         // price even one instrument, prefer that last successful provider valuation over a
         // misleading partial total (cash + only the symbols Yahoo happened to resolve).
         if (!allHoldingsPriced && isProviderValued(account)) {
-            return account.getCurrentBalance();
+            // Both sides move together. The provider's total covers every position, so the cost
+            // basis must too: pairing it with the partial basis reports a gain the size of the
+            // unpriced positions' cost — the same value/cost mismatch as the -85% incident, with
+            // the sign flipped, and dailySnapshots would write it into balance_snapshot.
+            liveValue = account.getCurrentBalance();
+            invested = investedOverAllHoldings;
+            // The provider valued them; only our price lookup failed.
+            anyHoldingPriced = true;
         }
-        return liveValue;
+        return new Valuation(liveValue, invested, allHoldingsPriced, anyHoldingPriced, anyStale);
+    }
+
+    /**
+     * A holding's EUR cost basis: the provider's own figure when it reports one, else
+     * {@code averageBuyIn × quantity}, else zero. Zero rather than null because the only caller
+     * is the all-holdings total, whose alternative — dropping the line — is what it exists to
+     * avoid; the null case is handled separately by {@code anyCostBasisUnknown}.
+     */
+    private BigDecimal costBasisOf(AccountHolding holding) {
+        BigDecimal costBasis = providerCostBasisEur(holding);
+        if (costBasis == null && holding.getAverageBuyIn() != null) {
+            costBasis = holding.getAverageBuyIn().multiply(holding.getQuantity());
+        }
+        return costBasis == null ? BigDecimal.ZERO : costBasis;
+    }
+
+    /**
+     * Quotes for an account's holdings, in one call.
+     *
+     * <p>A {@code CRYPTO} account is resolved crypto-only: dozens of coins share a symbol with a
+     * listed equity, and the generic route would hand an unmapped one to Yahoo Finance and value
+     * it at that company's share price. {@code CryptoExchangeSyncService} has always taken that
+     * care on the write side; taking it here too means the read side can no longer disagree with
+     * what was synced.
+     */
+    private Map<String, PriceService.Quote> quotesFor(Account account, List<AccountHolding> holdings) {
+        Set<String> tickers = holdings.stream()
+            .map(AccountHolding::getTicker)
+            .filter(t -> t != null && !t.isBlank())
+            .map(t -> t.toUpperCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toSet());
+        if (tickers.isEmpty()) return Map.of();
+        return account.getType() == AccountType.CRYPTO
+            ? priceService.getCryptoQuotes(tickers)
+            : priceService.getQuotes(tickers);
     }
 
     /** Null-safe: {@code Set.of(...)} throws on a null lookup, and most accounts have no provider. */
@@ -382,7 +514,7 @@ public class AccountService {
     @Transactional
     public HoldingResponse updateHolding(Long accountId, Long memberId, String ticker,
             BigDecimal quantity, BigDecimal averageBuyIn) {
-        getOrThrow(accountId, memberId);
+        Account account = getOrThrow(accountId, memberId);
         AccountHolding h = holdingRepository.findByAccountIdAndTicker(accountId, ticker)
             .orElseThrow(() -> new ResourceNotFoundException("Holding not found"));
         h.setQuantity(quantity);
@@ -392,7 +524,7 @@ public class AccountService {
         h.setProviderValueEur(null);
         h.setProviderPnlEur(null);
         holdingRepository.save(h);
-        return toHoldingResponse(h);
+        return toHoldingResponse(h, quotesFor(account, List.of(h)));
     }
 
     @Transactional
@@ -461,10 +593,12 @@ public class AccountService {
         return loanAmortizationService.compute(debt, LocalDate.now());
     }
 
-    private HoldingResponse toHoldingResponse(AccountHolding holding) {
+    private HoldingResponse toHoldingResponse(AccountHolding holding, Map<String, PriceService.Quote> quotes) {
         BigDecimal currentPrice = holding.getCurrentPrice();
         BigDecimal currentPriceEur = null;
         Instant priceUpdatedAt = null;
+        LocalDate priceAsOf = null;
+        boolean priceStale = false;
 
         // Only PriceService (Yahoo/CoinGecko, FX-converted) is trusted as a
         // source of EUR-denominated prices. holding.currentPrice may have been
@@ -473,7 +607,12 @@ public class AccountService {
         // produce native-as-EUR values. Better to return null and surface
         // "price unknown" than to invent a wrong number.
         if (holding.getTicker() != null && !holding.getTicker().isBlank()) {
-            currentPriceEur = priceService.getPriceEur(holding.getTicker());
+            PriceService.Quote quote = quotes.get(holding.getTicker().toUpperCase(Locale.ROOT));
+            if (quote != null) {
+                currentPriceEur = quote.price();
+                priceAsOf = quote.asOf();
+                priceStale = !quote.live();
+            }
             priceUpdatedAt = holding.getLastSyncedAt();
         }
 
@@ -509,7 +648,9 @@ public class AccountService {
             costBasis,
             pnlEur,
             pnlPercent,
-            priceUpdatedAt
+            priceUpdatedAt,
+            priceAsOf,
+            priceStale
         );
     }
 

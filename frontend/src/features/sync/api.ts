@@ -16,6 +16,8 @@ import type {
   BoursoAuthInitResponse,
   BourseDirectSessionStatus,
   BourseDirectAuthInitResponse,
+  DegiroSessionStatus,
+  DegiroAuthInitResponse,
   AmundiSessionStatus,
   AmundiAuthInitResponse,
 } from '@/types/api'
@@ -94,7 +96,9 @@ export const trApi = {
 // --- Crypto Exchanges ---
 
 export const cryptoExchangeApi = {
-  add: (type: ExchangeType, apiKey: string, apiSecret: string) =>
+  // apiSecret is optional: single-key exchanges (Meria) must not send one, and axios drops an
+  // undefined field from the JSON body entirely.
+  add: (type: ExchangeType, apiKey: string, apiSecret?: string) =>
     api
       .post<Account>('/crypto/exchange', { type, apiKey, apiSecret })
       .then(r => r.data),
@@ -152,6 +156,29 @@ export const boursoApi = {
 
   clearSession: () =>
     api.delete('/bourso/session'),
+}
+
+// --- DEGIRO ---
+
+export const degiroApi = {
+  initiateAuth: (username: string, password: string) =>
+    api
+      .post<DegiroAuthInitResponse>('/degiro/auth/initiate', { username, password })
+      .then(r => r.data),
+
+  completeAuth: (processId: string, code: string) =>
+    api
+      .post<DegiroSessionStatus>('/degiro/auth/complete', { processId, code })
+      .then(r => r.data),
+
+  sync: () =>
+    api.post<Account>('/degiro/sync').then(r => r.data),
+
+  getStatus: () =>
+    api.get<DegiroSessionStatus>('/degiro/status').then(r => r.data),
+
+  clearSession: () =>
+    api.delete('/degiro/session'),
 }
 
 // --- Bourse Direct ---

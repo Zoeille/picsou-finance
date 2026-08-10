@@ -84,6 +84,14 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-IP DEGIRO auth rate limiter: 5 attempts per 15 minutes.
+     */
+    @Bean("degiroAuthBuckets")
+    public Map<String, Bucket> degiroAuthBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
      * Per-IP Amundi auth rate limiter: 5 attempts per 15 minutes.
      */
     @Bean("amundiAuthBuckets")
@@ -208,6 +216,15 @@ public class RateLimitConfig {
     }
 
     public static Bucket createBourseDirectAuthBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(5)
+                .refillIntervally(5, Duration.ofMinutes(15))
+                .build())
+            .build();
+    }
+
+    public static Bucket createDegiroAuthBucket() {
         return Bucket.builder()
             .addLimit(Bandwidth.builder()
                 .capacity(5)

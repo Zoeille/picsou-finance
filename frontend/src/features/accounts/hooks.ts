@@ -162,6 +162,13 @@ export function useAccountHoldings(id: number) {
   })
 }
 
+export function useAccountPositions(id: number) {
+  return useQuery({
+    queryKey: ['accounts', id, 'positions'],
+    queryFn: () => accountsApi.positions(id),
+  })
+}
+
 export function useHoldingsWithLivePrices(id: number) {
   return useQuery({
     queryKey: ['accounts', id, 'holdings'],

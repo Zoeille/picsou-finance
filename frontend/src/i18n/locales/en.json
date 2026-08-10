@@ -163,6 +163,7 @@
     "assetNamePlaceholder": "Example: iShares Core MSCI World",
     "priceLive": "Live price",
     "priceStale": "Price from {{time}}",
+    "priceAsOf": "Price from {{date}} — the price provider did not respond",
     "history": "History",
     "manual": "Manual",
     "allTypes": "All types",
@@ -199,9 +200,9 @@
     "compteTitres": "Brokerage",
     "crypto": "Crypto",
     "realEstate": "Real estate",
-    "employeeSavings": "Employee savings",
     "loan": "Loan",
-    "other": "Other"
+    "other": "Other",
+    "employeeSavings": "Employee savings"
   },
   "realEstate": {
     "purchasePrice": "Purchase price",
@@ -342,6 +343,16 @@
       }
     }
   },
+  "positions": {
+    "products": {
+      "SPOT": "Spot",
+      "STAKING": "Staking",
+      "LENDING": "Lending"
+    },
+    "principal": "Principal",
+    "interest": "Interest",
+    "total": "Total"
+  },
   "goals": {
     "title": "Goals",
     "addGoal": "New goal",
@@ -401,13 +412,14 @@
     "syncingDesc": "We're pulling in your latest transactions. This usually takes a few seconds.",
     "desc": {
       "banks": "Connect your banks via OAuth",
-      "exchanges": "Binance, Kraken...",
+      "exchanges": "Binance, Meria...",
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sync your PEA and securities accounts",
-      "amundi": "PEE, PEG, PERCO, PER held at Amundi",
+      "degiro": "Sync your DEGIRO securities account",
       "finary": "Import from Finary",
-      "manual": "Create an account manually"
+      "manual": "Create an account manually",
+      "amundi": "PEE, PEG, PERCO, PER held at Amundi"
     }
   },
   "sync": {
@@ -419,8 +431,6 @@
       "countriesLoadError": "Couldn't load all countries — showing France only.",
       "searchPlaceholder": "e.g. BNP Paribas...",
       "searchError": "Unable to search banks right now.",
-      "proBadge": "Pro",
-      "proBadgeTitle": "Business account — this bank only serves professional customers",
       "connected": "Active connections",
       "noConnections": "No bank connections",
       "connect": "Connect",
@@ -431,7 +441,9 @@
       "callbackDone": "Accounts synced!",
       "callbackError": "Sync error",
       "initiateError": "Connection failed",
-      "psd2ScopeNote": "Enable Banking only syncs current accounts (PSD2 limitation). For PEA, life insurance, savings: use Trade Republic, Boursobank, Finary, or add them manually."
+      "psd2ScopeNote": "Enable Banking only syncs current accounts (PSD2 limitation). For PEA, life insurance, savings: use Trade Republic, Boursobank, Finary, or add them manually.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Business account — this bank only serves professional customers"
     },
     "tr": {
       "title": "Trade Republic",
@@ -488,8 +500,12 @@
       "type": "Exchange type",
       "apiKey": "API Key",
       "apiSecret": "API Secret",
+      "apiKeyOnly": "Meria connects with a single read-only API key — no secret needed.",
+      "showSecret": "Show API secret",
+      "hideSecret": "Hide API secret",
       "connect": "Connect",
       "connectError": "Failed to connect exchange. Check your API key and secret.",
+      "connectErrorKeyOnly": "Failed to connect exchange. Check your API key.",
       "sync": "Synchronize",
       "remove": "Remove",
       "removeConfirm": "Remove this exchange?",
@@ -586,6 +602,57 @@
         "serverError": "BoursoBank server error. Please try again."
       }
     },
+    "degiro": {
+      "title": "DEGIRO",
+      "username": "Username",
+      "password": "Password",
+      "totpCode": "Authenticator code",
+      "connect": "Connect",
+      "sync": "Synchronize",
+      "clearSession": "Disconnect",
+      "noSession": "No active session",
+      "sessionActive": "Active session",
+      "reauthRequired": "Reconnection needed",
+      "lastSyncedAt": "Last synced on",
+      "totpPrompt": "Enter the 6-digit code from your authenticator app",
+      "errors": {
+        "tooManyAttempts": "Too many attempts. Please wait.",
+        "invalidCredentials": "Invalid credentials.",
+        "invalidTotpCode": "Invalid or expired authenticator code.",
+        "sessionExpired": "Session expired. Please reconnect.",
+        "serverError": "DEGIRO server error. Please try again."
+      }
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct",
+      "login": "Login",
+      "password": "Password",
+      "otpCode": "6-digit security code",
+      "otpPrompt": "Enter the code sent by Bourse Direct. This device will not be marked as trusted.",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "validate": "Validate code",
+      "validating": "Validating…",
+      "sync": "Sync",
+      "queued": "Synchronization queued…",
+      "syncing": "Syncing…",
+      "syncSuccess": "Portfolio synchronized.",
+      "clearSession": "Disconnect",
+      "noSession": "No active session",
+      "sessionActive": "Active session",
+      "scope": "Syncs positions, average cost, price, valuation and cash for PEA and securities accounts.",
+      "errors": {
+        "tooManyAttempts": "Too many attempts. Please wait.",
+        "invalidCredentials": "Invalid Bourse Direct credentials.",
+        "invalidCode": "Invalid or expired security code. Start the login again.",
+        "authAttemptExpired": "The authentication attempt expired. Start the login again.",
+        "sessionExpired": "The Bourse Direct session expired. Please reconnect.",
+        "portfolioIncomplete": "Bourse Direct returned an incomplete portfolio. Your existing data was kept unchanged.",
+        "formatChanged": "Bourse Direct changed its portfolio format. Your existing data was kept unchanged.",
+        "invalidData": "Bourse Direct returned inconsistent portfolio data. Your existing data was kept unchanged.",
+        "serverError": "Could not reach Bourse Direct. Please try again."
+      }
+    },
     "amundi": {
       "title": "Amundi",
       "login": "Username",
@@ -618,36 +685,6 @@
         "formatChanged": "The Amundi website format changed. Your existing data was kept.",
         "invalidData": "Amundi returned inconsistent data. Your existing data was kept.",
         "serverError": "Could not reach Amundi. Please try again."
-      }
-    },
-    "bourseDirect": {
-      "title": "Bourse Direct",
-      "login": "Login",
-      "password": "Password",
-      "otpCode": "6-digit security code",
-      "otpPrompt": "Enter the code sent by Bourse Direct. This device will not be marked as trusted.",
-      "connect": "Connect",
-      "connecting": "Connecting…",
-      "validate": "Validate code",
-      "validating": "Validating…",
-      "sync": "Sync",
-      "queued": "Synchronization queued…",
-      "syncing": "Syncing…",
-      "syncSuccess": "Portfolio synchronized.",
-      "clearSession": "Disconnect",
-      "noSession": "No active session",
-      "sessionActive": "Active session",
-      "scope": "Syncs positions, average cost, price, valuation and cash for PEA and securities accounts.",
-      "errors": {
-        "tooManyAttempts": "Too many attempts. Please wait.",
-        "invalidCredentials": "Invalid Bourse Direct credentials.",
-        "invalidCode": "Invalid or expired security code. Start the login again.",
-        "authAttemptExpired": "The authentication attempt expired. Start the login again.",
-        "sessionExpired": "The Bourse Direct session expired. Please reconnect.",
-        "portfolioIncomplete": "Bourse Direct returned an incomplete portfolio. Your existing data was kept unchanged.",
-        "formatChanged": "Bourse Direct changed its portfolio format. Your existing data was kept unchanged.",
-        "invalidData": "Bourse Direct returned inconsistent portfolio data. Your existing data was kept unchanged.",
-        "serverError": "Could not reach Bourse Direct. Please try again."
       }
     }
   },
@@ -1182,7 +1219,7 @@
     },
     "crypto": {
       "title": "Encrypt your exchange API keys",
-      "body": "Your Binance / Kraken / Coinbase API keys are encrypted at rest. Picsou can generate the encryption key for you — it stays on your disk and is never transmitted.",
+      "body": "Your exchange API keys (Binance, Meria...) are encrypted at rest. Picsou can generate the encryption key for you — it stays on your disk and is never transmitted.",
       "generateCta": "Generate a key for me",
       "generating": "Generating...",
       "existed": "Your encryption key is already configured — nothing to do.",

@@ -52,6 +52,18 @@ export const QUERY_STALE_TIMES = {
 export const TR_VERIFICATION_CODE_LENGTH = 4
 
 /**
+ * Mirrors the `@Size` bounds on `CryptoExchangeController.AddExchangeRequest`, shared by both
+ * exchange forms (AddAccountModal, CryptoExchangeTab).
+ *
+ * A credential over the limit is rejected as a 422 whose ProblemDetail carries an `errors` map
+ * but no `detail` — and the forms only render `detail`, so the user gets an error with no text.
+ * Capping the inputs means that response is unreachable from the UI. The backend bounds are sized
+ * against the `varchar(500)` columns holding the AES-GCM ciphertext; raise these only together.
+ */
+export const EXCHANGE_API_KEY_MAX_LENGTH = 200
+export const EXCHANGE_API_SECRET_MAX_LENGTH = 300
+
+/**
  * How long a successful `session-probe` result (RequireAuth's cookie-backed
  * session check) may sit in the query cache after it stops being observed
  * (isAuthenticated flips true). Bounded rather than Infinity so a stale

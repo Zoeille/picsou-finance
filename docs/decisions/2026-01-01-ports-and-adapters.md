@@ -17,7 +17,7 @@ The 5 port interfaces:
 |------|-----------------|
 | `BankConnectorPort` | `EnableBankingBankConnector`, `PowensBankConnector` |
 | `TradeRepublicPort` | `TradeRepublicAdapter` |
-| `CryptoExchangePort` | `BinanceAdapter` |
+| `CryptoExchangePort` | `BinanceAdapter`, `MeriaAdapter` |
 | `WalletPort` | `BitcoinWalletAdapter`, `EvmWalletAdapter`, `SolanaWalletAdapter` |
 | `PriceProviderPort` | `CoinGeckoPriceProvider`, `YahooFinancePriceProvider` |
 

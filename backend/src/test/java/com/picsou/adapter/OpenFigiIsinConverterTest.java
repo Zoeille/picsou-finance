@@ -9,6 +9,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenFigiIsinConverterTest {
 
+    private static Map<String, Object> entry(String exchCode, String ticker, String name) {
+        return Map.of("exchCode", exchCode, "ticker", ticker, "name", name);
+    }
+
     @Test
     void isIsin_recognizesValidIsinCodes() {
         // 2-letter country prefix + 9 alphanumerics + 1 check digit = 12 chars
@@ -92,6 +96,68 @@ class OpenFigiIsinConverterTest {
         OpenFigiIsinConverter.TickerResult padded = converter.resolve(" xf000btc0017 ");
         assertThat(padded.ticker()).isEqualTo("BTC");
         assertThat(padded.name()).isEqualTo("Bitcoin");
+    }
+
+    // ─── pickBest exchange priority ─────────────────────────────────────────────
+    // A 2026-08-05 attempt to prefer EU exchanges over US OTC/ADR for Irish/
+    // Luxembourg-domiciled ISINs (no HOME_EXCHANGE entry for either) was tried
+    // and reverted: it fixed IE000BI8OT95 ("MWRD") but broke two other real
+    // holdings on the same live portfolio (IE00BGSF1X88, IE00BD6FTQ80) whose EU
+    // tickers have no live Yahoo quote while their US OTC ones do. See the
+    // class-level Javadoc on pickBest() for the full account. These tests lock
+    // in the reverted (original) US-OTC-first behavior.
+
+    private final OpenFigiIsinConverter converter = new OpenFigiIsinConverter(new CoinGeckoPriceProvider());
+
+    @Test
+    void pickBest_prefersUsOtcOverEuExchangeWhenNoHomeExchangeMatches() {
+        // IE: no HOME_EXCHANGE entry — mirrors IE000BI8OT95 exactly (FP + US both present).
+        List<Map<String, Object>> entries = List.of(
+            entry("US", "MWRDF", "AMUNDI MSCI WORLD USD ACC"),
+            entry("FP", "MWRD", "AM CORE MSCI WORLD U ETF ACC")
+        );
+
+        OpenFigiIsinConverter.TickerResult result = converter.pickBest("IE000BI8OT95", entries);
+
+        assertThat(result.ticker()).isEqualTo("MWRDF");
+        assertThat(result.name()).isEqualTo("AMUNDI MSCI WORLD USD ACC");
+    }
+
+    @Test
+    void pickBest_fallsBackToEuExchangeWhenNoUsOtcAvailable() {
+        List<Map<String, Object>> entries = List.of(
+            entry("FP", "SOMEF", "SOME FUND WITH NO US OTC LISTING")
+        );
+
+        OpenFigiIsinConverter.TickerResult result = converter.pickBest("IE00XXXXXXXX", entries);
+
+        assertThat(result.ticker()).isEqualTo("SOMEF.PA");
+    }
+
+    @Test
+    void pickBest_homeExchangeStillWinsOverUsAndEu() {
+        // FR has a HOME_EXCHANGE entry (FP) — must still short-circuit before the
+        // US/EU fallback ordering below it.
+        List<Map<String, Object>> entries = List.of(
+            entry("US", "BNPQY", "BNP PARIBAS ADR"),
+            entry("FP", "BNP", "BNP PARIBAS SA"),
+            entry("GR", "BNP", "BNP PARIBAS SA")
+        );
+
+        OpenFigiIsinConverter.TickerResult result = converter.pickBest("FR0000131104", entries);
+
+        assertThat(result.ticker()).isEqualTo("BNP.PA");
+    }
+
+    @Test
+    void pickBest_fallsBackToAnyKnownExchangeWhenNoHomeUsOrEuMatch() {
+        List<Map<String, Object>> entries = List.of(
+            entry("HK", "1234", "SOME HONG KONG LISTING")
+        );
+
+        OpenFigiIsinConverter.TickerResult result = converter.pickBest("KYG000000000", entries);
+
+        assertThat(result.ticker()).isEqualTo("1234.HK");
     }
 
     @Test

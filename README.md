@@ -30,7 +30,7 @@ Track bank accounts, brokerage, crypto, and net worth — all in one place.
 - **Bank sync** — Enable Banking (PSD2/OAuth, 2000+ EU banks).
 - **Brokerage sync** — Trade Republic via WebSocket or CSV import, and Bourse Direct PEA/CTO positions via a local read-only sidecar
 - **Employee savings** — Amundi Épargne Salariale plans (PEE/PEG, PERCO, PER) and their FCPE lines, via a local read-only sidecar
-- **Crypto** — Binance exchange sync, on-chain BTC/ETH/SOL address tracking
+- **Crypto** — Binance and Meria exchange sync, on-chain BTC/ETH/SOL address tracking
 - **Live prices** — CoinGecko (crypto), Yahoo Finance (stocks/ETFs)
 - **Security insight** — Per-holding asset-type detection and ETF composition (top holdings, country & sector breakdowns) in the holding detail modal
 - **Net worth tracking** — Historical snapshots, stacked area charts, per-account breakdown
