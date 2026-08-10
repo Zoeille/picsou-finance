@@ -106,7 +106,9 @@ public class AccountService {
             .isManual(req.isManual())
             .color(req.color() != null ? req.color() : "#6366f1")
             .ticker(req.ticker())
-            .logoKey(normalizeLogoKey(req.logoKey(), req.type()))
+            // Nothing stored yet, so nothing survives normalization: a logo key is only ever
+            // seeded by WalletSyncService, which builds the wallet's row itself.
+            .logoKey(normalizeLogoKey(req.logoKey(), null, req.type()))
             .build();
 
         account = accountRepository.save(account);
@@ -135,8 +137,7 @@ public class AccountService {
         // know about logos" (the MCP update_account tool, an older frontend) rather than
         // "clear it" -- and silently dropping a Ledger back to the generic wallet icon on an
         // unrelated rename would be a surprise.
-        account.setLogoKey(normalizeLogoKey(
-            req.logoKey() != null ? req.logoKey() : account.getLogoKey(), account.getType()));
+        account.setLogoKey(normalizeLogoKey(req.logoKey(), account.getLogoKey(), account.getType()));
 
         // For manual accounts, allow balance update
         if (account.isManual() && req.currentBalance() != null) {
@@ -279,16 +280,25 @@ public class AccountService {
     }
 
     /**
-     * A bundled logo key only means something on a crypto account: it is seeded by
-     * {@link WalletSyncService} for on-chain wallets and the picker only offers wallet marks.
+     * A bundled logo key only means something on an on-chain wallet: it is seeded by
+     * {@link WalletSyncService} at account creation and the picker only offers wallet marks.
+     *
+     * <p>The stored key is what answers "is this a wallet?", the same test the picker uses —
+     * a client can swap one wallet mark for another ({@code stored != null}), never attach one
+     * to an account that has none. CRYPTO alone wouldn't do: it also covers exchange accounts,
+     * which could then hide their own brand mark behind a Ledger.
      *
      * <p>Enforced here rather than trusted from the client because the key otherwise outlives
      * the reason it exists — retyping a wallet to CHECKING would leave a blockchain mark on it
      * for good, since the picker has no "none" option and {@code update} keeps a key the
      * request omits.
+     *
+     * @param requested the key the client sent, or {@code null} if it sent none
+     * @param stored    the key already on the account, {@code null} on create
      */
-    private static String normalizeLogoKey(String logoKey, AccountType type) {
-        return type == AccountType.CRYPTO ? logoKey : null;
+    private static String normalizeLogoKey(String requested, String stored, AccountType type) {
+        if (stored == null || type != AccountType.CRYPTO) return null;
+        return requested != null ? requested : stored;
     }
 
     Account getOrThrow(Long id, Long memberId) {

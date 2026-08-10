@@ -216,8 +216,8 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 
 `logoUrl` is the bank logo captured from the sync provider's institution catalog (Enable
 Banking only). `logoKey` names a logo bundled with the frontend — set on on-chain wallet
-accounts, whose `provider` is a bare ticker; see
-[the feature notes](../../docs/features/bank-logos.md).
+accounts, whose `provider` is a bare ticker, and settable by a client only on an account
+that already carries one; see [the feature notes](../../docs/features/bank-logos.md).
 
 ---
 
@@ -246,7 +246,7 @@ accounts, whose `provider` is a bare ticker; see
 | `isManual` | `boolean` | | Whether manually managed |
 | `color` | `string` | Hex pattern | Display color, e.g. `"#6366f1"` |
 | `ticker` | `string` | max 20 | Ticker for price lookup (optional) |
-| `logoKey` | `string` | `^[a-z0-9-]{1,32}$` | Bundled frontend logo to show, e.g. `"ledger"` (optional). Omitting it on `PUT` keeps the stored value — it is never cleared by a client that doesn't know about it |
+| `logoKey` | `string` | `^[a-z0-9-]{1,32}$` | Bundled frontend logo to show, e.g. `"ledger"` (optional). Honoured only on a `CRYPTO` account that already stores a key, i.e. an on-chain wallet — ignored on `POST` and on any other account, so a key can be swapped but never attached. Omitting it on `PUT` keeps the stored value: it is never cleared by a client that doesn't know about it |
 
 **Response `201` — `AccountResponse`.**
 

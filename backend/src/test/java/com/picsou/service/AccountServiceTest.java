@@ -121,12 +121,42 @@ class AccountServiceTest {
     }
 
     @Test
+    void update_ignoresALogoKeyOnACryptoAccountThatCarriesNone() {
+        // CRYPTO covers exchange accounts too, and those already have a brand mark keyed on
+        // provider -- a key sent by hand would win over it and show a Ledger on a Meria
+        // account. Only an account WalletSyncService already seeded gets to swap its mark.
+        Account exchange = Account.builder().id(1L).name("Meria").type(AccountType.CRYPTO)
+            .provider("MERIA").currency("EUR").build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(exchange));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, new AccountRequest("Meria", AccountType.CRYPTO, "MERIA", "EUR",
+            null, false, "#f59e0b", null, "ledger"), 7L);
+
+        assertThat(exchange.getLogoKey()).isNull();
+    }
+
+    @Test
     void create_ignoresALogoKeyOnANonCryptoAccount() {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AccountResponse created = accountService.create(
             new AccountRequest("Livret", AccountType.SAVINGS, null, "EUR",
                 null, true, "#f59e0b", null, "ledger"),
+            FamilyMember.builder().id(7L).build());
+
+        assertThat(created.logoKey()).isNull();
+    }
+
+    @Test
+    void create_ignoresALogoKeyOnACryptoAccountToo() {
+        // A key is never introduced by a request: only WalletSyncService seeds one, and it
+        // builds the wallet's row itself rather than going through create().
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AccountResponse created = accountService.create(
+            new AccountRequest("BITCOIN Wallet", AccountType.CRYPTO, "BTC", "EUR",
+                null, false, "#f59e0b", null, "ledger"),
             FamilyMember.builder().id(7L).build());
 
         assertThat(created.logoKey()).isNull();

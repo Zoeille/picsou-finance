@@ -279,9 +279,9 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
             <ColorPicker value={selectedColor} onChange={(c) => setValue('color', c)} />
           </div>
 
-          {/* Also gated on the type: AccountService drops the key from anything but a crypto
-              account, so the picker has to disappear the moment the type changes rather than
-              offer a choice the save is about to discard. */}
+          {/* Also gated on the type: AccountService keeps a key only on a crypto account that
+              already stores one, so the picker has to disappear the moment the type changes
+              rather than offer a choice the save is about to discard. */}
           {selectedLogoKey && selectedType === 'CRYPTO' && (
             <div className="space-y-2">
               <Label>{t('accounts.logo')}</Label>
