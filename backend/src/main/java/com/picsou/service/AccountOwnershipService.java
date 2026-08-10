@@ -10,6 +10,7 @@ import com.picsou.model.AccountType;
 import com.picsou.model.FamilyMember;
 import com.picsou.repository.AccountOwnershipRepository;
 import com.picsou.repository.FamilyMemberRepository;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -53,7 +54,9 @@ public class AccountOwnershipService {
     @Transactional(readOnly = true)
     public OwnershipResponse get(Long accountId, Long memberId) {
         Account account = accessResolver.requireReadable(accountId, memberId);
-        return toResponse(account, ownershipRepository.findByAccountId(accountId));
+        // Safe to hand over the lazy proxy: nothing on the read path clears the session, so it
+        // initialises on first access.
+        return toResponse(account.getMember(), ownershipRepository.findByAccountId(accountId));
     }
 
     /**
@@ -70,14 +73,28 @@ public class AccountOwnershipService {
         }
 
         List<OwnershipRequest.Share> shares = request.shares();
+
+        // Read the owner out *before* the delete. deleteAllForAccount is declared
+        // clearAutomatically, so it empties the persistence context: `account` comes back
+        // detached and its lazy `member` is a proxy that can never be initialised again.
+        // Clearing a split used to die there on LazyInitializationException, and because the
+        // rollback took the delete with it, "clear the split" never worked at all. An
+        // initialised entity stays readable once detached; a proxy does not.
+        FamilyMember owner = account.getMember();
+        Hibernate.initialize(owner);
+
+        // Validated before the delete too, so a rejected request no longer issues a DELETE it
+        // only undoes by rolling back.
+        if (!shares.isEmpty()) {
+            validate(owner.getId(), shares);
+        }
+
         ownershipRepository.deleteAllForAccount(accountId);
 
         if (shares.isEmpty()) {
             // Clearing the split restores the implicit 100% for the owner.
-            return toResponse(account, List.of());
+            return toResponse(owner, List.of());
         }
-
-        validate(account, shares);
 
         List<AccountOwnership> rows = new ArrayList<>(shares.size());
         for (OwnershipRequest.Share share : shares) {
@@ -89,10 +106,12 @@ public class AccountOwnershipService {
                 .sharePercent(share.sharePercent())
                 .build());
         }
-        return toResponse(account, ownershipRepository.saveAll(rows));
+        // `account` is detached by now; Hibernate still resolves the FK from its id, which
+        // AccountOwnershipReplaceIntegrationTest pins so a future change cannot break it quietly.
+        return toResponse(owner, ownershipRepository.saveAll(rows));
     }
 
-    private void validate(Account account, List<OwnershipRequest.Share> shares) {
+    private void validate(Long ownerId, List<OwnershipRequest.Share> shares) {
         Set<Long> seen = new HashSet<>();
         BigDecimal total = BigDecimal.ZERO;
         for (OwnershipRequest.Share share : shares) {
@@ -110,7 +129,6 @@ public class AccountOwnershipService {
                 "Ownership shares add up to more than 100%");
         }
 
-        Long ownerId = account.getMember().getId();
         if (!seen.contains(ownerId)) {
             // The owner stays responsible for the account (editing, syncing, deleting), so a
             // split that writes them out entirely is almost certainly a mistake. Transferring
@@ -120,11 +138,15 @@ public class AccountOwnershipService {
         }
     }
 
-    private OwnershipResponse toResponse(Account account, List<AccountOwnership> rows) {
-        Long ownerId = account.getMember().getId();
+    /**
+     * @param owner the account's owning member, which must be readable — {@code replace} calls
+     *              this after a persistence-context clear, where an uninitialised proxy would
+     *              throw rather than load
+     */
+    private OwnershipResponse toResponse(FamilyMember owner, List<AccountOwnership> rows) {
+        Long ownerId = owner.getId();
 
         if (rows.isEmpty()) {
-            FamilyMember owner = account.getMember();
             return new OwnershipResponse(
                 List.of(new MemberShare(ownerId, owner.getDisplayName(), owner.getAvatarColor(), FULL, true)),
                 FULL,

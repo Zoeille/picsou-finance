@@ -1,6 +1,6 @@
 # Feature: Ownership shares
 
-> Last updated: 2026-08-01
+> Last updated: 2026-08-10
 
 ## Context
 
@@ -76,6 +76,18 @@ PUT /accounts/{id}/ownership
   both an account belonging to another member entirely and one whose split omits this member.
 - **`deleteAllForAccount` is JPQL on purpose.** A derived `deleteByAccountId` lets Hibernate
   flush the inserts first, tripping `uk_account_ownership_account_member` on a rewrite.
+- **…and it detaches whatever the caller is holding.** It is declared
+  `clearAutomatically = true`, so the persistence context is empty once it returns: the
+  `Account` from `requireOwner` is detached and its lazy `member` is a proxy that can never be
+  initialised again. Anything the response needs off that graph must be read *before* the
+  delete — `replace` calls `Hibernate.initialize(owner)` for exactly this. Clearing a split
+  shipped broken because of it: the response read the owner's name off the dead proxy,
+  `LazyInitializationException` rolled the transaction back, and the delete went with it, so
+  the split could never be cleared at all. `isOwner`/`validate` never noticed because reading
+  a proxy's *identifier* does not initialise it.
+- **Writing through the detached `Account` is fine, but only just.** The new rows reference it
+  and Hibernate resolves the FK from its id without needing it managed. That is behaviour, not
+  a guarantee — `AccountOwnershipReplaceIntegrationTest` pins it.
 - **Removing a member frees their share rather than redistributing it.** Automatic
   redistribution would be a guess about a real-world event Picsou knows nothing about.
 - **`/family/members` is admin-only.** The ownership editor fetches the roster only for
@@ -88,7 +100,14 @@ PUT /accounts/{id}/ownership
 - `AccountAccessResolverTest` — the security-critical one: co-owned reads allowed, co-owned
   writes refused, non-holders 404'd, weighting arithmetic
 - `AccountOwnershipServiceTest` — over-100 rejected, owner-must-remain, type restriction,
-  clearing restores the implicit default
+  clearing restores the implicit default. Mockito throughout, so its `Account` carries a real
+  `FamilyMember` and it cannot see anything the persistence context does
+- `AccountOwnershipReplaceIntegrationTest` — the same `replace` against Flyway-migrated
+  PostgreSQL, where `member` really is a lazy proxy: clearing a split, writing one, rewriting
+  one over itself, and clearing one that exists. Skips itself without Docker. Note the ordering
+  trap it was written around — a `replace` that ran earlier in the same context leaves the
+  owner loaded, so the association resolves to that managed instance and the proxy never
+  appears; only a cold context (every HTTP request) reproduces the failure
 - `RealEstateSummaryServiceTest` — divergent property/loan shares
 - `RealEstateValuationMigrationTest` — constraint bounds and cascade behaviour
 
