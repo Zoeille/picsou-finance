@@ -24,14 +24,15 @@ vi.mock('@/features/accounts/hooks', () => ({
 function metadata(overrides: Partial<RealEstateMetadata> = {}): RealEstateMetadata {
   return {
     purchasePrice: 300000, purchaseDate: null, agencyFees: null, notaryFees: null,
-    worksCost: null, costBasis: 300000, propertyType: 'HOUSE', category: null,
+    worksCost: null, costBasis: 300000, propertyType: 'HOUSE', propertyKind: 'HOUSE',
+    category: null,
     description: null, address: null, postalCode: null, city: null, country: 'FR',
     inseeCode: '33063', latitude: null, longitude: null, geocodeScore: null,
     geocodedAt: null, surfaceArea: 100, landArea: null, constructionYear: null,
     rooms: null, bedrooms: null, bathrooms: null, floorNumber: null, floorsTotal: null,
     hasElevator: null, garageCount: 0, parkingCount: 0, hasGarden: false,
     hasTerrace: false, hasBalcony: false, energyClass: null,
-    valuationMode: 'ESTIMATED', rentalIncome: 0,
+    valuationMode: 'ESTIMATED', lastValuedAt: null, rentalIncome: 0,
     ...overrides,
   }
 }

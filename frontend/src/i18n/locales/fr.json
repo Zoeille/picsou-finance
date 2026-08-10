@@ -146,6 +146,7 @@
     "noAccounts": "Aucun compte",
     "balance": "Solde",
     "lastSync": "Dernière sync",
+    "lastValuation": "Dernière estimation",
     "neverSynced": "Jamais synchronisé",
     "holdings": "Positions",
     "transactions": "Transactions",

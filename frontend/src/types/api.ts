@@ -32,6 +32,12 @@ export interface RealEstateMetadata {
   /** Purchase price plus every acquisition fee — what gain/loss is measured against. */
   costBasis: number
   propertyType: string | null
+  /**
+   * `propertyType` normalised by the backend's lenient `PropertyKind.parse`, or null when the
+   * free-text column holds something it does not recognise. Branch on this, not on the raw
+   * string — old rows predate the enum and may hold French labels.
+   */
+  propertyKind: PropertyKind | null
   category: PropertyCategory | null
   description: string | null
   address: string | null
@@ -60,6 +66,8 @@ export interface RealEstateMetadata {
   hasBalcony: boolean | null
   energyClass: string | null
   valuationMode: ValuationMode
+  /** Date of the newest valuation (`YYYY-MM-DD`), or null if the property was never valued. */
+  lastValuedAt: string | null
   rentalIncome: number | null
 }
 

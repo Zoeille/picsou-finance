@@ -2,7 +2,7 @@ import '@testing-library/jest-dom'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 import { AccountCard } from './AccountCard'
-import type { Account } from '@/types/api'
+import type { Account, RealEstateMetadata } from '@/types/api'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -84,6 +84,38 @@ const baseAccount: Account = {
   createdAt: '2024-01-01T00:00:00Z',
 }
 
+/** A described, valued property -- the shape every real-estate assertion below varies from. */
+function realEstateAccount(
+  overrides: Partial<Account> = {},
+  metadata: Partial<RealEstateMetadata> = {},
+): Account {
+  return {
+    ...baseAccount,
+    id: 8,
+    name: 'Résidence principale',
+    type: 'REAL_ESTATE',
+    provider: null,
+    isManual: true,
+    color: '#a855f7',
+    currentBalance: 412000,
+    currentBalanceEur: 412000,
+    realEstate: {
+      purchasePrice: 320000, purchaseDate: null, agencyFees: null, notaryFees: null,
+      worksCost: null, costBasis: 368800, propertyType: 'HOUSE', propertyKind: 'HOUSE',
+      category: 'PRIMARY_RESIDENCE', description: null, address: null, postalCode: null,
+      city: 'Bordeaux', country: 'FR', inseeCode: '33063', latitude: null, longitude: null,
+      geocodeScore: null, geocodedAt: null, surfaceArea: 95, landArea: null,
+      constructionYear: null, rooms: null, bedrooms: null, bathrooms: null,
+      floorNumber: null, floorsTotal: null, hasElevator: null, garageCount: 0,
+      parkingCount: 0, hasGarden: false, hasTerrace: false, hasBalcony: false,
+      energyClass: null, valuationMode: 'ESTIMATED', lastValuedAt: '2026-01-10',
+      rentalIncome: 0,
+      ...metadata,
+    },
+    ...overrides,
+  }
+}
+
 describe('AccountCard', () => {
   it('renders a colored circle when the account has no logo', () => {
     const { container } = render(<AccountCard account={baseAccount} />)
@@ -133,6 +165,64 @@ describe('AccountCard', () => {
       expect(container.querySelector('img')).not.toBeInTheDocument()
       const dot = container.querySelector('[style*="background-color"]')
       expect(dot).toHaveStyle({ backgroundColor: '#6366f1' })
+    })
+  })
+
+  describe('real estate', () => {
+    it('marks the property with its kind glyph instead of a color circle', () => {
+      const { container } = render(<AccountCard account={realEstateAccount()} />)
+
+      expect(container.querySelector('.lucide-house')).toBeInTheDocument()
+      expect(container.querySelector('[style*="background-color"]')).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['APARTMENT', 'lucide-building-2'],
+      ['BUILDING', 'lucide-building'],
+      ['LAND', 'lucide-land-plot'],
+      ['PARKING', 'lucide-square-parking'],
+      ['COMMERCIAL', 'lucide-store'],
+    ] as const)('gives %s its own glyph', (propertyKind, iconClass) => {
+      const { container } = render(<AccountCard account={realEstateAccount({}, { propertyKind })} />)
+      expect(container.querySelector(`.${iconClass}`)).toBeInTheDocument()
+    })
+
+    it('falls back to the color circle when the kind is unknown', () => {
+      // property_type is free text predating PropertyKind -- an old row the backend parser
+      // does not recognise leaves propertyKind null, and there is no glyph to pick.
+      const account = realEstateAccount({}, { propertyType: 'chalet', propertyKind: null })
+      const { container } = render(<AccountCard account={account} />)
+
+      expect(container.querySelector('svg')).not.toBeInTheDocument()
+      expect(container.querySelector('[style*="background-color"]')).toHaveStyle({
+        backgroundColor: '#a855f7',
+      })
+    })
+
+    it('stands the kind and city in for the provider line a manual account has not got', () => {
+      const { getByText } = render(<AccountCard account={realEstateAccount()} />)
+      expect(getByText('property.kind.HOUSE · Bordeaux')).toBeInTheDocument()
+    })
+
+    it('drops whichever half of the subtitle is missing', () => {
+      const { getByText } = render(
+        <AccountCard account={realEstateAccount({}, { city: null })} />,
+      )
+      expect(getByText('property.kind.HOUSE')).toBeInTheDocument()
+    })
+
+    it('shows the valuation date where a synced account shows its sync date', () => {
+      const { container } = render(<AccountCard account={realEstateAccount()} />)
+      expect(container.textContent).toContain('accounts.lastValuation')
+      expect(container.textContent).not.toContain('accounts.lastSync')
+    })
+
+    it('leaves the unrealized gain to the detail page, so the card matches every other one', () => {
+      const { container } = render(<AccountCard account={realEstateAccount()} />)
+
+      // 412 000 - 368 800 = 43 200, whatever the locale's group separator.
+      expect(container.textContent).not.toMatch(/43\D?200/)
+      expect(container.querySelector('.text-emerald-500')).not.toBeInTheDocument()
     })
   })
 })

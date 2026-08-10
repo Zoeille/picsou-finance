@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Home, Building2, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -15,6 +15,7 @@ import { AddressAutocomplete } from './AddressAutocomplete'
 import { useCreateAccount, useUpdateRealEstateMetadata, useRefreshValuation } from '@/features/accounts/hooks'
 import { formatApiError } from '@/lib/errors'
 import { parseAmount } from '@/lib/utils'
+import { PROPERTY_KIND_ICONS } from '@/lib/property-icons'
 import type { PropertyCategory, PropertyKind, RealEstateMetadataRequest } from '@/types/api'
 
 interface AddPropertyModalProps {
@@ -22,14 +23,9 @@ interface AddPropertyModalProps {
   onOpenChange: (open: boolean) => void
 }
 
-const KINDS: { value: PropertyKind; icon: typeof Home }[] = [
-  { value: 'HOUSE', icon: Home },
-  { value: 'APARTMENT', icon: Building2 },
-  { value: 'BUILDING', icon: Building2 },
-  { value: 'LAND', icon: Home },
-  { value: 'PARKING', icon: Home },
-  { value: 'COMMERCIAL', icon: Building2 },
-]
+/** Ordered for the picker; the glyphs are shared with the account card so a property looks
+ *  the same wherever it is shown. */
+const KINDS: PropertyKind[] = ['HOUSE', 'APARTMENT', 'BUILDING', 'LAND', 'PARKING', 'COMMERCIAL']
 
 const CATEGORIES: PropertyCategory[] = [
   'PRIMARY_RESIDENCE', 'SECONDARY_RESIDENCE', 'RENTAL', 'LAND', 'OTHER',
@@ -179,19 +175,22 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
             <div className="space-y-2">
               <Label>{t('property.form.propertyType')}</Label>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {KINDS.map(({ value, icon: Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setKind(value)}
-                    aria-pressed={kind === value}
-                    className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors
-                      ${kind === value ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    {t(`property.kind.${value}`)}
-                  </button>
-                ))}
+                {KINDS.map(value => {
+                  const Icon = PROPERTY_KIND_ICONS[value]
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setKind(value)}
+                      aria-pressed={kind === value}
+                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors
+                        ${kind === value ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      {t(`property.kind.${value}`)}
+                    </button>
+                  )
+                })}
               </div>
               {kind !== '' && !canEstimate && (
                 <p className="text-xs text-muted-foreground">{t('property.add.notEstimable')}</p>

@@ -1,6 +1,7 @@
 package com.picsou.dto;
 
 import com.picsou.model.PropertyCategory;
+import com.picsou.model.PropertyKind;
 import com.picsou.model.RealEstateMetadata;
 import com.picsou.model.ValuationMode;
 
@@ -18,6 +19,13 @@ public record RealEstateMetadataResponse(
     BigDecimal costBasis,
 
     String propertyType,
+    /**
+     * {@link #propertyType} normalised through {@link PropertyKind#parse}, or null when the
+     * free-text column holds something the enum does not recognise. Clients that need to
+     * branch on the kind — picking an icon, say — read this rather than re-implementing the
+     * aliases the column accumulated before the enum existed.
+     */
+    PropertyKind propertyKind,
     PropertyCategory category,
     String description,
 
@@ -49,9 +57,11 @@ public record RealEstateMetadataResponse(
     String energyClass,
 
     ValuationMode valuationMode,
+    /** Date of the newest {@code property_valuation} row, or null if none was ever run. */
+    LocalDate lastValuedAt,
     BigDecimal rentalIncome
 ) {
-    public static RealEstateMetadataResponse from(RealEstateMetadata m) {
+    public static RealEstateMetadataResponse from(RealEstateMetadata m, LocalDate lastValuedAt) {
         return new RealEstateMetadataResponse(
             m.getPurchasePrice(),
             m.getPurchaseDate(),
@@ -60,6 +70,7 @@ public record RealEstateMetadataResponse(
             m.getWorksCost(),
             m.costBasis(),
             m.getPropertyType(),
+            PropertyKind.parse(m.getPropertyType()),
             m.getCategory(),
             m.getDescription(),
             m.getAddress(),
@@ -87,6 +98,7 @@ public record RealEstateMetadataResponse(
             m.getHasBalcony(),
             m.getEnergyClass(),
             m.getValuationMode(),
+            lastValuedAt,
             m.getRentalIncome()
         );
     }

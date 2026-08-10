@@ -2,15 +2,20 @@ package com.picsou.service;
 
 import com.picsou.dto.DebtRequest;
 import com.picsou.dto.HoldingResponse;
+import com.picsou.dto.RealEstateMetadataResponse;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.model.Account;
 import com.picsou.model.AccountHolding;
 import com.picsou.model.AccountType;
 import com.picsou.model.Debt;
+import com.picsou.model.PropertyKind;
+import com.picsou.model.PropertyValuation;
+import com.picsou.model.RealEstateMetadata;
 import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.BalanceSnapshotRepository;
 import com.picsou.repository.DebtRepository;
+import com.picsou.repository.PropertyValuationRepository;
 import com.picsou.repository.RealEstateMetadataRepository;
 import com.picsou.repository.TransactionRepository;
 import org.junit.jupiter.api.Test;
@@ -43,6 +48,7 @@ class AccountServiceTest {
     @Mock AccountHoldingRepository holdingRepository;
     @Mock TransactionRepository transactionRepository;
     @Mock RealEstateMetadataRepository realEstateMetadataRepository;
+    @Mock PropertyValuationRepository propertyValuationRepository;
     @Mock DebtRepository debtRepository;
     @Mock PriceService priceService;
     @Mock LoanAmortizationService loanAmortizationService;
@@ -574,5 +580,62 @@ class AccountServiceTest {
         BigDecimal result = accountService.signedLiveBalanceEur(cash);
 
         assertThat(result).isEqualByComparingTo("2500");
+    }
+
+    /**
+     * A property carries no holdings, so its balance comes straight back out of
+     * {@code priceService.toEur}; nothing here exercises pricing.
+     */
+    private Account propertyAccount() {
+        return Account.builder()
+            .id(8L)
+            .name("Résidence principale")
+            .type(AccountType.REAL_ESTATE)
+            .currency("EUR")
+            .currentBalance(new BigDecimal("412000"))
+            .build();
+    }
+
+    private RealEstateMetadataResponse propertyResponse(String propertyType, LocalDate lastValuedAt) {
+        when(priceService.toEur(any(), eq("EUR"), any())).thenReturn(new BigDecimal("412000"));
+        when(realEstateMetadataRepository.findByAccountId(8L)).thenReturn(Optional.of(
+            RealEstateMetadata.builder()
+                .purchasePrice(new BigDecimal("320000"))
+                .propertyType(propertyType)
+                .city("Bordeaux")
+                .build()));
+        when(propertyValuationRepository.findFirstByAccountIdOrderByValuedAtDesc(8L)).thenReturn(
+            lastValuedAt == null
+                ? Optional.empty()
+                : Optional.of(PropertyValuation.builder().valuedAt(lastValuedAt).build()));
+
+        return accountService.toResponse(propertyAccount()).realEstate();
+    }
+
+    @Test
+    void toResponse_normalizesTheFreeTextPropertyTypeIntoAKind() {
+        // property_type predates PropertyKind and is free text, so an old row may hold a French
+        // label. Clients pick the card's glyph off the parsed value, never the raw string.
+        RealEstateMetadataResponse realEstate = propertyResponse("maison", LocalDate.of(2026, 1, 10));
+
+        assertThat(realEstate.propertyType()).isEqualTo("maison");
+        assertThat(realEstate.propertyKind()).isEqualTo(PropertyKind.HOUSE);
+    }
+
+    @Test
+    void toResponse_reportsWhenThePropertyWasLastValued() {
+        RealEstateMetadataResponse realEstate = propertyResponse("HOUSE", LocalDate.of(2026, 1, 10));
+
+        assertThat(realEstate.lastValuedAt()).isEqualTo(LocalDate.of(2026, 1, 10));
+    }
+
+    @Test
+    void toResponse_leavesBothNullOnAPropertyNeitherDescribedNorValued() {
+        // A property has no lastSyncedAt to fall back on -- the card simply renders no
+        // freshness line, exactly as a manual account with no provider does.
+        RealEstateMetadataResponse realEstate = propertyResponse("chalet", null);
+
+        assertThat(realEstate.propertyKind()).isNull();
+        assertThat(realEstate.lastValuedAt()).isNull();
     }
 }

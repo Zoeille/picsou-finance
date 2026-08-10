@@ -17,7 +17,9 @@ There are two logo sources, in priority order:
 1. **A provider-supplied URL on the account** (`Account.logoUrl`). Only **Enable Banking** fills it — it's the sole active `BankConnectorPort` implementation that returns one (see [bank-sync.md](./bank-sync.md)). Powens (disabled, experimental) hardcodes `logoUrl = null`.
 2. **A bundled brand asset**, matched on `Account.provider` when the account has no `logoUrl`. Currently `MERIA` and Amundi.
 
-Everything else — manual accounts, on-chain wallets, Binance, Trade Republic, Bourse Direct, BoursoBank, Finary, real estate, loans — still shows the color fallback. There is no manual logo picker — `color` remains the only user-editable visual field (`ColorPicker` / `AccountForm` are unchanged).
+Properties are the one account type that takes neither route: they have no `provider` to key on and no connector to ask, so `AccountCard` marks them with the glyph for their `propertyKind` instead — see [accounts-overview.md](./accounts-overview.md#account-card-anatomy). That is a user choice in all but name (the kind is picked in the property form), which is as close to a manual logo picker as the app gets.
+
+Everything else — manual accounts, on-chain wallets, Binance, Trade Republic, Bourse Direct, BoursoBank, Finary, loans — still shows the color fallback. There is no manual logo picker — `color` remains the only user-editable visual field (`ColorPicker` / `AccountForm` are unchanged).
 
 ### Capture at connection time
 
@@ -51,7 +53,7 @@ Nothing is written to the database and no backend change was needed: an existing
 - `backend/src/main/java/com/picsou/model/Requisition.java` — `logoUrl` + `logoBackfillAttemptedAt` columns
 - `backend/src/main/java/com/picsou/service/SyncService.java` — `resolveLogoUrl()`, `ensureLogoUrl()`, `findInstitution()`, `upsertAccount()` copy logic
 - `backend/src/main/resources/db/migration/V50__account_bank_logo.sql`
-- `frontend/src/components/shared/AccountCard.tsx` — `AccountAvatar` sub-component
+- `frontend/src/components/shared/AccountCard.tsx` — `AccountAvatar` and `PropertyAvatar` sub-components
 - `frontend/src/components/shared/AddAccountModal.tsx` — `InstitutionLogo` (bank search list preview)
 - `frontend/src/components/ui/avatar.tsx` — shared Radix Avatar primitives
 - `frontend/src/lib/provider-logos.ts` — `PROVIDER_LOGOS` map + `providerLogoUrl()`
@@ -63,6 +65,8 @@ Nothing is written to the database and no backend change was needed: an existing
 | Choice | Why | Rejected alternative |
 |--------|-----|----------------------|
 | Enable Banking only, no manual picker | It's the only connector with real logos; a curated logo library or free-form upload was out of scope for v1 | Static logo library / image upload per account |
+| Property kind as the mark, rather than a dedicated icon field | The kind is already a required, user-picked field on every property, so the glyph costs no new column, no migration and no second thing to keep in step; a separate picker would only buy the freedom to label a garage a parking space | A `real_estate_metadata.icon` column with its own picker |
+| lucide components for kinds, files under `public/` for brands | A lucide glyph inherits `currentColor`, so one map serves both themes and the account color. A brand logo cannot be redrawn that way — it is someone's asset, and it ships as a file | An SVG file per kind, light and dark variants |
 | Bundled asset + frontend map | No institution catalog to query for either provider, and hotlinking is a dead end: `meria.com/favicon.ico` and `/apple-touch-icon.png` both answer **403** to non-browser clients behind their WAF (the only asset that does serve, `og:image`, is a 3299×2475 dark share banner), and a logo pulled off Amundi's own site would rot the moment they reorganise it. A file in `public/` is the only source that can't break underneath us | Hardcoded remote URL on the account; a generic backend favicon fetcher/cache serving `/api/logos/{provider}` (would also cover Trade Republic, BoursoBank, IBKR — but the same WAF breaks it on Meria) |
 | Mapping in the frontend, not written to `Account.logoUrl` | No migration and no database backfill is needed for a bundled logo — an existing account simply renders it on the next load (unlike an Enable Banking `logoUrl`, which does need the `ensureLogoUrl()` backfill two rows down). It works in demo mode, and the asset path stays a frontend concern instead of the backend storing a frontend URL | `CryptoExchangePort.logoUrl()` / `AmundiPort` returning a logo copied onto the account by the sync service, mirroring Enable Banking |
 | `color` kept as-is on every account | Still used by `AccountsStackedChart` line colors and the detail page dot; removing it would require a chart color strategy | Drop `color` once a logo exists |
@@ -86,4 +90,5 @@ Nothing is written to the database and no backend change was needed: an existing
 ## Links
 
 - Related: [bank-sync.md](./bank-sync.md) — Enable Banking connector and requisition lifecycle
-- Related: [accounts-overview.md](./accounts-overview.md) — Accounts page and account card
+- Related: [accounts-overview.md](./accounts-overview.md) — Accounts page, and the card's five-line anatomy
+- Related: [real-estate-valuation.md](./real-estate-valuation.md) — `PropertyKind` and the property form

@@ -1,6 +1,6 @@
 # Feature: Real estate valuation
 
-> Last updated: 2026-08-01
+> Last updated: 2026-08-10
 
 ## Context
 
@@ -60,6 +60,8 @@ Daily snapshot job (unchanged) picks up the new balance -> gain curve for free
 - `resources/db/migration/V66__real_estate_valuation_and_ownership.sql`
 
 **Frontend**
+- `lib/property-icons.ts` — `PROPERTY_KIND_ICONS`, one lucide glyph per `PropertyKind`,
+  shared by the add-property picker and the account card
 - `components/property/PropertyDetailSection.tsx` — mounted from `AccountDetailPage` on
   `type === 'REAL_ESTATE'`
 - `components/property/PropertyMetadataForm.tsx` — RHF + zod, five sections
@@ -68,6 +70,20 @@ Daily snapshot job (unchanged) picks up the new balance -> gain curve for free
 - `components/property/PropertyValuationChart.tsx` — value over time vs cost basis
 - `components/property/PropertyFinancingCard.tsx` — linked loans and equity
 - `components/property/RealEstateSummaryCard.tsx` — dashboard roll-up
+
+### What the account list sees
+
+`RealEstateMetadataResponse` carries two fields the estimator does not use, both read by the
+account card (see [accounts-overview.md](./accounts-overview.md#account-card-anatomy)):
+
+- **`propertyKind`** — `property_type` run through `PropertyKind.parse`. The raw column stays
+  on the response for the form, but anything branching on the kind reads the parsed value, so
+  the alias table lives in Java only.
+- **`lastValuedAt`** — the date of the newest `property_valuation` row, looked up in
+  `AccountService.toResponse` alongside the metadata. It is read from the valuation table
+  rather than tracked on the account so a property valued before the field existed reports
+  its real date immediately, instead of waiting for the next monthly refresh. That is one
+  extra query per property in the account list, on top of the metadata lookup already there.
 
 ### Data sources
 
@@ -132,6 +148,9 @@ Daily snapshot job (unchanged) picks up the new balance -> gain curve for free
   throwing.
 - **DGFiP reuse conditions** forbid re-identification and search-engine indexing. Demo mode
   must therefore never ship real DVF records — a demo build is public by definition.
+- **`lastValuedAt` is a valuation date, not a sync date.** Nothing writes `lastSyncedAt` on a
+  property account — a property described but never valued has neither, and its card renders
+  without a freshness line, like any other manual account.
 - **Adjustment coefficients are opinions, not a fitted model.** DVF records no floor, lift,
   garden or condition. They are bounded (multiplier clamped to [0.75, 1.25], area-equivalents
   capped) and every one is disclosed in the UI.

@@ -18,12 +18,14 @@ import com.picsou.model.AccountType;
 import com.picsou.model.BalanceSnapshot;
 import com.picsou.model.Debt;
 import com.picsou.model.FamilyMember;
+import com.picsou.model.PropertyValuation;
 import com.picsou.model.RealEstateMetadata;
 import com.picsou.model.ValuationMode;
 import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.BalanceSnapshotRepository;
 import com.picsou.repository.DebtRepository;
+import com.picsou.repository.PropertyValuationRepository;
 import com.picsou.repository.RealEstateMetadataRepository;
 import com.picsou.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
@@ -61,6 +63,7 @@ public class AccountService {
     private final AccountHoldingRepository holdingRepository;
     private final TransactionRepository transactionRepository;
     private final RealEstateMetadataRepository realEstateMetadataRepository;
+    private final PropertyValuationRepository propertyValuationRepository;
     private final DebtRepository debtRepository;
     private final PriceService priceService;
     private final LoanAmortizationService loanAmortizationService;
@@ -72,6 +75,7 @@ public class AccountService {
         AccountHoldingRepository holdingRepository,
         TransactionRepository transactionRepository,
         RealEstateMetadataRepository realEstateMetadataRepository,
+        PropertyValuationRepository propertyValuationRepository,
         DebtRepository debtRepository,
         PriceService priceService,
         LoanAmortizationService loanAmortizationService,
@@ -82,6 +86,7 @@ public class AccountService {
         this.holdingRepository = holdingRepository;
         this.transactionRepository = transactionRepository;
         this.realEstateMetadataRepository = realEstateMetadataRepository;
+        this.propertyValuationRepository = propertyValuationRepository;
         this.debtRepository = debtRepository;
         this.priceService = priceService;
         this.loanAmortizationService = loanAmortizationService;
@@ -529,7 +534,7 @@ public class AccountService {
 
         if (account.getType() == AccountType.REAL_ESTATE) {
             Optional<RealEstateMetadataResponse> meta = realEstateMetadataRepository.findByAccountId(account.getId())
-                .map(RealEstateMetadataResponse::from);
+                .map(m -> RealEstateMetadataResponse.from(m, lastValuedAt(account.getId())));
             if (meta.isPresent()) {
                 response = response.withRealEstate(meta.get());
             }
@@ -643,7 +648,22 @@ public class AccountService {
             }
         }
 
-        return RealEstateMetadataResponse.from(realEstateMetadataRepository.save(metadata));
+        return RealEstateMetadataResponse.from(
+            realEstateMetadataRepository.save(metadata), lastValuedAt(accountId));
+    }
+
+    /**
+     * When the property was last valued, or null if it never was.
+     *
+     * <p>Read from {@code property_valuation} rather than tracked on the account, so a
+     * property valued before this was surfaced reports its real date instead of waiting for
+     * the next monthly refresh. Manual accounts have no {@code lastSyncedAt} to fall back on
+     * and would otherwise show no date at all.
+     */
+    private LocalDate lastValuedAt(Long accountId) {
+        return propertyValuationRepository.findFirstByAccountIdOrderByValuedAtDesc(accountId)
+            .map(PropertyValuation::getValuedAt)
+            .orElse(null);
     }
 
     /** Whether any component the geocoder consumes differs from what is stored. */
