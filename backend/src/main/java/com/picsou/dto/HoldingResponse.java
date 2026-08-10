@@ -9,6 +9,7 @@ public record HoldingResponse(
     BigDecimal quantity,
     BigDecimal averageBuyIn,
     BigDecimal currentPrice,
+    String quoteCurrency,
     BigDecimal currentValueEur,  // null if currentPrice unknown
     BigDecimal costBasisEur,
     BigDecimal pnlEur,

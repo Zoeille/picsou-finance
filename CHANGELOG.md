@@ -9,6 +9,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Amundi Épargne Salariale sync.** Connect an Amundi account and import every
+  funded employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own
+  account, leaving emptied and closed dispositifs out,
+  with each FCPE line's units, unit value, valuation and unrealized gain. A
+  dedicated read-only Playwright sidecar handles the captcha-gated login and the
+  mandatory second factor, either an approval in the "Mon Épargne" app or an SMS
+  code; credentials and codes are never persisted, only the encrypted session.
+  Valuations come from Amundi rather than a price feed, since no FCPE is quotable
+  on Yahoo. Imports expose queued/running/success/failure progress, reject plans
+  whose total does not reconcile with their lines, and preserve the last valid
+  holdings on failure. Reachable from the Sync page and the Add-account modal, in
+  all four locales, and its accounts carry the Amundi logo rather than a color
+  circle. See [feature notes](docs/features/amundi-epargne-salariale.md)
+  and the [ADR](docs/decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
+- **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
+  handles login and the six-digit security code, then imports PEA/CTO positions,
+  average cost, current price, valuation and account cash. Credentials and OTPs
+  are never persisted; only the complete browser session is encrypted at rest.
+  Sessions support manual and daily sync, and accounts remain explicitly typed
+  as PEA or securities accounts. Imports expose queued/running/success/failure
+  progress, reject unreconciled partial portfolios, preserve the last valid
+  holdings on failure, and retain native quote currencies alongside broker EUR
+  valuations. See [feature notes](docs/features/bourse-direct.md) and the
+  [ADR](docs/decisions/2026-07-21-bourse-direct-isolated-atomic-sync.md).
+- **Interactive Brokers (IBKR) sync via the Flex Web Service.** Connect once with a
+  read-only Flex token + an "Open Positions" query id; Picsou pulls open positions
+  end-of-day and maps them to accounts + holdings (one account per IBKR account id),
+  valued live in EUR through the existing ticker/price path. Cost basis is converted
+  to the account base currency via `fxRateToBase`; per-tax-lot rows are de-duplicated.
+  Daily auto-sync runs alongside the other connectors. A connection tab on the Sync
+  page (paste token + query id, then sync/disconnect) drives it, in all four locales. See
+  [ADR](docs/decisions/2026-07-19-ibkr-flex-web-service.md) and
+  [feature note](docs/features/ibkr-sync.md).
+- **BNB Chain support and EVM multichain wallets.** On-chain wallets gained an
+  `EVM` chain that tracks a single `0x` address across every enabled EVM network
+  — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche —
+  reporting each native coin (ETH, BNB, POL, AVAX…) plus curated ERC-20/BEP-20
+  stablecoins, all over keyless public RPCs (no API key). Balances aggregate by
+  symbol across chains. Existing Ethereum wallets are migrated to `EVM`
+  automatically, keeping their history — including their display name, which is
+  relabelled from "ETHEREUM Wallet" to "EVM Wallet" (custom labels untouched). See
+  [ADR](docs/decisions/2026-07-17-evm-multichain-wallets.md).
+- **HTTPS for the Docker stack** via an opt-in `tls` compose profile running
+  Caddy in front of the app (`docker compose --profile tls up -d`). Caddy picks
+  the certificate strategy from `PICSOU_DOMAIN` alone: a real domain gets a
+  fully automatic Let's Encrypt certificate, while a LAN IP or `.local` name
+  gets one from Caddy's built-in CA (install its root once per device). This
+  unblocks Enable Banking, which rejects plain-HTTP callback URLs for
+  PRODUCTION applications — previously no Docker deployment could sync banks.
+  The profile is off by default so it cannot collide with an existing ingress
+  proxy. An optional overlay, `docker/docker-compose.no-http.yml`, removes the
+  plain-HTTP `:8080` publish once TLS is confirmed working — pass it as a second
+  `-f` alongside the base compose file.
+- **HTTPS frontend development mode.** Vite uses trusted local `mkcert`
+  certificates from `frontend/.local/certs/` when present and otherwise falls
+  back to a generated self-signed certificate. Local Enable Banking callbacks
+  and Playwright URL examples now default to `https://localhost:5173`.
 - **CSV transaction import for investment accounts (PEA/CTO)** and **realized
   P&L on closed positions**, computed on the fly with the average-cost method
   (#38, #43).
@@ -19,6 +76,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **HSTS is now opt-in in Docker (`HSTS_ENABLED`, default off).** Nginx
+  previously sent `Strict-Transport-Security` unconditionally, including on
+  plain-HTTP deployments. Combined with a locally-issued certificate that is a
+  lockout trap: the browser remembers the policy, then refuses to offer the
+  "proceed anyway" bypass, leaving no in-app recovery. Deployments behind a
+  publicly-trusted certificate should set `HSTS_ENABLED=true` to restore the
+  previous behavior.
+- **The documented Docker Enable Banking callback is now `https://`.**
+  `docker/.env.example` previously suggested `http://your-nas-ip:8080/sync/callback`,
+  which Enable Banking rejects for PRODUCTION applications — the only mode that
+  lists real banks. `docs/features/bank-sync.md` likewise no longer presents a
+  plain-HTTP deployment as a supported option for bank sync.
 - **UI controls realigned to the shadcn theme radius.** Pill-shape overrides on
   buttons, chips, and tabs were reverted to the theme tokens; Mira
   design-system pass completed with a sidebar style toggle (#46).
@@ -31,6 +100,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart is now titled by wealth mode instead of "Gain / Loss", its tooltip
   shows the backend's debt-neutral gain/loss, and a new Liabilities card lists
   loans separately.
+
+### Fixed
+
+- **Business-oriented banks never appeared in the bank search.** Picsou asked
+  Enable Banking only for retail (`personal`) institutions, so BaaS and
+  professional banks — Swan among them — were invisible in the picker even
+  though the account existed and the credentials were valid, with nothing to
+  distinguish that from a misconfiguration. The catalog is now fetched
+  unfiltered, each bank's PSU type is read from the provider and carried through
+  the connection flow so the consent page presents the right login, and
+  business-only banks are marked with a **Pro** badge in both bank pickers.
+  See [feature notes](docs/features/bank-sync.md).
+- **The GitHub link in Settings → About now points to the right repository.** It
+  linked to `github.com/zoeille/picsou`, which does not exist; the repository is
+  `github.com/zoeille/picsou-finance`.
+- **Restoring several tabs at once no longer logs you out everywhere.** When
+  multiple tabs were restored together they each presented the same "Remember
+  Me" token; the first request rotated it and the rest looked like a replayed
+  (stolen) token, so theft detection revoked the whole series and every tab was
+  logged out. `validateAndRotate` now serializes the rotate path with a
+  row-level lock (`findBySeriesIdForUpdate`) and remembers the immediately-previous
+  token hash, accepting it for a short grace window
+  (`app.persistent-session.rotation-grace-seconds`, default 30s). The window is
+  **anchored** to the rotation that opened it — a previous-token acceptance does
+  not advance it — so every tab in the burst is tolerated (not just the first
+  two) and replaying the previous token cannot slide the window forward. A token
+  presented after the window still trips theft detection (migration `V56`).
+- **Bourse Direct positions no longer appear at €0 when an ISIN has no live
+  quote.** Dashboard totals now reuse the same atomic account valuation as
+  account cards and history. A guarded migration also restores per-position EUR
+  values from early connector data only when every stored price reconciles with
+  the broker's account total minus cash; ambiguous legacy quotes remain unset.
+- **Wallet sync and removal failures now say why.** Both buttons reported nothing
+  at all when they failed — the row simply re-enabled, and the delete dialog sat
+  there — so a `422` from an RPC outage was indistinguishable from success. The
+  reason is now shown against the wallet that failed, and inside the delete
+  dialog, matching the add-wallet form.
+- **A bad price response can no longer cost a day of history.** The daily
+  snapshot job is transactional and looped over every account without a guard, so
+  one malformed CoinGecko reply would have aborted the remaining accounts and
+  members *and* rolled back the snapshots already taken. Each account, member and
+  backfilled ticker is now guarded individually. Relatedly, a genuine bug in the
+  price adapter is no longer swallowed as "no prices available" — only real
+  upstream outages are.
+- **A price-provider outage can no longer zero a wallet's balance.** If no asset
+  in a wallet could be priced, the sync recorded a 0 EUR balance and stamped a 0
+  snapshot for that day — flattening the net-worth chart for what was a transient
+  outage, and doing it quietly because the holdings themselves were preserved.
+  That sync now fails instead, leaving the previous balance intact. A partial
+  outage still records a partial total.
+- **One bad price no longer blanks the intraday chart.** A failure fetching
+  intraday prices for a single ticker returned a server error for the whole
+  chart; that ticker is now omitted and the rest still renders.
+- **Invalid wallet addresses fail fast with a clear error.** Adding a wallet with
+  a malformed address — or no address or chain at all — reported a `422` "could
+  not sync, please try again later", inviting a retry of input that can never
+  succeed, after a pointless call to the chain's RPC. The format is now checked
+  up front and comes back as a `400` naming what was expected — and the crypto
+  wallet form actually displays it, where it previously swallowed add failures
+  and simply appeared to do nothing.
+- **CoinGecko outages are diagnosable.** A failed price fetch returned an empty
+  map indistinguishable from "nothing to price", logged as one opaque line.
+  Failures are now classified — rate-limit, server error with status and body,
+  timeout with its duration, or an unexpected error with its stacktrace — and
+  always name the tickers involved. Prices still degrade to "unvalued this
+  cycle" rather than failing the sync, which is what keeps a price blip from
+  touching holdings or their cost basis.
+- **Ethereum wallet balances sync again.** The hard-coded `cloudflare-eth.com`
+  RPC was deprecated and started returning an HTTP 200 JSON-RPC error for
+  `eth_getBalance`, which the adapter read as a 0 balance — wallets appeared to
+  sync but showed nothing. Switched to `ethereum-rpc.publicnode.com`.
+- **On-chain wallet adapters no longer report a false 0 on RPC failure.** Both
+  the Ethereum and Solana adapters read the JSON-RPC `result` with `path(...)`,
+  which turned an `error` payload (rate-limit, deprecated method, node outage)
+  into a silent 0 balance rather than a sync error. They now validate the
+  envelope — a present `error`, a missing `result`, or an empty response throws
+  and surfaces as a `422` sync failure instead of corrupting the balance. A
+  genuinely empty wallet still reads 0. On Solana this covers both the native
+  SOL and the SPL-token call, and sync failures now preserve their root cause in
+  the logs.
+- **Wallet sync distinguishes bugs from routine RPC failures.** `WalletSyncService`
+  now logs unexpected errors (NPE, etc.) at `ERROR` with a full stacktrace instead
+  of a one-line `WARN`, so a real bug can't hide as a transient sync; the friendly
+  `422` shown to the user is unchanged. A malformed SPL token balance or an
+  unexpected token-list shape is logged and skipped (SOL and other tokens still
+  sync) rather than silently dropped, and a malformed Ethereum hex balance now
+  fails the sync with a clear message instead of an opaque error. Batch resync
+  (`resyncAll`) reports per-wallet outcomes, so the scheduler logs which wallets
+  failed and the MCP wallet-sync tool answers with the real success count.
+  `WalletRpcException` now also has a dedicated `GlobalExceptionHandler` mapping
+  (generic `422`) as defense-in-depth, so a bad RPC response can never surface as a
+  raw `500` even on an unwrapped call path.
+
+### Security
+
+- **Sync logs no longer dump full third-party payloads.** Provider responses
+  were written whole at INFO/WARN/ERROR in production: `EnableBankingBankConnector`
+  logged the full balances object (account amounts) — now an INFO **count-only**
+  line (visibility kept, amounts dropped); `FinaryApiClient` logged the raw Clerk
+  sign-in response (which can carry session tokens) — now a body-free message.
+  Every Finary/Clerk error body that flows into an `IOException` → `SyncException`
+  (and thus into logs *and* the user-facing 422) is now bounded before it is
+  thrown — Clerk auth and the low-level retry path to 200 chars, the Finary
+  data-API body to 500 (enough to keep its actionable message, still capped).
+  Defense-in-depth against financial PII and third-party secrets landing in logs.
 
 ## [1.0.13] — 2026-07-07
 

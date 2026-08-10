@@ -20,11 +20,15 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ```bash
-# Terminal 2 — frontend (http://localhost:5173, proxies /api/* to the backend)
+# Terminal 2 — frontend (https://localhost:5173, proxies /api/* to the backend)
 cd frontend
 bun install
 bun run dev
 ```
+
+The frontend uses HTTPS in development. See the
+[local certificate setup](README.md#-https-in-development-hybrid-mode) for a
+trusted `mkcert` certificate or the zero-config self-signed fallback.
 
 ## Tests
 

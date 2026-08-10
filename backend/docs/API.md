@@ -32,7 +32,7 @@
 
 ### AccountType
 
-`LEP` · `PEA` · `COMPTE_TITRES` · `CRYPTO` · `CHECKING` · `SAVINGS` · `OTHER`
+`LEP` · `PEA` · `COMPTE_TITRES` · `CRYPTO` · `CHECKING` · `SAVINGS` · `REAL_ESTATE` · `LOAN` · `EMPLOYEE_SAVINGS` · `OTHER`
 
 ### Chain
 
@@ -281,14 +281,19 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
     "name": "Apple Inc.",
     "quantity": 10,
     "averageBuyIn": 150.00,
-    "currentPrice": 180.00,
+    "currentPrice": 195.00,
+    "quoteCurrency": "USD",
     "currentValueEur": 1800.00,
     "costBasisEur": 1500.00,
     "pnlEur": 300.00,
-    "pnlPercent": 20.00
+    "pnlPercent": 20.00,
+    "priceUpdatedAt": "2026-07-20T10:00:00Z"
   }
 ]
 ```
+
+`currentPrice` is expressed in `quoteCurrency`. `averageBuyIn`,
+`currentValueEur`, `costBasisEur` and `pnlEur` are EUR-denominated.
 
 ---
 
@@ -489,14 +494,20 @@ Rotates `access_token`/`refresh_token` (old refresh token is invalidated) whenev
 ```json
 [
   {
-    "id": "BNP_PARIBAS",
-    "name": "BNP Paribas",
-    "bic": "BNPAFRPP",
+    "id": "Swan::FR::business",
+    "name": "Swan",
+    "bic": "SWNBFR22",
     "logoUrl": "https://...",
-    "country": "FR"
+    "country": "FR",
+    "psuType": "business"
   }
 ]
 ```
+
+`id` is an opaque token encoding `name::country::psuType` — pass it back to
+`/sync/initiate` verbatim. `psuType` is `personal` or `business`; business-only
+banks (Swan and other BaaS providers) present a professional login at the
+consent step.
 
 ---
 
@@ -524,7 +535,7 @@ Countries the active bank-sync provider supports, for the "which country" search
 **Request body:**
 | Field | Type | Description |
 |-------|------|-------------|
-| `institutionId` | `string` | Bank identifier from `/institutions` |
+| `institutionId` | `string` | Bank identifier from `/institutions`, passed back verbatim — it encodes the bank name, country, and PSU type |
 | `institutionName` | `string` | Display name |
 
 **Response `200` — `InitiateResponse`:**
@@ -564,7 +575,7 @@ Countries the active bank-sync provider supports, for the "which country" search
   {
     "id": 1,
     "requisitionId": "uuid",
-    "institutionId": "BNP_PARIBAS",
+    "institutionId": "BNP Paribas::FR::personal",
     "institutionName": "BNP Paribas",
     "status": "LINKED",
     "authLink": null
@@ -678,7 +689,91 @@ Countries the active bank-sync provider supports, for the "which country" search
 
 ---
 
-### 7. Crypto Wallets — `/api/crypto/wallet`
+### 7. Bourse Direct — `/api/bourse-direct`
+
+The connector is read-only. Authentication persists an encrypted browser
+session, then portfolio import continues asynchronously.
+
+#### `POST /api/bourse-direct/auth/initiate`
+
+- **Auth:** Required
+- **Rate limit:** Per IP
+
+**Request body:**
+```json
+{ "login": "client-id", "password": "secret" }
+```
+
+**Response `200` — `BourseDirectAuthInitResponse`:**
+```json
+{ "processId": "uuid", "mfaRequired": true, "mfaType": "OTP" }
+```
+
+When `mfaRequired` is false, the encrypted session is already stored and its
+first portfolio import is queued.
+
+---
+
+#### `POST /api/bourse-direct/auth/complete`
+
+- **Auth:** Required
+- **Rate limit:** Per IP
+
+**Request body:**
+```json
+{ "processId": "uuid", "code": "123456" }
+```
+
+**Response `200` — `BourseDirectSessionStatus`**, normally with
+`syncStatus: "QUEUED"`.
+
+---
+
+#### `POST /api/bourse-direct/sync`
+
+- **Auth:** Required
+- **Body:** none
+
+**Response `202` — `BourseDirectSessionStatus`.** An already queued or running
+job is not duplicated; its current status is returned.
+
+---
+
+#### `GET /api/bourse-direct/status`
+
+- **Auth:** Required
+
+**Response `200` — `BourseDirectSessionStatus`:**
+```json
+{
+  "isActive": true,
+  "expiresAt": null,
+  "syncStatus": "SUCCESS",
+  "lastSyncStartedAt": "2026-07-20T09:59:40Z",
+  "lastSyncCompletedAt": "2026-07-20T10:00:00Z",
+  "lastSyncError": null
+}
+```
+
+`syncStatus` is one of `IDLE`, `QUEUED`, `RUNNING`, `SUCCESS`, or `FAILED`.
+
+---
+
+#### `DELETE /api/bourse-direct/session`
+
+- **Auth:** Required
+
+**Response `204`.** Imported accounts and history are retained.
+
+Domain failures use `422` RFC 7807 responses with a stable `code` property:
+`INVALID_CREDENTIALS`, `INVALID_OTP`, `AUTH_ATTEMPT_EXPIRED`,
+`SESSION_EXPIRED`, `PORTFOLIO_INCOMPLETE`, `UPSTREAM_FORMAT_CHANGED`,
+`UPSTREAM_UNAVAILABLE`, `INVALID_DATA`, or `INTERNAL_ERROR`. Authentication
+rate limiting returns `429`.
+
+---
+
+### 8. Crypto Wallets — `/api/crypto/wallet`
 
 #### `POST /api/crypto/wallet`
 
@@ -731,7 +826,7 @@ Countries the active bank-sync provider supports, for the "which country" search
 
 ---
 
-### 8. Crypto Exchanges — `/api/crypto/exchange`
+### 9. Crypto Exchanges — `/api/crypto/exchange`
 
 #### `POST /api/crypto/exchange`
 
@@ -783,7 +878,7 @@ Countries the active bank-sync provider supports, for the "which country" search
 
 ---
 
-### 9. Prices — `/api/prices`
+### 10. Prices — `/api/prices`
 
 #### `GET /api/prices`
 
@@ -807,7 +902,7 @@ Prices are in EUR. Results are cached for 15 minutes.
 
 ---
 
-### 10. Finary — `/api/finary`
+### 11. Finary — `/api/finary`
 
 Two import modes: **file-based** (XLSX upload) and **API-based** (direct sync). Both use a two-phase flow: preview then execute with account mappings.
 
@@ -935,3 +1030,91 @@ Returns whether the Finary API credentials (`FINARY_EMAIL`, `FINARY_PASSWORD`) a
 ```
 
 **Response `200` — `FinaryImportResultResponse`** (same shape as file-based import).
+
+---
+
+### 12. Amundi Épargne Salariale — `/api/amundi`
+
+Read-only. Amundi gates its login behind a captcha and a mandatory second
+factor, so authentication is always interactive; it persists an encrypted
+sidecar session, then plan import continues asynchronously. One account is
+created per *dispositif* (PEE/PEG, PERCO, PER…), typed `EMPLOYEE_SAVINGS`.
+
+#### `POST /api/amundi/auth/initiate`
+
+- **Auth:** Required
+- **Rate limit:** 5 attempts per IP per 15 minutes
+
+**Request body:**
+```json
+{ "login": "identifiant", "password": "secret" }
+```
+
+**Response `200` — `AmundiAuthInitResponse`:**
+```json
+{ "processId": "uuid", "mfaRequired": true, "mfaType": "APP_PUSH" }
+```
+
+`mfaType` is `APP_PUSH` when the user must approve in the "Mon Épargne" app,
+or `SMS` when a code is texted.
+
+---
+
+#### `POST /api/amundi/auth/complete`
+
+- **Auth:** Required
+- **Rate limit:** 5 attempts per IP per 15 minutes
+
+**Request body** — `code` is omitted for an app push, since there is nothing
+for the user to type:
+```json
+{ "processId": "uuid", "code": "123456" }
+```
+
+**Response `200` — `AmundiSessionStatus`**, normally with
+`syncStatus: "QUEUED"`. For an app push the request stays open until the user
+approves on their phone, or fails with `APP_VALIDATION_TIMEOUT`.
+
+---
+
+#### `POST /api/amundi/sync`
+
+- **Auth:** Required
+- **Rate limit:** 10 requests per IP per minute (shared `syncBuckets`)
+- **Body:** none
+
+**Response `202` — `AmundiSessionStatus`.** An already queued or running job is
+not duplicated; its current status is returned.
+
+---
+
+#### `GET /api/amundi/status`
+
+- **Auth:** Required
+
+**Response `200` — `AmundiSessionStatus`:**
+```json
+{
+  "isActive": true,
+  "syncStatus": "SUCCESS",
+  "lastSyncStartedAt": "2026-08-09T09:59:40Z",
+  "lastSyncCompletedAt": "2026-08-09T10:00:00Z",
+  "lastSyncError": null
+}
+```
+
+`syncStatus` is one of `IDLE`, `QUEUED`, `RUNNING`, `SUCCESS`, or `FAILED`.
+
+---
+
+#### `DELETE /api/amundi/session`
+
+- **Auth:** Required
+
+**Response `204`.** Imported accounts and history are retained.
+
+Domain failures use `422` RFC 7807 responses with a stable `code` property:
+`INVALID_CREDENTIALS`, `CAPTCHA_BLOCKED`, `INVALID_OTP`,
+`APP_VALIDATION_TIMEOUT`, `AUTH_ATTEMPT_EXPIRED`, `SESSION_EXPIRED`,
+`PORTFOLIO_INCOMPLETE`, `UPSTREAM_FORMAT_CHANGED`, `UPSTREAM_UNAVAILABLE`,
+`INVALID_DATA`, or `INTERNAL_ERROR`. Authentication rate limiting returns `429`.

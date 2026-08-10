@@ -20,6 +20,7 @@ public class PriceService {
 
     private static final Logger log = LoggerFactory.getLogger(PriceService.class);
     private static final long CACHE_TTL_SECONDS = 900; // 15 minutes
+    private static final long MISS_CACHE_TTL_SECONDS = 300; // 5 minutes
 
     private final CoinGeckoPriceProvider coinGecko;
     private final YahooFinancePriceProvider yahoo;
@@ -45,7 +46,7 @@ public class PriceService {
             return BigDecimal.ONE;
         }
 
-        String upper = ticker.toUpperCase();
+        String upper = ticker.toUpperCase(Locale.ROOT);
 
         // Check cache
         CachedPrice cached = priceCache.get(upper);
@@ -64,12 +65,8 @@ public class PriceService {
         }
 
         BigDecimal price = prices.get(upper);
-        if (price != null) {
-            priceCache.put(upper, new CachedPrice(price, Instant.now()));
-            return price;
-        }
-
-        return null;
+        priceCache.put(upper, new CachedPrice(price, Instant.now()));
+        return price;
     }
 
     /** Bulk fetch and refresh cache for all provided tickers. */
@@ -82,7 +79,7 @@ public class PriceService {
         Set<String> stockTickers = new HashSet<>();
 
         for (String ticker : tickers) {
-            String upper = ticker.toUpperCase();
+            String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) {
                 result.put(upper, BigDecimal.ONE);
             } else if (coinGecko.supports(upper)) {
@@ -143,7 +140,18 @@ public class PriceService {
         BigDecimal price = getPriceEur(symbol);
 
         if (price == null) {
-            log.warn("No price available for symbol: {}, returning raw balance", symbol);
+            // The returned number is now WRONG, not merely missing: an unconverted USD or
+            // GBP balance flows into net worth and its snapshots as though it were EUR.
+            // ERROR, because unlike a missing crypto price (which the wallet sync refuses to
+            // record) this one silently corrupts a figure the user reads as authoritative.
+            //
+            // Deliberately NOT thrown, and deliberately still returning the raw balance:
+            // toEur backs liveBalanceEur, the dashboard and the history charts, so throwing
+            // would 500 all of them on one missing FX rate, and substituting zero would
+            // understate net worth just as silently. Changing the number either way shifts
+            // every user's totals; making the failure loud does not.
+            log.error("No EUR rate for {} -- returning the balance UNCONVERTED, so any total "
+                + "including it is wrong until the rate is available", symbol);
             return balance;
         }
 
@@ -158,30 +166,53 @@ public class PriceService {
     public int backfillHistoricalPrices(Set<String> tickers, LocalDate from) {
         LocalDate to = LocalDate.now();
         int saved = 0;
+        int failed = 0;
 
         for (String ticker : tickers) {
-            String upper = ticker.toUpperCase();
+            String upper = ticker.toUpperCase(Locale.ROOT);
             if ("EUR".equals(upper)) continue;
 
-            Map<LocalDate, BigDecimal> prices;
-            if (coinGecko.supports(upper)) {
-                prices = coinGecko.getHistoricalPricesEur(upper, from, to);
-            } else {
-                prices = yahoo.getHistoricalPricesEur(upper, from, to);
-            }
-
-            for (var entry : prices.entrySet()) {
-                if (priceSnapshotRepository.findByTickerAndDate(upper, entry.getKey()).isEmpty()) {
-                    priceSnapshotRepository.save(PriceSnapshot.builder()
-                        .ticker(upper)
-                        .date(entry.getKey())
-                        .priceEur(entry.getValue())
-                        .build());
-                    saved++;
+            // Guard per ticker: this runs from PriceBackfillRunner, an ApplicationRunner, so
+            // an unguarded throw here would fail Spring Boot startup outright.
+            try {
+                Map<LocalDate, BigDecimal> prices;
+                if (coinGecko.supports(upper)) {
+                    prices = coinGecko.getHistoricalPricesEur(upper, from, to);
+                } else {
+                    prices = yahoo.getHistoricalPricesEur(upper, from, to);
                 }
-            }
 
-            log.info("Backfilled {} prices for {}", prices.size(), upper);
+                for (var entry : prices.entrySet()) {
+                    if (priceSnapshotRepository.findByTickerAndDate(upper, entry.getKey()).isEmpty()) {
+                        priceSnapshotRepository.save(PriceSnapshot.builder()
+                            .ticker(upper)
+                            .date(entry.getKey())
+                            .priceEur(entry.getValue())
+                            .build());
+                        saved++;
+                    }
+                }
+
+                log.info("Backfilled {} prices for {}", prices.size(), upper);
+            } catch (Exception ex) {
+                // ERROR, not WARN: the providers return an empty map for expected upstream
+                // failures, so anything thrown here is a genuine bug. Still skip rather than
+                // propagate -- this runs from PriceBackfillRunner, an ApplicationRunner, where
+                // an escaping exception fails Spring Boot startup outright.
+                failed++;
+                log.error("Historical price backfill failed for {} -- skipping it", upper, ex);
+            }
+        }
+
+        // The per-ticker guard means a run can "succeed" having backfilled almost nothing,
+        // and the returned count alone cannot distinguish "1 of 1" from "1 of 100". Summarise
+        // so a sparse backfill is visible without grepping for individual failures.
+        if (failed > 0) {
+            log.error("Historical price backfill completed with {} of {} tickers failing ({} prices saved)",
+                failed, tickers.size(), saved);
+        } else {
+            log.info("Historical price backfill completed for {} tickers ({} prices saved)",
+                tickers.size(), saved);
         }
 
         return saved;
@@ -189,7 +220,8 @@ public class PriceService {
 
     private record CachedPrice(BigDecimal price, Instant cachedAt) {
         boolean isExpired() {
-            return Instant.now().isAfter(cachedAt.plusSeconds(CACHE_TTL_SECONDS));
+            long ttl = price == null ? MISS_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS;
+            return Instant.now().isAfter(cachedAt.plusSeconds(ttl));
         }
     }
 
@@ -207,7 +239,7 @@ public class PriceService {
             return Map.of();
         }
 
-        String upper = ticker.toUpperCase();
+        String upper = ticker.toUpperCase(Locale.ROOT);
 
         if (coinGecko.supports(upper)) {
             return coinGecko.getIntradayPricesEur(upper, from, to);

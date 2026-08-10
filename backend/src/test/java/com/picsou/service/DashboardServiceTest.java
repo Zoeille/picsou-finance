@@ -34,7 +34,7 @@ class DashboardServiceTest {
     @InjectMocks DashboardService dashboardService;
 
     @Test
-    void getDashboard_skipsHoldingCurrentPrice_whenPriceServiceHasNoPrice() {
+    void getDashboard_usesSharedAccountValuation_whenHoldingHasNoLivePrice() {
         Account account = holdingAccount();
         AccountHolding holding = AccountHolding.builder()
             .account(account)
@@ -45,19 +45,20 @@ class DashboardServiceTest {
             .build();
         when(accountRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(account));
         when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
-        when(priceService.getPriceEur("PHYMF")).thenReturn(null);
+        when(accountService.liveBalanceEur(account)).thenReturn(new BigDecimal("5000"));
         when(historyService.buildHistory(List.of(1L), 12, 42L)).thenReturn(List.of());
         when(goalRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of());
 
         DashboardResponse response = dashboardService.getDashboard(42L, "1Y");
 
-        assertThat(response.totalNetWorth()).isEqualByComparingTo("0");
+        assertThat(response.totalNetWorth()).isEqualByComparingTo("5000");
         assertThat(response.distribution()).hasSize(1);
-        assertThat(response.distribution().getFirst().balanceEur()).isEqualByComparingTo("0");
+        assertThat(response.distribution().getFirst().balanceEur()).isEqualByComparingTo("5000");
+        verify(accountService).liveBalanceEur(account);
     }
 
     @Test
-    void getDashboard_usesTrustedEurPrice_whenAvailable() {
+    void getDashboard_reusesSameHoldingAccountValue_forTotalAndDistribution() {
         Account account = holdingAccount();
         AccountHolding holding = AccountHolding.builder()
             .account(account)
@@ -68,7 +69,7 @@ class DashboardServiceTest {
             .build();
         when(accountRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(account));
         when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(holding));
-        when(priceService.getPriceEur("AAPL")).thenReturn(new BigDecimal("200"));
+        when(accountService.liveBalanceEur(account)).thenReturn(new BigDecimal("2000"));
         when(historyService.buildHistory(List.of(1L), 12, 42L)).thenReturn(List.of());
         when(goalRepository.findAllByMemberIdOrderByCreatedAtAsc(42L)).thenReturn(List.of());
 

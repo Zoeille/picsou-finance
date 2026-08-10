@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.picsou.config.EnableBankingConfigProvider;
 import com.picsou.model.AppSetting;
 import com.picsou.repository.AppSettingRepository;
+import com.picsou.repository.BourseDirectSessionRepository;
 import com.picsou.repository.FinarySessionRepository;
 import com.picsou.repository.TradeRepublicSessionRepository;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class IntegrationsServiceTest {
     @Mock EnableBankingConfigProvider enableBankingConfig;
     @Mock TradeRepublicSessionRepository tradeRepublicSessions;
     @Mock FinarySessionRepository finarySessions;
+    @Mock BourseDirectSessionRepository bourseDirectSessions;
     @InjectMocks IntegrationsService integrationsService;
 
     @Test
@@ -94,6 +96,22 @@ class IntegrationsServiceTest {
         when(finarySessions.count()).thenReturn(0L);
 
         assertThat(integrationsService.isEffectivelyEnabled("finary")).isFalse();
+    }
+
+    @Test
+    void isEffectivelyEnabled_bourseDirect_trueWhenAnActiveSessionExists() {
+        when(settingRepository.findByKey("integration.boursedirect.enabled")).thenReturn(Optional.empty());
+        when(bourseDirectSessions.existsByActiveTrue()).thenReturn(true);
+
+        assertThat(integrationsService.isEffectivelyEnabled("boursedirect")).isTrue();
+    }
+
+    @Test
+    void isEffectivelyEnabled_bourseDirect_falseWhenOnlyExpiredSessionsExist() {
+        when(settingRepository.findByKey("integration.boursedirect.enabled")).thenReturn(Optional.empty());
+        when(bourseDirectSessions.existsByActiveTrue()).thenReturn(false);
+
+        assertThat(integrationsService.isEffectivelyEnabled("boursedirect")).isFalse();
     }
 
     @Test

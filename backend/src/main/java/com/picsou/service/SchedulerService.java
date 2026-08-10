@@ -33,10 +33,13 @@ public class SchedulerService {
     private final SyncService syncService;
     private final TradeRepublicSyncService trSyncService;
     private final BoursoSyncService boursoSyncService;
+    private final BourseDirectSyncService bourseDirectSyncService;
+    private final AmundiSyncService amundiSyncService;
     private final PriceService priceService;
     private final CryptoExchangeSyncService cryptoExchangeSyncService;
     private final WalletSyncService walletSyncService;
     private final FinaryApiSyncService finaryApiSyncService;
+    private final IbkrSyncService ibkrSyncService;
 
     public SchedulerService(
         AccountRepository accountRepository,
@@ -46,10 +49,13 @@ public class SchedulerService {
         SyncService syncService,
         TradeRepublicSyncService trSyncService,
         BoursoSyncService boursoSyncService,
+        BourseDirectSyncService bourseDirectSyncService,
+        AmundiSyncService amundiSyncService,
         PriceService priceService,
         CryptoExchangeSyncService cryptoExchangeSyncService,
         WalletSyncService walletSyncService,
-        FinaryApiSyncService finaryApiSyncService
+        FinaryApiSyncService finaryApiSyncService,
+        IbkrSyncService ibkrSyncService
     ) {
         this.accountRepository = accountRepository;
         this.snapshotRepository = snapshotRepository;
@@ -58,10 +64,13 @@ public class SchedulerService {
         this.syncService = syncService;
         this.trSyncService = trSyncService;
         this.boursoSyncService = boursoSyncService;
+        this.bourseDirectSyncService = bourseDirectSyncService;
+        this.amundiSyncService = amundiSyncService;
         this.priceService = priceService;
         this.cryptoExchangeSyncService = cryptoExchangeSyncService;
         this.walletSyncService = walletSyncService;
         this.finaryApiSyncService = finaryApiSyncService;
+        this.ibkrSyncService = ibkrSyncService;
     }
 
     /**
@@ -91,6 +100,20 @@ public class SchedulerService {
 
             trSyncService.resyncIfSessionActive(memberId);
             boursoSyncService.resyncIfSessionActive(memberId);
+            bourseDirectSyncService.resyncIfSessionActive(memberId);
+            amundiSyncService.resyncIfSessionActive(memberId);
+
+            try {
+                ibkrSyncService.resyncIfConnected(memberId);
+            } catch (Exception ex) {
+                // resyncIfConnected swallows sync failures itself, but Spring can still
+                // throw UnexpectedRollbackException AT THE PROXY EXIT: a repository call
+                // failing inside the sync marks the shared transaction rollback-only
+                // through the repository's own proxy, and the commit attempt happens
+                // after the method's internal catch. Without this wrapper that breaks
+                // the loop for every remaining member.
+                log.error("Daily IBKR auto-sync failed for member {}", memberId, ex);
+            }
 
             try {
                 cryptoExchangeSyncService.resyncAll(memberId);
@@ -99,7 +122,11 @@ public class SchedulerService {
             }
 
             try {
-                walletSyncService.resyncAll(memberId);
+                WalletSyncService.ResyncSummary walletSummary = walletSyncService.resyncAll(memberId);
+                if (!walletSummary.failed().isEmpty()) {
+                    log.warn("Daily wallet sync for member {}: {}/{} succeeded, failed chains: {}",
+                        memberId, walletSummary.succeeded(), walletSummary.total(), walletSummary.failed());
+                }
             } catch (Exception ex) {
                 log.error("Daily wallet sync failed for member {}", memberId, ex);
             }
@@ -133,16 +160,31 @@ public class SchedulerService {
             List<Account> memberAccounts = accountRepository.findAllByMemberIdOrderByCreatedAtAsc(member.getId());
 
             for (Account account : memberAccounts) {
-                Optional<BalanceSnapshot> existing = snapshotRepository.findByAccountIdAndDate(account.getId(), today);
-                if (existing.isEmpty()) {
-                    BigDecimal balance = accountService.liveBalanceEur(account);
-                    BigDecimal invested = accountService.calculateInvestedAmount(account);
-                    snapshotRepository.save(BalanceSnapshot.builder()
-                        .account(account)
-                        .date(today)
-                        .balance(balance)
-                        .investedAmount(invested)
-                        .build());
+                // Guard per account. This method is @Transactional, so without it a single
+                // failing price lookup would not merely skip one account -- it would abort
+                // every remaining account AND member, and roll back the snapshots already
+                // saved in this run. A missing snapshot for one account is recoverable;
+                // losing the whole day's is not.
+                try {
+                    Optional<BalanceSnapshot> existing = snapshotRepository.findByAccountIdAndDate(account.getId(), today);
+                    if (existing.isEmpty()) {
+                        BigDecimal balance = accountService.liveBalanceEur(account);
+                        BigDecimal invested = accountService.calculateInvestedAmount(account);
+                        snapshotRepository.save(BalanceSnapshot.builder()
+                            .account(account)
+                            .date(today)
+                            .balance(balance)
+                            .investedAmount(invested)
+                            .build());
+                    }
+                } catch (Exception ex) {
+                    // ERROR, not WARN: the price adapters swallow expected upstream failures
+                    // and return no prices, so anything reaching here is a genuine bug. Logging
+                    // it at WARN would re-hide exactly what CoinGeckoPriceProvider now rethrows
+                    // to make visible. Skipping still matters -- this method is @Transactional,
+                    // so aborting would roll back the snapshots already written this run.
+                    log.error("Daily snapshot failed for account {} (member {}) -- skipping it",
+                        account.getId(), member.getId(), ex);
                 }
             }
         }
@@ -165,7 +207,15 @@ public class SchedulerService {
 
             if (!tickers.isEmpty()) {
                 log.debug("Refreshing prices for member {} tickers: {}", member.getId(), tickers);
-                priceService.refreshPrices(tickers);
+                // Guard per member so one member's bad ticker doesn't cost every later
+                // member their hourly refresh.
+                try {
+                    priceService.refreshPrices(tickers);
+                } catch (Exception ex) {
+                    // ERROR for the same reason as dailySnapshots above: expected outages never
+                    // reach here, so this is a bug worth surfacing.
+                    log.error("Price refresh failed for member {} -- skipping this cycle", member.getId(), ex);
+                }
             }
         }
     }

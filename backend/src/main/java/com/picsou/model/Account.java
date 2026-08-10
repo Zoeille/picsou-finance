@@ -45,6 +45,10 @@ public class Account extends AuditableEntity {
     @Builder.Default
     private BigDecimal currentBalance = BigDecimal.ZERO;
 
+    /** Cash held inside an investment envelope (PEA/CTO); null for other providers. */
+    @Column(name = "cash_balance", precision = 20, scale = 8)
+    private BigDecimal cashBalance;
+
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
 

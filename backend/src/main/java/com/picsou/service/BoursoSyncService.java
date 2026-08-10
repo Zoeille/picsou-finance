@@ -265,6 +265,14 @@ public class BoursoSyncService {
 
             for (Map.Entry<String, HoldingDedup.HoldingAgg> entry : deduped.entrySet()) {
                 HoldingDedup.HoldingAgg agg = entry.getValue();
+                if (agg.quantity().signum() == 0) {
+                    // vwapMerge is sign-aware and can net two positions to exactly zero
+                    // (shared with IBKR, which can carry short quantities) -- a flat
+                    // position, not a holding to persist. Bourso only ever feeds positive
+                    // quantities today, so this is unreachable here but keeps the
+                    // invariant true regardless.
+                    continue;
+                }
                 holdingRepository.save(AccountHolding.builder()
                     .account(account)
                     .ticker(entry.getKey())

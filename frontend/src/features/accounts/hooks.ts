@@ -20,24 +20,27 @@ export interface PortfolioLine {
   valueEur: number
   costBasisEur: number | null
   averageBuyIn: number | null
+  quoteCurrency: string | null
   pnlEur: number | null
   pnlPercent: number | null
   priceUpdatedAt: string | null
 }
 
-const HOLDING_ACCOUNT_TYPES: Account['type'][] = ['PEA', 'COMPTE_TITRES', 'CRYPTO']
+const HOLDING_ACCOUNT_TYPES: Account['type'][] = ['PEA', 'COMPTE_TITRES', 'CRYPTO', 'EMPLOYEE_SAVINGS']
 
 // Single source of truth: recompute the (value, cost, pnl, pct) trio from a live price.
 // Keeps all four derived numbers consistent with the same price snapshot.
 function recomputeWithLivePrice(
-  input: { quantity: number; averageBuyIn: number | null },
+  input: { quantity: number; costBasisEur: number | null },
   livePrice: number,
 ) {
-  const costBasisEur = input.averageBuyIn != null ? input.quantity * input.averageBuyIn : null
+  const costBasisEur = input.costBasisEur
   const currentValueEur = input.quantity * livePrice
   const pnlEur = costBasisEur != null ? currentValueEur - costBasisEur : null
+  // Math.abs: a short position has a negative cost basis — dividing by it would flip
+  // the sign and show a winning short as a loss. Mirrors the backend formula.
   const pnlPercent = costBasisEur != null && costBasisEur !== 0
-    ? (pnlEur! / costBasisEur) * 100
+    ? (pnlEur! / Math.abs(costBasisEur)) * 100
     : null
   return { currentValueEur, costBasisEur, pnlEur, pnlPercent }
 }
@@ -66,6 +69,7 @@ export function usePortfolio() {
               valueEur: h.currentValueEur ?? 0,
               costBasisEur: h.costBasisEur,
               averageBuyIn: h.averageBuyIn,
+              quoteCurrency: h.quoteCurrency ?? null,
               pnlEur: h.pnlEur,
               pnlPercent: h.pnlPercent,
               priceUpdatedAt: h.priceUpdatedAt,
@@ -92,7 +96,7 @@ export function usePortfolio() {
         const livePrice = livePrices[l.ticker]
         if (livePrice == null) return l // keep backend priceUpdatedAt
         const recomputed = recomputeWithLivePrice(
-          { quantity: l.quantity, averageBuyIn: l.averageBuyIn },
+          { quantity: l.quantity, costBasisEur: l.costBasisEur },
           livePrice,
         )
         return {
@@ -119,6 +123,7 @@ export function usePortfolio() {
           valueEur: cashAccounts.reduce((sum, a) => sum + a.currentBalanceEur, 0),
           costBasisEur: null,
           averageBuyIn: null,
+          quoteCurrency: 'EUR',
           pnlEur: null,
           pnlPercent: null,
           priceUpdatedAt: null,
@@ -171,10 +176,14 @@ export function useHoldingsWithLivePrices(id: number) {
         return holdings.map(h => {
           const livePrice = livePrices[h.ticker]
           if (livePrice == null) return h // keep backend priceUpdatedAt
-          const recomputed = recomputeWithLivePrice(h, livePrice)
+          const recomputed = recomputeWithLivePrice(
+            { quantity: h.quantity, costBasisEur: h.costBasisEur },
+            livePrice,
+          )
           return {
             ...h,
             currentPrice: livePrice,
+            quoteCurrency: 'EUR',
             ...recomputed,
             priceUpdatedAt: now,
           }

@@ -80,6 +80,14 @@ server:
   # 403. "framework" (Spring's ForwardedHeaderFilter) is used because the backend is only
   # reachable through nginx — no per-IP trusted-proxy config needed — and it is a no-op
   # when no X-Forwarded-* headers are present (dev / direct-HTTP access).
+  #
+  # Side effect: this ALSO rewrites request.getRemoteAddr() from the leftmost
+  # X-Forwarded-For entry, which nginx's proxy_add_x_forwarded_for only appends to (never
+  # replaces) — so a raw client can set that entry itself and getRemoteAddr() is no longer
+  # a trustworthy per-client identity. Never key a rate limiter (or anything else
+  # security-sensitive) on getRemoteAddr() while this is "framework"; use
+  # com.picsou.config.ClientIp#resolve(request) instead, which reads the nginx-owned
+  # X-Real-IP header — see docs/features/security-cors-cookies.md ("client IP trust").
   forward-headers-strategy: framework
   error:
     include-stacktrace: never     # never expose stack traces to clients
@@ -122,16 +130,25 @@ app:
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:}
   secure-cookies: ${SECURE_COOKIES:true}
+  # Strict-Transport-Security. Off by default and read from the same env var as the
+  # nginx-side gate (docker/entrypoint.sh), so one flag controls the header on both
+  # the SPA/static responses and the /api responses. Enable only behind a
+  # publicly-trusted certificate — see docs/features/docker-deployment.md.
+  hsts-enabled: ${HSTS_ENABLED:false}
   crypto:
     encryption-key: ${CRYPTO_ENCRYPTION_KEY:}
   tr-auth:
     url: ${TR_AUTH_URL:http://tr-auth:8001}
   bourso-auth:
     url: ${BOURSO_AUTH_URL:http://bourso-auth:8001}
+  bourse-direct-auth:
+    url: ${BOURSE_DIRECT_AUTH_URL:http://bourse-direct-auth:8001}
+  amundi-auth:
+    url: ${AMUNDI_AUTH_URL:http://amundi-auth:8001}
   enablebanking:
     application-id: ${ENABLEBANKING_APPLICATION_ID:}
     key-id: ${ENABLEBANKING_KEY_ID:}
-    redirect-uri: ${ENABLEBANKING_REDIRECT_URI:http://localhost:5173/sync/callback}
+    redirect-uri: ${ENABLEBANKING_REDIRECT_URI:https://localhost:5173/sync/callback}
     private-key: ${ENABLEBANKING_PRIVATE_KEY:}
     private-key-path: ${ENABLEBANKING_PRIVATE_KEY_PATH:/data/keys/enablebanking-private.pem}
     base-url: ${ENABLEBANKING_BASE_URL:https://api.enablebanking.com}

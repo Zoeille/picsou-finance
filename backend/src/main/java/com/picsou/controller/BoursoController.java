@@ -1,5 +1,6 @@
 package com.picsou.controller;
 
+import com.picsou.config.ClientIp;
 import com.picsou.config.RateLimitConfig;
 import com.picsou.dto.AccountResponse;
 import com.picsou.service.BoursoSyncService;
@@ -85,7 +86,7 @@ public class BoursoController {
     // ─── Rate limiting ────────────────────────────────────────────────────────
 
     private boolean checkRateLimit(HttpServletRequest request) {
-        String ip = request.getRemoteAddr();
+        String ip = ClientIp.resolve(request);
         Bucket bucket = boursoAuthBuckets.computeIfAbsent(ip, k -> RateLimitConfig.createBoursoAuthBucket());
         return bucket.tryConsume(1);
     }

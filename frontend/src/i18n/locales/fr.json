@@ -173,6 +173,7 @@
     "color": "Couleur",
     "total": "Total",
     "currentBalance": "Solde actuel",
+    "cashBalance": "Liquidités dans le PEA/CTO",
     "snapshots": "Relevés mensuels",
     "addSnapshot": "Enregistrer",
     "monthlyHistory": "Solde en fin de mois",
@@ -198,6 +199,7 @@
     "compteTitres": "Compte titres",
     "crypto": "Crypto",
     "realEstate": "Immobilier",
+    "employeeSavings": "Épargne salariale",
     "loan": "Prêt",
     "other": "Autre"
   },
@@ -400,8 +402,10 @@
     "desc": {
       "banks": "Connecter vos banques via OAuth",
       "exchanges": "Binance, Kraken...",
-      "wallets": "Bitcoin, Ethereum, Solana...",
+      "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
+      "bourseDirect": "Synchroniser vos PEA et CTO",
+      "amundi": "PEE, PEG, PERCO, PER chez Amundi",
       "finary": "Importer depuis Finary",
       "manual": "Créer un compte manuellement"
     }
@@ -415,6 +419,8 @@
       "countriesLoadError": "Impossible de charger tous les pays — France uniquement.",
       "searchPlaceholder": "Ex: BNP Paribas...",
       "searchError": "Impossible de rechercher les banques pour le moment.",
+      "proBadge": "Pro",
+      "proBadgeTitle": "Compte professionnel — cette banque ne s'adresse qu'aux pros",
       "connected": "Connexions actives",
       "noConnections": "Aucune connexion bancaire",
       "connect": "Connecter",
@@ -453,6 +459,29 @@
         "unknownError": "Une erreur inattendue s'est produite."
       }
     },
+    "ibkr": {
+      "title": "Interactive Brokers",
+      "setupHint": "Dans le Client Portal IBKR, créez une requête Flex « Open Positions » et générez un jeton Flex Web Service, puis collez les deux ci-dessous.",
+      "token": "Jeton Flex Web Service",
+      "tokenPlaceholder": "ex. 123456789012345678901234",
+      "queryId": "ID de la requête Flex",
+      "queryIdPlaceholder": "ex. 987654",
+      "connect": "Connecter",
+      "sync": "Synchroniser",
+      "syncing": "Synchronisation…",
+      "disconnect": "Déconnecter",
+      "disconnectConfirm": "Supprimer la connexion Interactive Brokers enregistrée ?",
+      "connected": "Connecté",
+      "statusError": "Échec de la dernière synchro",
+      "lastSync": "Dernière sync",
+      "neverSynced": "Jamais synchronisé",
+      "syncedToast": "Interactive Brokers synchronisé : {{count}} compte(s)",
+      "errors": {
+        "connectFailed": "Impossible d'enregistrer la connexion. Vérifiez le jeton et l'ID de requête.",
+        "syncFailed": "Échec de la synchronisation Interactive Brokers. Vérifiez votre jeton ou réessayez.",
+        "disconnectFailed": "Impossible de supprimer la connexion. Réessayez."
+      }
+    },
     "exchanges": {
       "title": "Exchanges",
       "add": "Ajouter un exchange",
@@ -475,11 +504,14 @@
       "label": "Label",
       "track": "Suivre",
       "connectError": "Échec de l'ajout. Vérifiez l'adresse et réessayez.",
+      "syncError": "Échec de la synchronisation. Vérifiez l'adresse ou réessayez plus tard.",
+      "removeError": "Impossible de supprimer ce portefeuille. Veuillez réessayer.",
       "sync": "Synchroniser",
       "remove": "Supprimer",
       "removeConfirm": "Supprimer ce wallet ?",
       "noWallets": "Aucun wallet suivi",
-      "lastSync": "Dernière sync"
+      "lastSync": "Dernière sync",
+      "evmHint": "Une seule adresse, toutes les chaînes EVM — Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base et Avalanche."
     },
     "finary": {
       "title": "Finary",
@@ -552,6 +584,70 @@
         "invalidMfaCode": "Code MFA invalide ou expiré.",
         "sessionExpired": "Session expirée. Veuillez vous reconnecter.",
         "serverError": "Erreur serveur BoursoBank. Veuillez réessayer."
+      }
+    },
+    "amundi": {
+      "title": "Amundi",
+      "login": "Identifiant",
+      "password": "Mot de passe",
+      "otpCode": "Code de sécurité à 6 chiffres",
+      "otpPrompt": "Saisissez le code envoyé par Amundi par SMS.",
+      "appValidationPrompt": "Ouvrez l'application Mon Épargne et validez la connexion.",
+      "appValidationHint": "Cette page se met à jour automatiquement dès que vous avez validé.",
+      "connect": "Se connecter",
+      "connecting": "Connexion en cours…",
+      "validate": "Valider le code",
+      "validating": "Validation en cours…",
+      "sync": "Synchroniser",
+      "queued": "Synchronisation en attente…",
+      "syncing": "Synchronisation en cours…",
+      "syncSuccess": "Plans d'épargne synchronisés.",
+      "clearSession": "Déconnecter",
+      "noSession": "Aucune session active",
+      "sessionActive": "Session active",
+      "scope": "Synchronise vos plans d'épargne salariale (PEE, PEG, PERCO, PER) et les lignes de FCPE qu'ils contiennent, avec leur valorisation.",
+      "errors": {
+        "tooManyAttempts": "Trop de tentatives. Veuillez patienter.",
+        "invalidCredentials": "Identifiants Amundi invalides.",
+        "captchaBlocked": "Amundi demande un captcha que Picsou ne peut pas résoudre. Réessayez plus tard.",
+        "invalidCode": "Code de sécurité invalide ou expiré. Recommencez la connexion.",
+        "appValidationTimeout": "La validation dans l'application n'a pas été confirmée à temps. Recommencez la connexion.",
+        "authAttemptExpired": "La tentative d’authentification a expiré. Recommencez la connexion.",
+        "sessionExpired": "La session Amundi a expiré. Veuillez vous reconnecter.",
+        "portfolioIncomplete": "Amundi a renvoyé des plans incomplets. Vos données existantes ont été conservées.",
+        "formatChanged": "Le format du site Amundi a changé. Vos données existantes ont été conservées.",
+        "invalidData": "Amundi a renvoyé des données incohérentes. Vos données existantes ont été conservées.",
+        "serverError": "Impossible de joindre Amundi. Veuillez réessayer."
+      }
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct",
+      "login": "Identifiant",
+      "password": "Mot de passe",
+      "otpCode": "Code de sécurité à 6 chiffres",
+      "otpPrompt": "Saisissez le code envoyé par Bourse Direct. Cet appareil ne sera pas déclaré comme appareil de confiance.",
+      "connect": "Se connecter",
+      "connecting": "Connexion en cours…",
+      "validate": "Valider le code",
+      "validating": "Validation en cours…",
+      "sync": "Synchroniser",
+      "queued": "Synchronisation en attente…",
+      "syncing": "Synchronisation en cours…",
+      "syncSuccess": "Portefeuille synchronisé.",
+      "clearSession": "Déconnecter",
+      "noSession": "Aucune session active",
+      "sessionActive": "Session active",
+      "scope": "Synchronise les positions, le PRU, le cours, la valorisation et les liquidités de vos PEA et CTO.",
+      "errors": {
+        "tooManyAttempts": "Trop de tentatives. Veuillez patienter.",
+        "invalidCredentials": "Identifiants Bourse Direct invalides.",
+        "invalidCode": "Code de sécurité invalide ou expiré. Recommencez la connexion.",
+        "authAttemptExpired": "La tentative d’authentification a expiré. Recommencez la connexion.",
+        "sessionExpired": "La session Bourse Direct a expiré. Veuillez vous reconnecter.",
+        "portfolioIncomplete": "Bourse Direct a renvoyé un portefeuille incomplet. Vos données existantes ont été conservées.",
+        "formatChanged": "Le format du portefeuille Bourse Direct a changé. Vos données existantes ont été conservées.",
+        "invalidData": "Bourse Direct a renvoyé des données incohérentes. Vos données existantes ont été conservées.",
+        "serverError": "Impossible de joindre Bourse Direct. Veuillez réessayer."
       }
     }
   },
@@ -784,6 +880,7 @@
       "description": "Activer ou désactiver les connecteurs de données",
       "enablebanking": "Enable Banking",
       "boursobank": "BoursoBank",
+      "boursedirect": "Bourse Direct",
       "traderepublic": "Trade Republic",
       "finary": "Finary",
       "crypto": "Crypto"
@@ -952,6 +1049,10 @@
           "title": "BoursoBank (sidecar)",
           "description": "Synchronisation directe via le conteneur bourso-auth livré avec Picsou. Aucun compte externe requis."
         },
+        "boursedirect": {
+          "title": "Bourse Direct",
+          "description": "Synchronisez directement vos positions PEA et compte-titres avec une authentification 2FA."
+        },
         "traderepublic": {
           "title": "Trade Republic",
           "description": "Synchronisez votre portefeuille Trade Republic avec vos identifiants. Vous les ajouterez au moment de créer le compte."
@@ -1057,6 +1158,13 @@
       "retry": "Réessayer",
       "continue": "Continuer",
       "skip": "Ignorer pour l'instant"
+    },
+    "bourseDirect": {
+      "title": "Bourse Direct est prêt.",
+      "body": "Vous vous connecterez après l'installation avec vos identifiants Bourse Direct, puis le code de sécurité à 6 chiffres.",
+      "tip": "Picsou conserve uniquement une session chiffrée. Le mot de passe et le code 2FA ne sont jamais enregistrés. Les comptes restent rattachés à leur PEA ou CTO.",
+      "cta": "Activer Bourse Direct",
+      "skip": "Ne pas activer Bourse Direct"
     },
     "tr": {
       "title": "Trade Republic est prêt.",

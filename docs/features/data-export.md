@@ -1,6 +1,6 @@
 # Feature: GDPR-friendly data export (JSON + CSV)
 
-> Last updated: 2026-04-26
+> Last updated: 2026-07-20
 > Status: ✅ Implemented
 
 ## Context
@@ -197,13 +197,15 @@ Frontend:
 - **Currency separation.** Money is always written as `(decimal-string, currency-code)` — never as a localized string like `"1 234,56 €"` and never as a `Double`.
 - **`SharedResource` direction.** Only export rows where the AppUser's member is the **recipient** (data shared *with* me); rows where they share *outwards* are also relevant since they describe how my data is shared — both directions are exported, but always anchored on "my member id" so we never include third-party data we shouldn't.
 - **Managed-profile detour.** The export endpoint ignores any `?memberId=` query/cookie context — always anchors on the authenticated `AppUser`.
+- **`BalanceSnapshotsExporter` streams per account.** `writeCsv`/`writeJson` each iterate the member's accounts and, per account, query `balanceSnapshotRepository.findByAccountIdOrderByDateAsc` — instead of collecting the member's *entire* snapshot history into one list before writing anything. This is the table the class's own Javadoc calls out as able to "dwarf the rest of the archive" (years × many accounts), so heap must stay bounded to one account's history at a time rather than growing with total history size. Cost: each of the 2 passes (CSV, JSON) re-runs the same per-account queries — 2 passes total, unchanged from before. Accepted: the goal is bounded heap, not minimal query count. Row order (account insertion order, then date within account) is unchanged.
 
 ## Tests
 
 Backend:
 
 - `*ExporterTest` (one per `EntityExporter`) — fixtures → expected JSON node + CSV rows. Each includes a *negative* assertion: the produced bytes do not contain known-secret tokens.
-- `DataExportServiceTest` — verifies ZIP file list given options, presence/absence of `balance_snapshots.csv` based on toggle, presence of `README.txt`.
+- `DataExportServiceTest` — verifies ZIP file list given options, presence/absence of `balance_snapshots.csv` based on toggle, presence of `README.txt`. Wires **all** `EntityExporter` beans (matching production Spring injection, not a subset) with one fixture per entity carrying a unique tripwire literal in every sensitive, non-exported field (e.g. `Requisition.authLink`); asserts none of the tripwires appear anywhere in the archive bytes. **New exporter ⇒ new wiring + new tripwire(s) in this test** — the net only protects what it exercises, and a partial exporter list (as this test shipped with for a while) silently blinds it to whichever exporters are missing.
+- `BalanceSnapshotsExporterTest` — drives the exporter directly (2 accounts × 3 snapshots): asserts CSV/JSON row order (account, then date) and, via `Mockito.verify`, exactly one `balanceSnapshotRepository.findByAccountIdOrderByDateAsc` call per account per pass (2 passes) — never a whole-member collecting call.
 - `MeExportControllerTest` (`@WebMvcTest`) — happy path, re-auth fail (password), re-auth fail (TOTP), missing body, rate-limit exceeded.
 - `DataExportIntegrationTest` (`@SpringBootTest` + H2) — seed an `AppUser` with **all** entity types populated **and** every secret-bearing entity (MFA secret, recovery codes, BoursoSession ciphertext, requisition tokens, persistent session). Hit the endpoint, parse the ZIP in memory, assert:
   - all expected files present

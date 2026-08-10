@@ -34,13 +34,21 @@ class BankConnectorPortTest {
     }
 
     @Test
-    void parseInstitutionId_nameContainsSeparator_splitsAtLastOccurrence() {
-        // A bank name that itself contains "::" must not corrupt the split — the
-        // country is always the LAST appended segment.
-        var parsed = BankConnectorPort.parseInstitutionId("Foo::Bar::EE");
+    void parseInstitutionId_threeSegmentId_readsCountryFromTheSecondSegment() {
+        // Current id format is "name::country::psuType". Reading the LAST segment
+        // would hand callers "business" as a country code.
+        var parsed = BankConnectorPort.parseInstitutionId("Swan::FR::business");
 
-        assertThat(parsed.name()).isEqualTo("Foo::Bar");
-        assertThat(parsed.country()).isEqualTo("EE");
+        assertThat(parsed.name()).isEqualTo("Swan");
+        assertThat(parsed.country()).isEqualTo("FR");
+    }
+
+    @Test
+    void parseInstitutionId_threeSegmentBlankCountry_returnsBlankCountry() {
+        var parsed = BankConnectorPort.parseInstitutionId("Some Bank::::personal");
+
+        assertThat(parsed.name()).isEqualTo("Some Bank");
+        assertThat(parsed.country()).isEmpty();
     }
 
     @Test

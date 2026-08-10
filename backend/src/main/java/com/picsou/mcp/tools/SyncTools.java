@@ -80,7 +80,14 @@ public class SyncTools {
             + "Does not add a new wallet.")
     @RequiresScope(Scopes.SYNC_TRIGGER)
     public String triggerCryptoWalletSync() {
-        walletSyncService.resyncAll(userContext.currentMemberId());
-        return "Crypto wallet sync triggered for your existing wallets.";
+        WalletSyncService.ResyncSummary summary = walletSyncService.resyncAll(userContext.currentMemberId());
+        if (summary.total() == 0) {
+            return "No on-chain wallets to sync.";
+        }
+        String result = "Crypto wallet sync: " + summary.succeeded() + "/" + summary.total() + " succeeded.";
+        if (!summary.failed().isEmpty()) {
+            result += " Failed: " + summary.failed().stream().map(Enum::name).collect(java.util.stream.Collectors.joining(", ")) + ".";
+        }
+        return result;
     }
 }

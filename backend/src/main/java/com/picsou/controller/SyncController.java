@@ -1,5 +1,6 @@
 package com.picsou.controller;
 
+import com.picsou.config.ClientIp;
 import com.picsou.config.RateLimitConfig;
 import com.picsou.dto.AccountResponse;
 import com.picsou.model.Requisition;
@@ -98,7 +99,7 @@ public class SyncController {
      * user action like initiating a bank connection.
      */
     private boolean checkSyncRateLimit(HttpServletRequest request, String bucketKey) {
-        String key = request.getRemoteAddr() + ":" + bucketKey;
+        String key = ClientIp.resolve(request) + ":" + bucketKey;
         Bucket bucket = syncBuckets.computeIfAbsent(key, k -> RateLimitConfig.createSyncBucket());
         return bucket.tryConsume(1);
     }

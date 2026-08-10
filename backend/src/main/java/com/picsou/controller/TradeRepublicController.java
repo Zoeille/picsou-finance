@@ -1,5 +1,6 @@
 package com.picsou.controller;
 
+import com.picsou.config.ClientIp;
 import com.picsou.config.RateLimitConfig;
 import com.picsou.dto.AccountResponse;
 import com.picsou.service.TradeRepublicSyncService;
@@ -81,7 +82,7 @@ public class TradeRepublicController {
     // --- Rate limiting ---
 
     private boolean checkAuthRateLimit(HttpServletRequest request) {
-        String ip = request.getRemoteAddr();
+        String ip = ClientIp.resolve(request);
         Bucket bucket = trAuthBuckets.computeIfAbsent(ip, k -> RateLimitConfig.createTrAuthBucket());
         return bucket.tryConsume(1);
     }

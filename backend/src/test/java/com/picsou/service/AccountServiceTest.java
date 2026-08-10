@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,6 +57,24 @@ class AccountServiceTest {
     }
 
     @Test
+    void pruneHoldings_deletesOnlyTickersNotKept() {
+        accountService.pruneHoldings(ownedAccount(), Set.of("BTC", "ETH"));
+
+        verify(holdingRepository).deleteByAccountIdAndTickerNotIn(1L, Set.of("BTC", "ETH"));
+        verify(holdingRepository, never()).deleteByAccountId(any());
+    }
+
+    @Test
+    void pruneHoldings_emptyKeepSet_clearsAllHoldings() {
+        // No asset survived (empty wallet) -> remove every holding, but never issue
+        // a NOT IN () against an empty set.
+        accountService.pruneHoldings(ownedAccount(), Set.of());
+
+        verify(holdingRepository).deleteByAccountId(1L);
+        verify(holdingRepository, never()).deleteByAccountIdAndTickerNotIn(any(), any());
+    }
+
+    @Test
     void getHoldings_returnsNullValue_whenPriceServiceHasNoPrice() {
         when(accountRepository.findByIdAndMemberId(1L, 1L)).thenReturn(Optional.of(ownedAccount()));
         AccountHolding holding = AccountHolding.builder()
@@ -78,6 +97,31 @@ class AccountServiceTest {
         assertThat(h.currentValueEur()).isNull();
         assertThat(h.pnlEur()).isNull();
         assertThat(h.pnlPercent()).isNull();
+    }
+
+    @Test
+    void getHoldings_usesBrokerEurSnapshot_whenLivePriceIsUnavailable() {
+        when(accountRepository.findByIdAndMemberId(1L, 1L)).thenReturn(Optional.of(ownedAccount()));
+        AccountHolding holding = AccountHolding.builder()
+            .id(10L)
+            .ticker("FR0000000001")
+            .quantity(new BigDecimal("10"))
+            .averageBuyIn(new BigDecimal("90"))
+            .currentPrice(new BigDecimal("100"))
+            .quoteCurrency("EUR")
+            .providerValueEur(new BigDecimal("1000"))
+            .providerPnlEur(new BigDecimal("200"))
+            .build();
+        when(holdingRepository.findByAccountIdOrderByCurrentPriceDesc(1L))
+            .thenReturn(List.of(holding));
+        when(priceService.getPriceEur("FR0000000001")).thenReturn(null);
+
+        HoldingResponse result = accountService.getHoldings(1L, 1L).getFirst();
+
+        assertThat(result.currentValueEur()).isEqualByComparingTo("1000");
+        assertThat(result.costBasisEur()).isEqualByComparingTo("800");
+        assertThat(result.pnlEur()).isEqualByComparingTo("200");
+        assertThat(result.pnlPercent()).isEqualByComparingTo("25");
     }
 
     @Test
@@ -180,6 +224,23 @@ class AccountServiceTest {
     }
 
     @Test
+    void liveBalanceEur_usesBrokerPositionValue_whenLivePriceIsUnavailable() {
+        Account account = ownedAccount();
+        AccountHolding priced = AccountHolding.builder()
+            .ticker("AAPL").quantity(new BigDecimal("5")).build();
+        AccountHolding brokerValued = AccountHolding.builder()
+            .ticker("PHYMF").quantity(new BigDecimal("10"))
+            .providerValueEur(new BigDecimal("840")).build();
+        when(holdingRepository.findByAccount_Id(1L)).thenReturn(List.of(priced, brokerValued));
+        when(priceService.getPriceEur("AAPL")).thenReturn(new BigDecimal("200"));
+        when(priceService.getPriceEur("PHYMF")).thenReturn(null);
+
+        BigDecimal result = accountService.liveBalanceEur(account);
+
+        assertThat(result).isEqualByComparingTo("1840"); // 5 × 200 + broker's 840
+    }
+
+    @Test
     void liveBalanceEur_cashAccount_convertsStoredBalance() {
         Account cash = Account.builder()
             .id(2L)
@@ -194,6 +255,105 @@ class AccountServiceTest {
         BigDecimal result = accountService.liveBalanceEur(cash);
 
         assertThat(result).isEqualByComparingTo("2300");
+    }
+
+    @Test
+    void liveBalanceEur_bourseDirect_addsCashWhenAllPositionsArePriced() {
+        Account account = Account.builder().id(3L).name("PEA Bourse Direct")
+            .type(AccountType.PEA).provider("Bourse Direct").currency("EUR")
+            .currentBalance(new BigDecimal("1250")).cashBalance(new BigDecimal("250")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("ACME").quantity(new BigDecimal("10")).build();
+        when(holdingRepository.findByAccount_Id(3L)).thenReturn(List.of(holding));
+        when(priceService.getPriceEur("ACME")).thenReturn(new BigDecimal("100"));
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1250");
+    }
+
+    @Test
+    void liveBalanceEur_bourseDirect_usesBrokerTotalWhenAnyPositionIsUnpriced() {
+        Account account = Account.builder().id(3L).name("PEA Bourse Direct")
+            .type(AccountType.PEA).provider("Bourse Direct").currency("EUR")
+            .currentBalance(new BigDecimal("1250")).cashBalance(new BigDecimal("250")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("UNKNOWN").quantity(new BigDecimal("10")).build();
+        when(holdingRepository.findByAccount_Id(3L)).thenReturn(List.of(holding));
+        when(priceService.getPriceEur("UNKNOWN")).thenReturn(null);
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1250");
+    }
+
+    /**
+     * Yahoo can never quote an FCPE, so without the provider-valued fallback an
+     * Amundi plan collapses to its (null) cash sleeve -- i.e. zero -- and the
+     * dashboard books the whole plan as a loss.
+     */
+    @Test
+    void liveBalanceEur_amundi_usesTheProviderTotalWhenNoFcpeCanBePriced() {
+        Account account = Account.builder().id(4L).name("PEG — ACME SA")
+            .type(AccountType.EMPLOYEE_SAVINGS).provider("Amundi Épargne Salariale")
+            .currency("EUR").currentBalance(new BigDecimal("1234.56")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("FR0010405035").quantity(new BigDecimal("12.3456")).build();
+        when(holdingRepository.findByAccount_Id(4L)).thenReturn(List.of(holding));
+        when(priceService.getPriceEur("FR0010405035")).thenReturn(null);
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
+    }
+
+    @Test
+    void liveBalanceEur_amundi_stillPrefersLivePricesWhenEveryFcpeResolves() {
+        Account account = Account.builder().id(4L).name("PEG — ACME SA")
+            .type(AccountType.EMPLOYEE_SAVINGS).provider("Amundi Épargne Salariale")
+            .currency("EUR").currentBalance(new BigDecimal("1000")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("FR0010405035").quantity(new BigDecimal("10")).build();
+        when(holdingRepository.findByAccount_Id(4L)).thenReturn(List.of(holding));
+        when(priceService.getPriceEur("FR0010405035")).thenReturn(new BigDecimal("123.456"));
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
+    }
+
+    @Test
+    void calculateInvestedAmount_includesCashAndPrefersBrokerEurCostBasis() {
+        Account account = Account.builder().id(3L)
+            .currentBalance(new BigDecimal("1250"))
+            .cashBalance(new BigDecimal("250"))
+            .build();
+        AccountHolding holding = AccountHolding.builder()
+            .quantity(new BigDecimal("10"))
+            .averageBuyIn(new BigDecimal("90"))
+            .providerValueEur(new BigDecimal("1000"))
+            .providerPnlEur(new BigDecimal("200"))
+            .build();
+        when(holdingRepository.findByAccount_Id(3L)).thenReturn(List.of(holding));
+
+        assertThat(accountService.calculateInvestedAmount(account))
+            .isEqualByComparingTo("1050");
+    }
+
+    @Test
+    void updateHolding_clearsBrokerValuesThatNoLongerMatchTheUserEdit() {
+        Account account = ownedAccount();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("ACME")
+            .quantity(new BigDecimal("10"))
+            .averageBuyIn(new BigDecimal("80"))
+            .providerValueEur(new BigDecimal("1000"))
+            .providerPnlEur(new BigDecimal("200"))
+            .build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(holdingRepository.findByAccountIdAndTicker(1L, "ACME")).thenReturn(Optional.of(holding));
+        when(holdingRepository.save(holding)).thenReturn(holding);
+
+        accountService.updateHolding(
+            1L, 7L, "ACME", new BigDecimal("8"), new BigDecimal("75")
+        );
+
+        assertThat(holding.getQuantity()).isEqualByComparingTo("8");
+        assertThat(holding.getAverageBuyIn()).isEqualByComparingTo("75");
+        assertThat(holding.getProviderValueEur()).isNull();
+        assertThat(holding.getProviderPnlEur()).isNull();
     }
 
     // ─── signedLiveBalanceEur ─────────────────────────────────────────────────

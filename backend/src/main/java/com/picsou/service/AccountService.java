@@ -10,6 +10,8 @@ import com.picsou.dto.RealEstateMetadataResponse;
 import com.picsou.dto.SnapshotRequest;
 import com.picsou.dto.TransactionResponse;
 import com.picsou.exception.ResourceNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.picsou.model.Account;
 import com.picsou.model.AccountHolding;
 import com.picsou.model.AccountType;
@@ -32,10 +34,24 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
 public class AccountService {
+
+    private static final Logger log = LoggerFactory.getLogger(AccountService.class);
+
+    /**
+     * Providers that report an authoritative EUR valuation for every holding.
+     * Yahoo cannot quote some of their instruments -- and never quotes Amundi's
+     * FCPE units -- so a partial live total would understate these accounts,
+     * for épargne salariale all the way down to zero. See {@link #liveBalanceEur}.
+     */
+    private static final Set<String> PROVIDER_VALUED = Set.of(
+        BourseDirectSyncService.PROVIDER,
+        AmundiSyncService.PROVIDER
+    );
 
     private final AccountRepository accountRepository;
     private final BalanceSnapshotRepository snapshotRepository;
@@ -193,6 +209,27 @@ public class AccountService {
         return holdingRepository.save(holding);
     }
 
+    /**
+     * Removes holdings of {@code account} whose ticker is not in {@code keepTickers}
+     * — i.e. assets the latest sync no longer reports as <em>held</em> (keyed on the
+     * balances the adapter returned, never on which prices happened to resolve, so a
+     * transient price outage cannot delete a still-held asset). Without this, a sold
+     * or moved-out holding lingers at its last quantity and inflates the account's
+     * live balance ({@link #liveBalanceEur}) and invested basis forever. An empty
+     * {@code keepTickers} clears all holdings (the wallet holds nothing priced/known).
+     *
+     * <p>Takes the already-resolved {@link Account} (the caller has just loaded and
+     * member-scoped it), so no extra ownership lookup is issued on the sync path.
+     */
+    @Transactional
+    public void pruneHoldings(Account account, Set<String> keepTickers) {
+        if (keepTickers.isEmpty()) {
+            holdingRepository.deleteByAccountId(account.getId());
+        } else {
+            holdingRepository.deleteByAccountIdAndTickerNotIn(account.getId(), keepTickers);
+        }
+    }
+
     // ─── Package-private helpers used by other services ──────────────────────
 
     /**
@@ -205,11 +242,22 @@ public class AccountService {
         if (holdings.isEmpty()) {
             return account.getCurrentBalance();
         }
-        return holdings.stream()
-            .map(h -> h.getAverageBuyIn() != null
-                ? h.getAverageBuyIn().multiply(h.getQuantity())
-                : BigDecimal.ZERO)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal invested = account.getCashBalance() != null
+            ? account.getCashBalance()
+            : BigDecimal.ZERO;
+        for (AccountHolding holding : holdings) {
+            BigDecimal costBasis = providerCostBasisEur(holding);
+            if (costBasis == null && holding.getAverageBuyIn() != null) {
+                costBasis = holding.getAverageBuyIn().multiply(holding.getQuantity());
+            }
+            if (costBasis == null) {
+                // A partial cost basis creates a fictitious gain. Until every
+                // position is known, use the account value as a neutral baseline.
+                return account.getCurrentBalance();
+            }
+            invested = invested.add(costBasis);
+        }
+        return invested;
     }
 
     BalanceSnapshot upsertSnapshot(Account account, BigDecimal balance, LocalDate date) {
@@ -257,14 +305,45 @@ public class AccountService {
         if (holdings.isEmpty()) {
             return priceService.toEur(account.getCurrentBalance(), account.getCurrency(), account.getTicker());
         }
-        BigDecimal liveValue = BigDecimal.ZERO;
+        BigDecimal liveValue = account.getCashBalance() != null ? account.getCashBalance() : BigDecimal.ZERO;
+        boolean allHoldingsPriced = true;
         for (AccountHolding h : holdings) {
             BigDecimal qty = h.getQuantity();
             BigDecimal livePrice = h.getTicker() != null ? priceService.getPriceEur(h.getTicker()) : null;
-            if (livePrice == null) continue;
+            if (livePrice == null) {
+                allHoldingsPriced = false;
+                BigDecimal providerValue = h.getProviderValueEur();
+                if (providerValue != null) {
+                    liveValue = liveValue.add(providerValue);
+                    continue;
+                }
+                // Skipping is deliberate -- a held-but-unpriced asset must not be valued at a
+                // guess -- but it is not free: during a price-provider outage the balance (and
+                // any snapshot taken from it) silently shrinks by whatever those holdings were
+                // worth. Log it so the dip is explicable rather than mysterious.
+                // signum() != 0 (not > 0): omitting an unpriced SHORT overstates the
+                // balance — a liability valued at 0 — which deserves the trace at least
+                // as much as the understated long.
+                if (qty != null && qty.signum() != 0) {
+                    log.warn("No EUR price for holding {} (account {}) -- excluding it from the live balance",
+                        h.getTicker(), account.getId());
+                }
+                continue;
+            }
             liveValue = liveValue.add(qty.multiply(livePrice));
         }
+        // Some providers report an authoritative total in EUR. If Yahoo/OpenFIGI cannot
+        // price even one instrument, prefer that last successful provider valuation over a
+        // misleading partial total (cash + only the symbols Yahoo happened to resolve).
+        if (!allHoldingsPriced && isProviderValued(account)) {
+            return account.getCurrentBalance();
+        }
         return liveValue;
+    }
+
+    /** Null-safe: {@code Set.of(...)} throws on a null lookup, and most accounts have no provider. */
+    private boolean isProviderValued(Account account) {
+        return account.getProvider() != null && PROVIDER_VALUED.contains(account.getProvider());
     }
 
     /**
@@ -308,6 +387,10 @@ public class AccountService {
             .orElseThrow(() -> new ResourceNotFoundException("Holding not found"));
         h.setQuantity(quantity);
         if (averageBuyIn != null) h.setAverageBuyIn(averageBuyIn);
+        // A user edit invalidates broker-derived valuation/P&L as a coherent
+        // pair. A subsequent provider sync will repopulate both fields.
+        h.setProviderValueEur(null);
+        h.setProviderPnlEur(null);
         holdingRepository.save(h);
         return toHoldingResponse(h);
     }
@@ -396,15 +479,23 @@ public class AccountService {
 
         BigDecimal quantity = holding.getQuantity();
         BigDecimal averageBuyIn = holding.getAverageBuyIn();
-        BigDecimal costBasis = (averageBuyIn != null ? averageBuyIn : BigDecimal.ZERO).multiply(quantity);
+        BigDecimal costBasis = providerCostBasisEur(holding);
+        if (costBasis == null && averageBuyIn != null) {
+            costBasis = averageBuyIn.multiply(quantity);
+        }
         BigDecimal currentValueEur = currentPriceEur != null
             ? currentPriceEur.multiply(quantity)
-            : null;
-        BigDecimal pnlEur = currentValueEur != null
+            : holding.getProviderValueEur();
+        BigDecimal pnlEur = currentValueEur != null && costBasis != null
             ? currentValueEur.subtract(costBasis)
-            : null;
-        BigDecimal pnlPercent = (pnlEur != null && costBasis.signum() != 0)
-            ? pnlEur.divide(costBasis, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+            : holding.getProviderPnlEur();
+        // abs(): a short position has a negative cost basis, and dividing by it would
+        // flip the sign — a winning short would display as a loss. The percentage must
+        // carry the sign of the P&L itself, the denominator is only a magnitude.
+        // The null check on costBasis is required since pnlEur can now fall back to the
+        // provider-reported P&L, which is available even when no cost basis is known.
+        BigDecimal pnlPercent = (pnlEur != null && costBasis != null && costBasis.signum() != 0)
+            ? pnlEur.divide(costBasis.abs(), 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
             : null;
 
         return new HoldingResponse(
@@ -413,11 +504,19 @@ public class AccountService {
             quantity,
             averageBuyIn,
             currentPrice,
+            holding.getQuoteCurrency(),
             currentValueEur,
             costBasis,
             pnlEur,
             pnlPercent,
             priceUpdatedAt
         );
+    }
+
+    private BigDecimal providerCostBasisEur(AccountHolding holding) {
+        if (holding.getProviderValueEur() == null || holding.getProviderPnlEur() == null) {
+            return null;
+        }
+        return holding.getProviderValueEur().subtract(holding.getProviderPnlEur());
     }
 }

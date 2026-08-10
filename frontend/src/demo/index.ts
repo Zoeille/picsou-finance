@@ -307,10 +307,11 @@ handlers.set(key('DELETE', '/goals/3'), () => null)
 
 // Sync
 const DEMO_INSTITUTIONS = [
-  { id: 'BNP_PARIBAS', name: 'BNP Paribas', bic: 'BNPAFRPP', logoUrl: null, country: 'FR' },
-  { id: 'BOURSOBANK', name: 'BoursoBank', bic: 'BNPAFRPP', logoUrl: null, country: 'FR' },
-  { id: 'DEUTSCHE_BANK', name: 'Deutsche Bank', bic: 'DEUTDEFF', logoUrl: null, country: 'DE' },
-  { id: 'LHV_PANK', name: 'LHV Pank', bic: 'LHVBEE22', logoUrl: null, country: 'EE' },
+  { id: 'BNP Paribas::FR::personal', name: 'BNP Paribas', bic: 'BNPAFRPP', logoUrl: null, country: 'FR', psuType: 'personal' },
+  { id: 'BoursoBank::FR::personal', name: 'BoursoBank', bic: 'BNPAFRPP', logoUrl: null, country: 'FR', psuType: 'personal' },
+  { id: 'Swan::FR::business', name: 'Swan', bic: 'SWNBFR22', logoUrl: null, country: 'FR', psuType: 'business' },
+  { id: 'Deutsche Bank::DE::personal', name: 'Deutsche Bank', bic: 'DEUTDEFF', logoUrl: null, country: 'DE', psuType: 'personal' },
+  { id: 'LHV Pank::EE::personal', name: 'LHV Pank', bic: 'LHVBEE22', logoUrl: null, country: 'EE', psuType: 'personal' },
 ]
 handlers.set(key('GET', '/sync/status'), () => mockRequisitions)
 handlers.set(key('GET', '/sync/institutions'), (config) => {
@@ -345,6 +346,35 @@ handlers.set(key('POST', '/sync/1/retry'), () => [])
 
 // Sync - delete
 handlers.set(key('DELETE', '/sync/1'), () => null)
+
+// Interactive Brokers — same demo convention as Trade Republic below: reads report a
+// disconnected state, mutations fake-succeed with the real response shapes (without
+// these, unmapped routes resolve `{}` and the tab silently misbehaves).
+handlers.set(key('GET', '/ibkr/status'), () => ({
+  connected: false, connectionId: null, status: null, lastSyncedAt: null, maskedToken: null,
+}))
+handlers.set(key('POST', '/ibkr/connect'), () => null)
+handlers.set(key('POST', '/ibkr/sync'), () => [])
+handlers.set(key('DELETE', '/ibkr/connection'), () => null)
+
+// Amundi Épargne Salariale — same demo convention: reads report a disconnected
+// session, mutations fake-succeed with the real response shapes. Bourse Direct
+// has no handlers at all, which leaves its panel reading `isActive: undefined`
+// in demo mode; do not copy that gap here.
+const demoAmundiStatus = {
+  isActive: false,
+  syncStatus: 'IDLE',
+  lastSyncStartedAt: null,
+  lastSyncCompletedAt: null,
+  lastSyncError: null,
+}
+handlers.set(key('GET', '/amundi/status'), () => demoAmundiStatus)
+handlers.set(key('POST', '/amundi/auth/initiate'), () => ({
+  processId: null, mfaRequired: false, mfaType: null,
+}))
+handlers.set(key('POST', '/amundi/auth/complete'), () => demoAmundiStatus)
+handlers.set(key('POST', '/amundi/sync'), () => demoAmundiStatus)
+handlers.set(key('DELETE', '/amundi/session'), () => null)
 
 // Trade Republic - session status
 handlers.set(key('GET', '/tr/status'), () => ({ isActive: false, expiresAt: null }))

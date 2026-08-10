@@ -3,6 +3,7 @@ package com.picsou.service;
 import com.picsou.config.EnableBankingConfigProvider;
 import com.picsou.model.AppSetting;
 import com.picsou.repository.AppSettingRepository;
+import com.picsou.repository.BourseDirectSessionRepository;
 import com.picsou.repository.FinarySessionRepository;
 import com.picsou.repository.TradeRepublicSessionRepository;
 import org.slf4j.Logger;
@@ -32,15 +33,18 @@ public class IntegrationsService {
     private final EnableBankingConfigProvider enableBankingConfig;
     private final TradeRepublicSessionRepository tradeRepublicSessions;
     private final FinarySessionRepository finarySessions;
+    private final BourseDirectSessionRepository bourseDirectSessions;
 
     public IntegrationsService(AppSettingRepository settingRepository,
                                EnableBankingConfigProvider enableBankingConfig,
                                TradeRepublicSessionRepository tradeRepublicSessions,
-                               FinarySessionRepository finarySessions) {
+                               FinarySessionRepository finarySessions,
+                               BourseDirectSessionRepository bourseDirectSessions) {
         this.settingRepository = settingRepository;
         this.enableBankingConfig = enableBankingConfig;
         this.tradeRepublicSessions = tradeRepublicSessions;
         this.finarySessions = finarySessions;
+        this.bourseDirectSessions = bourseDirectSessions;
     }
 
     @Transactional
@@ -102,6 +106,7 @@ public class IntegrationsService {
             case "enablebanking" -> enableBankingConfig.isConfiguredLenient();
             case "traderepublic" -> tradeRepublicSessions.count() > 0;
             case "finary" -> finarySessions.count() > 0;
+            case "boursedirect" -> bourseDirectSessions.existsByActiveTrue();
             default -> false;
         };
     }

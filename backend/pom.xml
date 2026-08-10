@@ -22,6 +22,9 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <bucket4j.version>8.10.1</bucket4j.version>
+        <!-- Ahead of the Boot 3.4.9 BOM (1.20.6): its bundled docker-java negotiates down to
+             Docker API 1.32, which engines >= 28 refuse ("minimum supported API version is 1.40"). -->
+        <testcontainers.version>1.21.3</testcontainers.version>
         <!-- Spring AI 1.0.x targets Spring Boot 3.4.x (Spring 6.2) — matches this project.
              Do NOT bump to 1.1.x: it targets Boot 3.5 / Spring 6.3 and conflicts with the pins below. -->
         <spring-ai.version>1.0.3</spring-ai.version>
@@ -131,6 +134,12 @@
             <version>${bucket4j.version}</version>
         </dependency>
 
+        <!-- Bounded, self-evicting rate-limit bucket stores (RateLimitConfig) -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- TOTP (RFC 6238) for 2FA: secret generation, QR code, code verification -->
         <dependency>
             <groupId>dev.samstevens.totp</groupId>
@@ -182,10 +191,44 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+            Flyway migrations are PostgreSQL-flavoured (enum types, split_part...), so a
+            data-mutating migration can only be verified against real PostgreSQL, not H2.
+            Version comes from the testcontainers.version property above, which overrides
+            the Spring Boot parent's BOM.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!--
+                            Set process-wide so it applies before ANY Testcontainers class
+                            initializes, not just the one that carries a static block for
+                            IDE runs. Without it docker-java negotiates down to Docker API
+                            1.32, which Engine >= 28 refuses; that error is indistinguishable
+                            from "no Docker installed", so the migration test's availability
+                            guard would silently skip on a capable host.
+                            1.44 is satisfied by Engine >= 25.0 (Jan 2024).
+                        -->
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>

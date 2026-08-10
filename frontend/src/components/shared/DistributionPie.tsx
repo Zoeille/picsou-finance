@@ -4,14 +4,11 @@ import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } f
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useTranslation } from 'react-i18next'
-
-interface DistributionItem {
-  accountId: number
-  name: string
-  color: string
-  balanceEur: number
-  percentage: number
-}
+import { accountTypeLabelKey } from '@/lib/constants'
+import {
+  disambiguateDistributionNames,
+  type DistributionItem,
+} from './distribution-labels'
 
 interface DistributionPieProps {
   data: DistributionItem[]
@@ -188,6 +185,10 @@ function AllocationTreemap({ data }: { data: DistributionItem[] }) {
 
 export function DistributionPie({ data }: DistributionPieProps) {
   const { t } = useTranslation()
+  const displayData = useMemo(
+    () => disambiguateDistributionNames(data, type => t(accountTypeLabelKey(type))),
+    [data, t],
+  )
 
   return (
     <Card className="h-[420px]">
@@ -205,7 +206,7 @@ export function DistributionPie({ data }: DistributionPieProps) {
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                   <Pie
-                    data={data}
+                    data={displayData}
                     dataKey="balanceEur"
                     nameKey="name"
                     cx="50%"
@@ -215,7 +216,7 @@ export function DistributionPie({ data }: DistributionPieProps) {
                     paddingAngle={2}
                     strokeWidth={0}
                   >
-                    {data.map((entry) => (
+                    {displayData.map((entry) => (
                       <Cell key={entry.accountId} fill={entry.color} />
                     ))}
                     <Label
@@ -233,7 +234,7 @@ export function DistributionPie({ data }: DistributionPieProps) {
                                 y={viewBox.cy}
                                 className="fill-foreground text-2xl font-bold"
                               >
-                                {data.length}
+                                {displayData.length}
                               </tspan>
                               <tspan
                                 x={viewBox.cx}
@@ -251,7 +252,7 @@ export function DistributionPie({ data }: DistributionPieProps) {
                 </PieChart>
               </ChartContainer>
               <div className="mt-2 grid min-h-0 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto">
-                {data.map(item => (
+                {displayData.map(item => (
                   <div key={item.accountId} className="flex items-center gap-2 text-sm">
                     <div className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                     <span className="truncate">{item.name}</span>
@@ -263,7 +264,7 @@ export function DistributionPie({ data }: DistributionPieProps) {
           </TabsContent>
 
           <TabsContent value="allocation" className="h-full">
-            <AllocationTreemap data={data} />
+            <AllocationTreemap data={displayData} />
           </TabsContent>
         </CardContent>
       </Tabs>

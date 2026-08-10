@@ -83,6 +83,11 @@ export const SetupStepBoursoBank = lazy(() =>
     default: m.SetupStepBoursoBank,
   }))
 )
+export const SetupStepBourseDirect = lazy(() =>
+  import('@/pages/setup/integrations/SetupStepBourseDirect').then((m) => ({
+    default: m.SetupStepBourseDirect,
+  }))
+)
 export const SetupStepTradeRepublic = lazy(() =>
   import('@/pages/setup/integrations/SetupStepTradeRepublic').then((m) => ({
     default: m.SetupStepTradeRepublic,

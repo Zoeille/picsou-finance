@@ -36,6 +36,7 @@ Bucket4j (`io.github.bucket4j`) enforces per-IP rate limits. Buckets are created
 | `POST /api/mfa/verify`, `/api/mfa/challenge`  | Throttled (anti-bruteforce on 6-digit code) |
 | `POST /api/sync/initiate`                     | Throttled                                   |
 | `POST /api/tr/auth/initiate`                  | Throttled                                   |
+| `POST /api/bourse-direct/auth/initiate`, `/complete` | Throttled                            |
 | `GET /api/me/export`                          | Throttled (GDPR export)                     |
 
 When a limit is exceeded, the controller returns a 429 ProblemDetail directly (not via the exception handler).
@@ -46,6 +47,7 @@ When a limit is exceeded, the controller returns a 429 ProblemDetail directly (n
 |--------|-------|
 | `200 OK` | GET, PUT, POST (non-creation) |
 | `201 Created` | POST that creates a resource (annotated `@ResponseStatus(HttpStatus.CREATED)`) |
+| `202 Accepted` | POST that queues asynchronous work |
 | `204 No Content` | DELETE, logout |
 
 ## Error format
@@ -77,6 +79,10 @@ Validation errors (422) include an `errors` map with field-level messages:
 ```
 
 Stack traces are never exposed (`server.error.include-stacktrace: never`).
+
+Domain-specific failures may add a stable machine-readable `code` property.
+Clients translate this code and must not infer a cause from localized or
+human-readable `detail` text.
 
 ## Validation
 

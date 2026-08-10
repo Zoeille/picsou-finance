@@ -35,7 +35,7 @@ public class SetupService {
     public static final String KEY_ENABLEBANKING_REDIRECT_URI = "enablebanking.redirect-uri";
     public static final String KEY_BOURSO_AUTH_URL = "bourso-auth.url";
     public static final List<String> INTEGRATIONS = List.of(
-        "enablebanking", "boursobank", "traderepublic", "finary", "crypto"
+        "enablebanking", "boursobank", "boursedirect", "traderepublic", "finary", "crypto"
     );
 
     private final AppSettingRepository settingRepository;
@@ -78,7 +78,10 @@ public class SetupService {
      * {@code DataSeeder} path or by the setup wizard controller.
      *
      * SERIALIZABLE isolation + a CAS on setup.state prevents two racing
-     * callers (e.g. two browser tabs) from each creating an admin.
+     * callers (e.g. two browser tabs) from each creating an admin. The wizard
+     * seeds exactly one account: once any user exists, further calls are
+     * rejected regardless of {@code setup.state} — additional members/admins
+     * are created from the authenticated Family admin UI, never from here.
      */
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public AppUser seedAdmin(String username, String bcryptHash, String displayName, String avatarColor) {
@@ -92,12 +95,21 @@ public class SetupService {
             throw new IllegalStateException("Setup is already complete; use the admin UI to manage users.");
         }
 
+        if (userRepository.count() > 0) {
+            throw new IllegalStateException(
+                "An account already exists; additional members are created from the Family admin UI.");
+        }
+
         int claimed = settingRepository.compareAndSet(
             KEY_SETUP_STATE,
             SetupState.PENDING_ADMIN.name(),
             SetupState.IN_PROGRESS.name()
         );
         if (claimed == 0 && state == SetupState.PENDING_ADMIN) {
+            // Two concurrent seeding attempts raced on the PENDING_ADMIN → IN_PROGRESS CAS
+            // (e.g. double-submitted wizard tabs). Log it so the resulting 5xx is
+            // distinguishable from a genuine server error in the logs.
+            log.warn("Setup: concurrent admin-seeding attempt lost the setup-state CAS (state={})", state);
             throw new IllegalStateException("Another setup session is already in progress.");
         }
 

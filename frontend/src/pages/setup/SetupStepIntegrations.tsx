@@ -4,6 +4,7 @@ import type { ComponentType } from 'react'
 import {
   Landmark,
   LineChart,
+  BriefcaseBusiness,
   PiggyBank,
   Bitcoin,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ const CATALOG: Array<{
 }> = [
   { key: 'enablebanking', icon: Landmark, route: '/setup/integrations/enablebanking' },
   // BoursoBank disabled for 1.0.0 — sidecar integration not finished.
+  { key: 'boursedirect', icon: BriefcaseBusiness, route: '/setup/integrations/boursedirect' },
   { key: 'traderepublic', icon: LineChart, route: '/setup/integrations/traderepublic' },
   { key: 'finary', icon: PiggyBank, route: '/setup/integrations/finary' },
   { key: 'crypto', icon: Bitcoin, route: '/setup/integrations/crypto' },
