@@ -9,9 +9,9 @@ test.describe('Sync page tabs', () => {
     await page.waitForURL('**/sync')
   })
 
-  test('should show 5 tabs', async ({ page }) => {
+  test('should show 8 tabs', async ({ page }) => {
     const tabs = page.locator('[role="tablist"] [role="tab"]')
-    await expect(tabs).toHaveCount(5)
+    await expect(tabs).toHaveCount(8)
   })
 
   // Switching tabs no longer rewrites the URL (?tab= is only read as the

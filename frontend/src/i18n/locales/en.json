@@ -199,6 +199,7 @@
     "compteTitres": "Brokerage",
     "crypto": "Crypto",
     "realEstate": "Real estate",
+    "employeeSavings": "Employee savings",
     "loan": "Loan",
     "other": "Other"
   },
@@ -404,6 +405,7 @@
       "wallets": "Bitcoin, Ethereum, BNB, Solana...",
       "tr": "Trade Republic",
       "bourseDirect": "Sync your PEA and securities accounts",
+      "amundi": "PEE, PEG, PERCO, PER held at Amundi",
       "finary": "Import from Finary",
       "manual": "Create an account manually"
     }
@@ -580,6 +582,40 @@
         "invalidMfaCode": "Invalid or expired MFA code.",
         "sessionExpired": "Session expired. Please reconnect.",
         "serverError": "BoursoBank server error. Please try again."
+      }
+    },
+    "amundi": {
+      "title": "Amundi",
+      "login": "Username",
+      "password": "Password",
+      "otpCode": "6-digit security code",
+      "otpPrompt": "Enter the code Amundi sent you by SMS.",
+      "appValidationPrompt": "Open the Mon Épargne app and approve the sign-in.",
+      "appValidationHint": "This page updates on its own as soon as you approve.",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "validate": "Submit code",
+      "validating": "Validating…",
+      "sync": "Sync",
+      "queued": "Sync queued…",
+      "syncing": "Syncing…",
+      "syncSuccess": "Savings plans synced.",
+      "clearSession": "Disconnect",
+      "noSession": "No active session",
+      "sessionActive": "Session active",
+      "scope": "Syncs your employee savings plans (PEE, PEG, PERCO, PER) and the FCPE lines they hold, with their valuation.",
+      "errors": {
+        "tooManyAttempts": "Too many attempts. Please wait before retrying.",
+        "invalidCredentials": "Invalid Amundi credentials.",
+        "captchaBlocked": "Amundi asked for a captcha Picsou cannot solve. Please try again later.",
+        "invalidCode": "Invalid or expired security code. Please start over.",
+        "appValidationTimeout": "The app approval was not confirmed in time. Please start over.",
+        "authAttemptExpired": "The authentication attempt expired. Please start over.",
+        "sessionExpired": "The Amundi session expired. Please reconnect.",
+        "portfolioIncomplete": "Amundi returned incomplete plans. Your existing data was kept.",
+        "formatChanged": "The Amundi website format changed. Your existing data was kept.",
+        "invalidData": "Amundi returned inconsistent data. Your existing data was kept.",
+        "serverError": "Could not reach Amundi. Please try again."
       }
     },
     "bourseDirect": {

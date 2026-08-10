@@ -5,16 +5,24 @@ import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { AccountTypeBadge } from '@/components/shared/AccountTypeBadge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { formatCurrency, formatDate, localeFromLanguage } from '@/lib/utils'
+import { providerLogoUrl } from '@/lib/provider-logos'
 
 interface AccountCardProps {
   account: Account
   onClick?: () => void
 }
 
-function AccountAvatar({ logoUrl, color }: { logoUrl: string | null; color: string }) {
+/**
+ * The provider's own logo when the connector supplied one (Enable Banking), otherwise the
+ * brand asset bundled for that provider, otherwise the account's color.
+ */
+function AccountAvatar(
+  { logoUrl, provider, color }: { logoUrl: string | null; provider: string | null; color: string },
+) {
+  const src = logoUrl ?? providerLogoUrl(provider)
   return (
     <Avatar className="mt-1 size-10 shrink-0 bg-white">
-      {logoUrl && <AvatarImage src={logoUrl} alt="" className="object-contain p-1" />}
+      {src && <AvatarImage src={src} alt="" className="object-contain p-1" />}
       <AvatarFallback style={{ backgroundColor: color }} />
     </Avatar>
   )
@@ -39,7 +47,11 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
       onClick={onClick}
     >
       <CardContent className="flex items-start gap-3 p-4">
-        <AccountAvatar logoUrl={account.logoUrl} color={account.color} />
+        <AccountAvatar
+          logoUrl={account.logoUrl}
+          provider={account.provider}
+          color={account.color}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{account.name}</span>

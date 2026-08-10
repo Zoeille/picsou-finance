@@ -29,6 +29,7 @@ Track bank accounts, brokerage, crypto, and net worth — all in one place.
 - **Account aggregation** — Bank accounts (LEP, PEA, Livret, current), brokerage, crypto wallets, on-chain addresses, debts/loans
 - **Bank sync** — Enable Banking (PSD2/OAuth, 2000+ EU banks).
 - **Brokerage sync** — Trade Republic via WebSocket or CSV import, and Bourse Direct PEA/CTO positions via a local read-only sidecar
+- **Employee savings** — Amundi Épargne Salariale plans (PEE/PEG, PERCO, PER) and their FCPE lines, via a local read-only sidecar
 - **Crypto** — Binance exchange sync, on-chain BTC/ETH/SOL address tracking
 - **Live prices** — CoinGecko (crypto), Yahoo Finance (stocks/ETFs)
 - **Security insight** — Per-holding asset-type detection and ETF composition (top holdings, country & sector breakdowns) in the holding detail modal
@@ -95,6 +96,7 @@ Picsou publishes pre-built, multi-arch (amd64/arm64) images to the GitHub Contai
 | `ghcr.io/zoeille/picsou-finance` | [picsou-finance](https://github.com/users/Zoeille/packages/container/package/picsou-finance) — app (frontend + backend) |
 | `ghcr.io/zoeille/picsou-finance/tr-auth` | [picsou-finance/tr-auth](https://github.com/users/Zoeille/packages/container/package/picsou-finance%2Ftr-auth) — Trade Republic auth sidecar |
 | `ghcr.io/zoeille/picsou-finance/bourse-direct-auth` | Bourse Direct login/2FA sidecar |
+| `ghcr.io/zoeille/picsou-finance/amundi-auth` | Amundi Épargne Salariale login/2FA sidecar |
 
 ```bash
 docker compose -f docker/docker-compose.yml pull    # fetch the published images from GHCR

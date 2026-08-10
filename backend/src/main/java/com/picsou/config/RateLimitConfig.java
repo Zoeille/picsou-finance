@@ -84,6 +84,14 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-IP Amundi auth rate limiter: 5 attempts per 15 minutes.
+     */
+    @Bean("amundiAuthBuckets")
+    public Map<String, Bucket> amundiAuthBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
      * Per-IP IBKR Flex sync rate limiter: 6 requests per minute.
      * IBKR itself enforces a separate per-token limit (~1 request/sec) on the Flex Web
      * Service; this application-level per-IP cap is additive and defensive — it keeps one
@@ -200,6 +208,15 @@ public class RateLimitConfig {
     }
 
     public static Bucket createBourseDirectAuthBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(5)
+                .refillIntervally(5, Duration.ofMinutes(15))
+                .build())
+            .build();
+    }
+
+    public static Bucket createAmundiAuthBucket() {
         return Bucket.builder()
             .addLimit(Bandwidth.builder()
                 .capacity(5)

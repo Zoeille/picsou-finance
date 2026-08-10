@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Amundi Épargne Salariale sync.** Connect an Amundi account and import every
+  funded employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own
+  account, leaving emptied and closed dispositifs out,
+  with each FCPE line's units, unit value, valuation and unrealized gain. A
+  dedicated read-only Playwright sidecar handles the captcha-gated login and the
+  mandatory second factor, either an approval in the "Mon Épargne" app or an SMS
+  code; credentials and codes are never persisted, only the encrypted session.
+  Valuations come from Amundi rather than a price feed, since no FCPE is quotable
+  on Yahoo. Imports expose queued/running/success/failure progress, reject plans
+  whose total does not reconcile with their lines, and preserve the last valid
+  holdings on failure. Reachable from the Sync page and the Add-account modal, in
+  all four locales, and its accounts carry the Amundi logo rather than a color
+  circle. See [feature notes](docs/features/amundi-epargne-salariale.md)
+  and the [ADR](docs/decisions/2026-08-09-amundi-epargne-salariale-sidecar.md).
 - **Bourse Direct brokerage sync.** A dedicated read-only Playwright sidecar
   handles login and the six-digit security code, then imports PEA/CTO positions,
   average cost, current price, valuation and account cash. Credentials and OTPs

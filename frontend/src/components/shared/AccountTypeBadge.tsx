@@ -10,6 +10,7 @@ interface AccountTypeBadgeProps {
 const TYPE_KEY: Partial<Record<AccountType, string>> = {
   COMPTE_TITRES: 'compteTitres',
   REAL_ESTATE: 'realEstate',
+  EMPLOYEE_SAVINGS: 'employeeSavings',
 }
 
 function getTypeKey(type: AccountType): string {

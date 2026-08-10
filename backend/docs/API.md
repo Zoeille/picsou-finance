@@ -31,7 +31,7 @@
 
 ### AccountType
 
-`LEP` · `PEA` · `COMPTE_TITRES` · `CRYPTO` · `CHECKING` · `SAVINGS` · `OTHER`
+`LEP` · `PEA` · `COMPTE_TITRES` · `CRYPTO` · `CHECKING` · `SAVINGS` · `REAL_ESTATE` · `LOAN` · `EMPLOYEE_SAVINGS` · `OTHER`
 
 ### Chain
 
@@ -1013,3 +1013,91 @@ Returns whether the Finary API credentials (`FINARY_EMAIL`, `FINARY_PASSWORD`) a
 ```
 
 **Response `200` — `FinaryImportResultResponse`** (same shape as file-based import).
+
+---
+
+### 12. Amundi Épargne Salariale — `/api/amundi`
+
+Read-only. Amundi gates its login behind a captcha and a mandatory second
+factor, so authentication is always interactive; it persists an encrypted
+sidecar session, then plan import continues asynchronously. One account is
+created per *dispositif* (PEE/PEG, PERCO, PER…), typed `EMPLOYEE_SAVINGS`.
+
+#### `POST /api/amundi/auth/initiate`
+
+- **Auth:** Required
+- **Rate limit:** 5 attempts per IP per 15 minutes
+
+**Request body:**
+```json
+{ "login": "identifiant", "password": "secret" }
+```
+
+**Response `200` — `AmundiAuthInitResponse`:**
+```json
+{ "processId": "uuid", "mfaRequired": true, "mfaType": "APP_PUSH" }
+```
+
+`mfaType` is `APP_PUSH` when the user must approve in the "Mon Épargne" app,
+or `SMS` when a code is texted.
+
+---
+
+#### `POST /api/amundi/auth/complete`
+
+- **Auth:** Required
+- **Rate limit:** 5 attempts per IP per 15 minutes
+
+**Request body** — `code` is omitted for an app push, since there is nothing
+for the user to type:
+```json
+{ "processId": "uuid", "code": "123456" }
+```
+
+**Response `200` — `AmundiSessionStatus`**, normally with
+`syncStatus: "QUEUED"`. For an app push the request stays open until the user
+approves on their phone, or fails with `APP_VALIDATION_TIMEOUT`.
+
+---
+
+#### `POST /api/amundi/sync`
+
+- **Auth:** Required
+- **Rate limit:** 10 requests per IP per minute (shared `syncBuckets`)
+- **Body:** none
+
+**Response `202` — `AmundiSessionStatus`.** An already queued or running job is
+not duplicated; its current status is returned.
+
+---
+
+#### `GET /api/amundi/status`
+
+- **Auth:** Required
+
+**Response `200` — `AmundiSessionStatus`:**
+```json
+{
+  "isActive": true,
+  "syncStatus": "SUCCESS",
+  "lastSyncStartedAt": "2026-08-09T09:59:40Z",
+  "lastSyncCompletedAt": "2026-08-09T10:00:00Z",
+  "lastSyncError": null
+}
+```
+
+`syncStatus` is one of `IDLE`, `QUEUED`, `RUNNING`, `SUCCESS`, or `FAILED`.
+
+---
+
+#### `DELETE /api/amundi/session`
+
+- **Auth:** Required
+
+**Response `204`.** Imported accounts and history are retained.
+
+Domain failures use `422` RFC 7807 responses with a stable `code` property:
+`INVALID_CREDENTIALS`, `CAPTCHA_BLOCKED`, `INVALID_OTP`,
+`APP_VALIDATION_TIMEOUT`, `AUTH_ATTEMPT_EXPIRED`, `SESSION_EXPIRED`,
+`PORTFOLIO_INCOMPLETE`, `UPSTREAM_FORMAT_CHANGED`, `UPSTREAM_UNAVAILABLE`,
+`INVALID_DATA`, or `INTERNAL_ERROR`. Authentication rate limiting returns `429`.
