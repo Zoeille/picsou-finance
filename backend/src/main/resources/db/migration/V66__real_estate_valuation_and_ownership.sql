@@ -1,9 +1,12 @@
 -- Real estate: full property description, automatic valuation from open data,
 -- and per-member ownership shares.
 --
--- Numbered V66 rather than V64: the crypto exchange branch already owns V64/V65.
--- flyway.out-of-order is enabled precisely because branches number independently,
--- so skipping ahead avoids a filename collision when that branch merges.
+-- Numbered V66 rather than V64: the crypto exchange branch owned V64/V65 when this was
+-- written (it now carries V71/V72, renumbered around main's own V64). Deliberately left
+-- at V66 even though main has since reached V72: flyway.out-of-order is enabled precisely
+-- because branches number independently, there is no filename collision, and V66/V67 are
+-- already applied on running instances -- renumbering them now would leave those
+-- instances with an applied migration Flyway can no longer resolve, and refuse to start.
 
 -- ─── 1. real_estate_metadata: Finary-parity property description ─────────────
 --
