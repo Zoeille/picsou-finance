@@ -68,6 +68,8 @@ class DuplicateSyncAccountMergeMigrationTest {
     private static long manualTwinBId;
     private static long allDeletedNewestId;
     private static long allDeletedOldestId;
+    private static long sameIdBankAId;
+    private static long sameIdBankBId;
     private static long goalId;
 
     /** Brings the schema to V76 — a deployed instance — reproduces the damage, then applies V77. */
@@ -106,6 +108,21 @@ class DuplicateSyncAccountMergeMigrationTest {
             // A holding and a transaction on a loser: both have to follow the history over.
             insertHolding(conn, oldDuplicateId, "BTC", "3");
             insertTransaction(conn, midDuplicateId, "2026-07-15", "42");
+            // The same ticker on a better-ranked loser, so the UNIQUE (account_id, ticker)
+            // collision branch actually runs and the more recent quantity is the one kept.
+            insertHolding(conn, midDuplicateId, "BTC", "5");
+
+            // Ownership: 60% on a loser and 70% on the survivor. Unioned they would describe a
+            // 130% account, which no constraint would catch -- the survivor's set must win whole.
+            insertOwnership(conn, liveDuplicateId, memberId, "70");
+            long otherMemberId = insertReturningId(conn,
+                "INSERT INTO family_member (display_name) VALUES ('Other') RETURNING id");
+            insertOwnership(conn, oldDuplicateId, otherMemberId, "60");
+
+            // Exchange positions: one colliding on (product, ticker), one not.
+            insertPosition(conn, oldDuplicateId, "SPOT", "BTC", "1");
+            insertPosition(conn, midDuplicateId, "SPOT", "BTC", "2");
+            insertPosition(conn, oldDuplicateId, "STAKING", "ETH", "9");
 
             // Both duplicates in one goal. The pair is the primary key, so one link survives.
             // chk_goal_deadline demands a future date, so it cannot be a literal.
@@ -124,6 +141,13 @@ class DuplicateSyncAccountMergeMigrationTest {
             // may legitimately share one. Merging them would destroy user data.
             manualTwinAId = insertAccount(conn, memberId, "Cash A", "my-notes", true, "2026-07-01", null);
             manualTwinBId = insertAccount(conn, memberId, "Cash B", "my-notes", true, "2026-07-02", null);
+
+            // Two banks handing out the same opaque account id. Same member, same external id,
+            // different institutions -- merging them would destroy one bank's account outright.
+            sameIdBankAId = insertAccount(conn, memberId, "Compte A", "12345", false,
+                "2026-07-01", null, "Bank A");
+            sameIdBankBId = insertAccount(conn, memberId, "Compte B", "12345", false,
+                "2026-07-02", null, "Bank B");
 
             // A wallet deleted and never resurrected: all rows soft-deleted. The newest wins,
             // and the survivor must stay deleted -- merging is not undeleting.
@@ -184,6 +208,41 @@ class DuplicateSyncAccountMergeMigrationTest {
     }
 
     @Test
+    void keepsOneHoldingPerTickerAndPrefersTheMoreRecentAccount() throws SQLException {
+        assertThat(count("SELECT count(*) FROM account_holding WHERE account_id = " + liveDuplicateId))
+            .isEqualTo(1);
+        assertThat(queryString("SELECT quantity::numeric(20,0)::text FROM account_holding "
+            + "WHERE account_id = " + liveDuplicateId + " AND ticker = 'BTC'"))
+            .as("the better ranked loser's quantity wins, not the oldest")
+            .isEqualTo("5");
+    }
+
+    /**
+     * Ownership is a description of how one whole is split, so the sets are never unioned:
+     * 70% on the survivor plus 60% on a loser would total 130%, and only the per-row CHECK
+     * exists to catch it — which it would not.
+     */
+    @Test
+    void takesOneOwnershipSetWholeRatherThanUnioningThem() throws SQLException {
+        assertThat(count("SELECT count(*) FROM account_ownership WHERE account_id = " + liveDuplicateId))
+            .isEqualTo(1);
+        assertThat(queryString("SELECT sum(share_percent)::numeric(6,0)::text FROM account_ownership "
+            + "WHERE account_id = " + liveDuplicateId))
+            .as("the survivor's own share stands; the loser's is dropped, not added")
+            .isEqualTo("70");
+    }
+
+    @Test
+    void reconcilesExchangePositionsOnTheirCompositeKey() throws SQLException {
+        // (SPOT, BTC) collided and collapses to one; (STAKING, ETH) had no rival and moves.
+        assertThat(count("SELECT count(*) FROM crypto_exchange_position WHERE account_id = "
+            + liveDuplicateId)).isEqualTo(2);
+        assertThat(queryString("SELECT quantity::numeric(20,0)::text FROM crypto_exchange_position "
+            + "WHERE account_id = " + liveDuplicateId + " AND product = 'SPOT' AND ticker = 'BTC'"))
+            .isEqualTo("2");
+    }
+
+    @Test
     void leavesUnduplicatedAndManualAccountsAlone() throws SQLException {
         assertThat(count("SELECT count(*) FROM account WHERE id = " + soloAccountId)).isEqualTo(1);
         assertThat(count("SELECT count(*) FROM balance_snapshot WHERE account_id = " + soloAccountId))
@@ -191,6 +250,17 @@ class DuplicateSyncAccountMergeMigrationTest {
         // Two manual accounts sharing free-text external ids are not duplicates of anything.
         assertThat(count("SELECT count(*) FROM account WHERE id IN ("
             + manualTwinAId + ", " + manualTwinBId + ")")).isEqualTo(2);
+    }
+
+    /**
+     * An Enable Banking external id is the bank's own opaque string, so two institutions may
+     * hand out the same one. Keying the merge on the id alone would collapse two real accounts
+     * held at different banks into one and delete the other outright.
+     */
+    @Test
+    void neverMergesTwoBanksThatShareAnOpaqueAccountId() throws SQLException {
+        assertThat(count("SELECT count(*) FROM account WHERE id IN ("
+            + sameIdBankAId + ", " + sameIdBankBId + ")")).isEqualTo(2);
     }
 
     @Test
@@ -226,10 +296,17 @@ class DuplicateSyncAccountMergeMigrationTest {
         Connection conn, long memberId, String name, String externalId, boolean manual,
         String createdAt, String deletedAt
     ) throws SQLException {
+        return insertAccount(conn, memberId, name, externalId, manual, createdAt, deletedAt, "BTC");
+    }
+
+    private static long insertAccount(
+        Connection conn, long memberId, String name, String externalId, boolean manual,
+        String createdAt, String deletedAt, String provider
+    ) throws SQLException {
         return insertReturningId(conn,
             "INSERT INTO account (name, type, provider, currency, current_balance, external_account_id, "
                 + "is_manual, member_id, created_at, deleted_at) VALUES ('" + name + "', 'CRYPTO'::account_type, "
-                + "'BTC', 'EUR', 100, '" + externalId + "', " + manual + ", " + memberId + ", '"
+                + "'" + provider + "', 'EUR', 100, '" + externalId + "', " + manual + ", " + memberId + ", '"
                 + createdAt + "', " + (deletedAt == null ? "NULL" : "'" + deletedAt + "'") + ") RETURNING id");
     }
 
@@ -243,6 +320,19 @@ class DuplicateSyncAccountMergeMigrationTest {
         throws SQLException {
         exec(conn, "INSERT INTO account_holding (account_id, ticker, name, quantity, current_price) VALUES ("
             + accountId + ", '" + ticker + "', '" + ticker + "', " + quantity + ", 1)");
+    }
+
+    private static void insertOwnership(Connection conn, long accountId, long memberId, String share)
+        throws SQLException {
+        exec(conn, "INSERT INTO account_ownership (account_id, member_id, share_percent) VALUES ("
+            + accountId + ", " + memberId + ", " + share + ")");
+    }
+
+    private static void insertPosition(
+        Connection conn, long accountId, String product, String ticker, String quantity
+    ) throws SQLException {
+        exec(conn, "INSERT INTO crypto_exchange_position (account_id, product, ticker, quantity) VALUES ("
+            + accountId + ", '" + product + "', '" + ticker + "', " + quantity + ")");
     }
 
     private static void insertTransaction(Connection conn, long accountId, String date, String amount)

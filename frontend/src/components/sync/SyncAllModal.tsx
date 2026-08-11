@@ -161,18 +161,26 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     {
       type: 'amundi' as const, name: 'Amundi', provider: 'Amundi Épargne Salariale',
       active: amundiStatus?.isActive ?? false, lastSyncedAt: amundiStatus?.lastSyncCompletedAt ?? null,
+      failed: amundiStatus?.syncStatus === 'FAILED',
     },
     {
       type: 'bourse-direct' as const, name: 'Bourse Direct', provider: 'Bourse Direct',
       active: bourseDirectStatus?.isActive ?? false, lastSyncedAt: bourseDirectStatus?.lastSyncCompletedAt ?? null,
+      failed: bourseDirectStatus?.syncStatus === 'FAILED',
     },
     {
       type: 'degiro' as const, name: 'DEGIRO', provider: 'DEGIRO',
       active: degiroStatus?.isActive ?? false, lastSyncedAt: degiroStatus?.lastSyncedAt ?? null,
+      failed: degiroStatus?.status === 'FAILED',
+      // DEGIRO says so explicitly; the others only ever report an inactive session.
+      reauth: degiroStatus?.status === 'REAUTH_REQUIRED',
     },
     {
+      // `connected` stays true through a failed sync -- the Flex connection exists, it is the
+      // last run that broke -- so without `failed` an errored IBKR row would read as healthy.
       type: 'ibkr' as const, name: 'Interactive Brokers', provider: 'Interactive Brokers',
       active: ibkrStatus?.connected ?? false, lastSyncedAt: ibkrStatus?.lastSyncedAt ?? null,
+      failed: ibkrStatus?.status === 'ERROR',
     },
   ], [amundiStatus, bourseDirectStatus, degiroStatus, ibkrStatus])
 
@@ -286,9 +294,15 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         id: provider.type,
         providerType: provider.type,
         name: provider.name,
-        status: provider.active ? 'active' : 'SESSION_EXPIRED',
+        // A failed run is reported as such rather than as "active": the session may well still
+        // be live, but a row that reads healthy while its last sync errored is the state a
+        // user never thinks to look into.
+        status: provider.failed ? 'FAILED' : provider.active ? 'active' : 'SESSION_EXPIRED',
         lastSyncedAt: provider.lastSyncedAt,
-        needsReauth: !provider.active,
+        // A failure is not automatically a credential problem -- a Flex outage or a rate limit
+        // clears on its own -- so a failed-but-live session keeps its retry button. Only a
+        // session that is gone, or one the provider explicitly flags, goes to its tab.
+        needsReauth: !provider.active || provider.reauth === true,
       })
     }
     if (finaryStatus?.connected) {
@@ -429,6 +443,10 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         }
       })
   }, [connections, syncingIds, handleSync, isBatchSyncable])
+
+  // With only Finary rows and expired sessions in the list there is nothing for "Sync all" to
+  // do, and an enabled button that quietly does nothing reads as a broken one.
+  const hasBatchSyncable = connections.some(isBatchSyncable)
 
   const isSyncAll = syncingIds.size > 0 && connections
     .filter(isBatchSyncable)
@@ -843,7 +861,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
           <DialogFooter>
             <Button
               onClick={handleSyncAll}
-              disabled={isSyncAll || isLoading}
+              disabled={isSyncAll || isLoading || !hasBatchSyncable}
             >
               {isSyncAll ? (
                 <>

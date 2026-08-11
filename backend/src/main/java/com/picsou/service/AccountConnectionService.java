@@ -134,6 +134,16 @@ public class AccountConnectionService {
      * certainty -- those simply keep their connection, the safe direction to fail.
      */
     private Optional<ConnectionRef> resolve(Account account) {
+        // Checked before the namespaces, not after: requisition_id is recorded by the connector
+        // that created the account, so it *knows*, where a prefix only guesses. Enable Banking
+        // account ids are the bank's own opaque strings -- nothing stops one from arriving as
+        // "wallet_bitcoin_2", and resolving that by prefix would delete an unrelated wallet of
+        // the same member while leaving the requisition linked.
+        if (account.getRequisitionId() != null) {
+            return Optional.of(new ConnectionRef(
+                Kind.ENABLE_BANKING, String.valueOf(account.getRequisitionId())));
+        }
+
         String externalId = account.getExternalAccountId();
 
         if (externalId != null) {
@@ -156,8 +166,7 @@ public class AccountConnectionService {
             if (externalId.equals(DEGIRO_EXTERNAL_ID)) return singleton(Kind.DEGIRO);
         }
 
-        return Optional.ofNullable(account.getRequisitionId())
-            .map(id -> new ConnectionRef(Kind.ENABLE_BANKING, String.valueOf(id)));
+        return Optional.empty();
     }
 
     private static Optional<ConnectionRef> singleton(Kind kind) {

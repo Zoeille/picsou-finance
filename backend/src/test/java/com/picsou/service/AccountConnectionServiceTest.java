@@ -202,6 +202,23 @@ class AccountConnectionServiceTest {
         verify(syncService, never()).deleteRequisition(anyLong(), anyLong());
     }
 
+    /**
+     * A bank's account id is its own opaque string; nothing stops one from looking like another
+     * connector's namespace. Resolving it by prefix would delete an unrelated wallet of the same
+     * member and leave the requisition linked — so the recorded requisition wins over the guess.
+     */
+    @Test
+    void prefersTheRecordedRequisitionOverAnExternalIdThatLooksLikeAnotherConnector() {
+        Account target = account(10L, "wallet_bitcoin_2");
+        target.setRequisitionId(3L);
+        given(target);
+
+        service().deleteAccount(10L, MEMBER_ID);
+
+        verify(syncService).deleteRequisition(3L, MEMBER_ID);
+        verify(walletSyncService, never()).removeWallet(anyLong(), anyLong());
+    }
+
     @Test
     void describeDeletionNamesTheConnectionAboutToGo() {
         given(account(10L, "wallet_bitcoin_2"));

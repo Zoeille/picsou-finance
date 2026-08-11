@@ -283,4 +283,50 @@ describe('SyncAllModal session providers', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sync?tab=amundi'))
     expect(apiPost).not.toHaveBeenCalledWith('/amundi/sync')
   })
+
+  /** An enabled button that quietly does nothing reads as a broken one. */
+  it('disables "Sync all" when every row needs attention rather than a sync', async () => {
+    accountsFixture = [AMUNDI_ACCOUNT]
+    renderModal()
+
+    await screen.findByText('Amundi')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /sync\.all\.syncAll/ })).toBeDisabled())
+  })
+
+  it('enables "Sync all" as soon as one row can actually be synced', async () => {
+    amundiStatus = { ...AMUNDI_INACTIVE, isActive: true }
+    accountsFixture = [AMUNDI_ACCOUNT]
+    renderModal()
+
+    await screen.findByText('Amundi')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /sync\.all\.syncAll/ })).toBeEnabled())
+  })
+
+  /**
+   * A live session whose last run errored used to render as "active". The failure is the one
+   * thing worth surfacing there -- it is the state nobody thinks to go looking for.
+   */
+  it('reports a failed last run instead of showing the row as active', async () => {
+    amundiStatus = { ...AMUNDI_INACTIVE, isActive: true, syncStatus: 'FAILED', lastSyncError: 'INTERNAL_ERROR' }
+    renderModal()
+
+    const row = (await screen.findByText('Amundi')).closest('[data-slot="card"]') as HTMLElement
+    expect(within(row).getByText('FAILED')).toBeInTheDocument()
+    expect(within(row).queryByText('active')).not.toBeInTheDocument()
+  })
+
+  /** A Flex outage or a rate limit clears on its own, so a failed-but-live row keeps its retry. */
+  it('still allows a retry when the session is live and only the run failed', async () => {
+    amundiStatus = { ...AMUNDI_INACTIVE, isActive: true, syncStatus: 'FAILED', lastSyncError: 'INTERNAL_ERROR' }
+    apiPost.mockResolvedValue({ data: amundiStatus })
+    renderModal()
+
+    const row = (await screen.findByText('Amundi')).closest('[data-slot="card"]') as HTMLElement
+    fireEvent.click(within(row).getByRole('button'))
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/amundi/sync'))
+    expect(navigate).not.toHaveBeenCalled()
+  })
 })

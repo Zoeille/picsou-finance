@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { QUERY_STALE_TIMES } from '@/lib/constants'
 import {
   bankSyncApi,
   trApi,
@@ -474,7 +475,7 @@ export function useIbkrStatus() {
   return useQuery({
     queryKey: syncKeys.ibkr(),
     queryFn: ibkrApi.getStatus,
-    staleTime: 30_000,
+    staleTime: QUERY_STALE_TIMES.sync,
   })
 }
 
