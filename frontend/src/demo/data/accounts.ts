@@ -128,6 +128,7 @@ export const mockAccounts: Account[] = [
     color: '#a855f7',
     ticker: null,
     logoUrl: null,
+    logoKey: null,
     createdAt: '2023-06-01T08:00:00Z',
     realEstate: {
       purchasePrice: 320000,
