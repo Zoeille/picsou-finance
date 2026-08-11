@@ -293,4 +293,60 @@ describe('AccountCard', () => {
       expect(queryByText('accounts.syncStale')).not.toBeInTheDocument()
     })
   })
+
+  /**
+   * The badge used to be binary -- amber past 48h, muted grey otherwise -- which said nothing
+   * about whether a figure was an hour or a month old. The two scales are deliberately
+   * different: bank syncs run daily, property valuations monthly.
+   */
+  describe('freshness colours', () => {
+    const HOUR = 60 * 60 * 1000
+    const DAY = 24 * HOUR
+    const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString()
+    const dayAgo = (days: number) => new Date(Date.now() - days * DAY).toISOString().slice(0, 10)
+
+    it.each([
+      ['green under a day', 2 * HOUR, 'text-emerald-600'],
+      ['yellow in the second day', 30 * HOUR, 'text-yellow-600'],
+      ['orange past two days', 3 * DAY, 'text-orange-600'],
+      ['red past a week', 10 * DAY, 'text-red-600'],
+    ])('grades a sync date %s', async (_label, age, expectedClass) => {
+      const account = { ...baseAccount, lastSyncedAt: isoAgo(age) }
+      const { findByText } = render(<AccountCard account={account} />)
+
+      const line = await findByText(/accounts\.(lastSync|syncStale)/)
+      expect(line.className).toContain(expectedClass)
+    })
+
+    it.each([
+      ['green in the first month', 10, 'text-emerald-600'],
+      ['yellow past 35 days', 45, 'text-yellow-600'],
+      ['red past 90 days', 100, 'text-red-600'],
+    ])('grades a valuation date %s on the monthly scale', async (_label, days, expectedClass) => {
+      const account = realEstateAccount({}, { lastValuedAt: dayAgo(days) })
+      const { findByText } = render(<AccountCard account={account} />)
+
+      const line = await findByText(/accounts\.lastValuation/)
+      expect(line.className).toContain(expectedClass)
+    })
+
+    /** 45 days would be red on the sync scale; on the monthly one it is merely ageing. */
+    it('does not warn about a valuation a monthly job has simply not revisited', async () => {
+      const account = realEstateAccount({}, { lastValuedAt: dayAgo(45) })
+      const { queryByText, findByText } = render(<AccountCard account={account} />)
+
+      expect(await findByText(/accounts\.lastValuation/)).toBeInTheDocument()
+      expect(queryByText('accounts.syncStale')).not.toBeInTheDocument()
+    })
+
+    /** Colour is informative for a manual balance; "reconnect the provider" is not. */
+    it('colours a stale manual account without the warning', async () => {
+      const account = { ...baseAccount, isManual: true, lastSyncedAt: isoAgo(10 * DAY) }
+      const { queryByText, findByText } = render(<AccountCard account={account} />)
+
+      const line = await findByText(/accounts\.lastSync/)
+      expect(line.className).toContain('text-red-600')
+      expect(queryByText('accounts.syncStale')).not.toBeInTheDocument()
+    })
+  })
 })

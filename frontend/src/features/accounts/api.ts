@@ -1,5 +1,5 @@
 import { api } from '@/lib/api-client'
-import type { Account, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, Ownership, OwnershipRequest, PropertyValuation, PropertyValuationHistoryEntry, RealEstateMetadataRequest, RealEstateMetadata, RealEstateSummary, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest, ExchangePositionResponse } from '@/types/api'
+import type { Account, AccountDeletionImpact, AccountRequest, BalanceSnapshot, DebtRequest, DebtInfo, HoldingResponse, LoanScheduleResponse, Ownership, OwnershipRequest, PropertyValuation, PropertyValuationHistoryEntry, RealEstateMetadataRequest, RealEstateMetadata, RealEstateSummary, RealizedPnlResponse, SecurityInsight, Transaction, TransactionImportPreviewResponse, TransactionImportRequest, TransactionImportResultResponse, TransactionRequest, ExchangePositionResponse } from '@/types/api'
 
 export const accountsApi = {
   list: () => api.get<Account[]>('/accounts').then(r => r.data),
@@ -7,6 +7,8 @@ export const accountsApi = {
   create: (data: AccountRequest) => api.post<Account>('/accounts', data).then(r => r.data),
   update: (id: number, data: AccountRequest) => api.put<Account>(`/accounts/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/accounts/${id}`),
+  deletionImpact: (id: number) =>
+    api.get<AccountDeletionImpact>(`/accounts/${id}/deletion-impact`).then(r => r.data),
   history: (id: number, from?: string, to?: string) =>
     api.get<BalanceSnapshot[]>(`/accounts/${id}/history`, { params: { from, to } }).then(r => r.data),
   holdings: (id: number) =>

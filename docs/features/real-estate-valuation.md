@@ -169,6 +169,14 @@ account card (see [accounts-overview.md](./accounts-overview.md#account-card-ana
 - **`lastValuedAt` is a valuation date, not a sync date.** Nothing writes `lastSyncedAt` on a
   property account — a property described but never valued has neither, and its card renders
   without a freshness line, like any other manual account.
+- **The account card grades it on a monthly scale, not the sync one.** `AccountCard` colours the
+  freshness line by age, and a valuation is judged against `VALUATION_FRESHNESS_BOUNDS_MS`
+  (green < 35 d, yellow < 60 d, orange < 90 d, red beyond) rather than the daily-cadence sync
+  bounds. `monthlyPropertyValuation` runs on the 1st of each month, against sources that refresh
+  twice a year at best, so a 40-day-old estimate is this feature working as designed — on the
+  sync scale it would be permanently red, and a warning that is always on is one nobody reads.
+  If the refresh cadence changes, move that scale with it. See
+  [accounts-overview.md](./accounts-overview.md).
 - **The q25/q75 band is not the raw commune spread.** `PropertyAdjustments.Result.applyTo`
   puts both bounds through the same multiplier and area-equivalent as the estimate, before
   re-indexing. It shipped re-indexing the bounds alone, which left a band that did not bracket

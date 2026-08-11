@@ -81,6 +81,16 @@ public class Account extends AuditableEntity {
     @Column(name = "logo_key", length = 32)
     private String logoKey;
 
+    /**
+     * The Enable Banking connection this account came from, or null for every other origin
+     * (manual, on-chain wallet, broker sidecar...) and for rows the V76 backfill could not
+     * attribute with certainty. Mapped as a plain id rather than a {@code @ManyToOne}: nothing
+     * needs to navigate to the requisition from here, and the association would drag a lazy
+     * proxy through every account read for a column only the deletion path consults.
+     */
+    @Column(name = "requisition_id")
+    private Long requisitionId;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 }

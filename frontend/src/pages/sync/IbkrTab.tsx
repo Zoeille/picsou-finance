@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,69 +8,43 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { RefreshCw, LogOut, KeyRound, Hash, AlertTriangle, Loader2 } from 'lucide-react'
-import type { Account, IbkrConnectionStatus } from '@/types/api'
+import { useIbkrStatus, useConnectIbkr, useSyncIbkr, useDisconnectIbkr } from '@/features/sync/hooks'
 import { extractErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/utils'
 
 export function IbkrTab() {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
 
   const [token, setToken] = useState('')
   const [queryId, setQueryId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
 
-  const { data: status, isLoading: statusLoading } = useQuery<IbkrConnectionStatus>({
-    queryKey: ['sync', 'ibkr', 'status'],
-    queryFn: () => api.get<IbkrConnectionStatus>('/ibkr/status').then((r) => r.data),
-  })
+  // Status and mutations come from features/sync/hooks so the "Sync all" modal, which shows
+  // IBKR too, reads the same cache entry instead of polling its own.
+  const { data: status, isLoading: statusLoading } = useIbkrStatus()
 
   const isConnected = status?.connected ?? false
   const isError = status?.status === 'ERROR'
 
-  const connectMutation = useMutation({
-    mutationFn: (params: { token: string; queryId: string }) =>
-      api.post('/ibkr/connect', params).then((r) => r.data),
-    onSuccess: () => {
-      setToken('')
-      setQueryId('')
-      setError(null)
-      queryClient.invalidateQueries({ queryKey: ['sync', 'ibkr', 'status'] })
-    },
-    onError: (err: unknown) => setError(extractErrorMessage(err, t('sync.ibkr.errors.connectFailed'))),
-  })
-
-  const syncMutation = useMutation({
-    mutationFn: () => api.post<Account[]>('/ibkr/sync').then((r) => r.data),
-    onSuccess: (accounts) => {
-      setError(null)
-      queryClient.invalidateQueries({ queryKey: ['sync', 'ibkr', 'status'] })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('sync.ibkr.syncedToast', { count: accounts.length }))
-    },
-    onError: (err: unknown) => setError(extractErrorMessage(err, t('sync.ibkr.errors.syncFailed'))),
-  })
-
-  const disconnectMutation = useMutation({
-    mutationFn: () => api.delete('/ibkr/connection').then((r) => r.data),
-    onSuccess: () => {
-      setShowDisconnectConfirm(false)
-      setError(null)
-      queryClient.invalidateQueries({ queryKey: ['sync', 'ibkr', 'status'] })
-    },
-    onError: (err: unknown) => {
-      // Close the dialog so the page-level error banner is actually visible.
-      setShowDisconnectConfirm(false)
-      setError(extractErrorMessage(err, t('sync.ibkr.errors.disconnectFailed')))
-    },
-  })
+  const connectMutation = useConnectIbkr()
+  const syncMutation = useSyncIbkr()
+  const disconnectMutation = useDisconnectIbkr()
 
   function handleConnect(e: React.FormEvent) {
     e.preventDefault()
     if (!token.trim() || !queryId.trim()) return
-    connectMutation.mutate({ token: token.trim(), queryId: queryId.trim() })
+    connectMutation.mutate(
+      { token: token.trim(), queryId: queryId.trim() },
+      {
+        onSuccess: () => {
+          setToken('')
+          setQueryId('')
+          setError(null)
+        },
+        onError: (err: unknown) => setError(extractErrorMessage(err, t('sync.ibkr.errors.connectFailed'))),
+      },
+    )
   }
 
   if (statusLoading) {
@@ -121,7 +93,16 @@ export function IbkrTab() {
       {isConnected ? (
         /* Connected: sync + disconnect */
         <div className="flex flex-wrap gap-3">
-          <Button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
+          <Button
+            onClick={() => syncMutation.mutate(undefined, {
+              onSuccess: (accounts) => {
+                setError(null)
+                toast.success(t('sync.ibkr.syncedToast', { count: accounts.length }))
+              },
+              onError: (err: unknown) => setError(extractErrorMessage(err, t('sync.ibkr.errors.syncFailed'))),
+            })}
+            disabled={syncMutation.isPending}
+          >
             {syncMutation.isPending ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
@@ -195,7 +176,17 @@ export function IbkrTab() {
         onOpenChange={setShowDisconnectConfirm}
         title={t('sync.ibkr.disconnect')}
         description={t('sync.ibkr.disconnectConfirm')}
-        onConfirm={() => disconnectMutation.mutate()}
+        onConfirm={() => disconnectMutation.mutate(undefined, {
+          onSuccess: () => {
+            setShowDisconnectConfirm(false)
+            setError(null)
+          },
+          onError: (err: unknown) => {
+            // Close the dialog so the page-level error banner is actually visible.
+            setShowDisconnectConfirm(false)
+            setError(extractErrorMessage(err, t('sync.ibkr.errors.disconnectFailed')))
+          },
+        })}
         loading={disconnectMutation.isPending}
       />
     </div>

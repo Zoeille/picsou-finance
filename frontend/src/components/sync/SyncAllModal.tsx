@@ -31,6 +31,7 @@ import {
   Info,
   Smartphone,
   Lock,
+  PiggyBank,
   ShieldCheck,
   User,
 } from 'lucide-react'
@@ -51,6 +52,14 @@ import {
   useInitiateBoursoAuth,
   useCompleteBoursoAuth,
   useReconnectBankSync,
+  useAmundiStatus,
+  useSyncAmundi,
+  useBourseDirectStatus,
+  useSyncBourseDirect,
+  useDegiroSessionStatus,
+  useSyncDegiro,
+  useIbkrStatus,
+  useSyncIbkr,
 } from '@/features/sync/hooks'
 import { useAccounts } from '@/features/accounts/hooks'
 import { formatTimeAgo } from '@/lib/utils'
@@ -61,10 +70,13 @@ import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 type SyncConnection = {
   id: string
   providerType: 'bank' | 'exchange' | 'wallet' | 'tr' | 'finary' | 'bourso'
+    | 'amundi' | 'bourse-direct' | 'degiro' | 'ibkr'
   name: string
   status: string
   lastSyncedAt: string | null
   syncId?: number
+  /** Session-based providers open their tab to re-authenticate instead of firing a doomed sync. */
+  needsReauth?: boolean
 }
 
 
@@ -75,6 +87,19 @@ const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{
   tr: Building2,
   finary: LineChart,
   bourso: Building2,
+  amundi: PiggyBank,
+  'bourse-direct': LineChart,
+  degiro: LineChart,
+  ibkr: LineChart,
+}
+
+/** Which Sync-page tab each provider re-authenticates on. */
+const REAUTH_TAB: Partial<Record<SyncConnection['providerType'], string>> = {
+  amundi: 'amundi',
+  'bourse-direct': 'bourse-direct',
+  degiro: 'degiro',
+  ibkr: 'ibkr',
+  finary: 'finary',
 }
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -113,6 +138,10 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const { data: trStatus } = useTrSessionStatus()
   const { data: boursoStatus } = useBoursoSessionStatus()
   const { data: finaryStatus } = useFinaryConnectionStatus()
+  const { data: amundiStatus } = useAmundiStatus()
+  const { data: bourseDirectStatus } = useBourseDirectStatus()
+  const { data: degiroStatus } = useDegiroSessionStatus()
+  const { data: ibkrStatus } = useIbkrStatus()
   const { data: accounts } = useAccounts()
 
   // Detect if user has a TR / BoursoBank account
@@ -121,6 +150,32 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const hasBoursoAccount = false
 
   // Mutations
+  /**
+   * The connectors that hold one session per member. Each is listed when its session is live
+   * *or* the user still has accounts from it — a dead session must stay visible and
+   * re-authenticatable rather than disappear from the list, the same rule Trade Republic
+   * already followed. `provider` is the exact string the connector stamps on the accounts it
+   * creates (see each service's PROVIDER constant).
+   */
+  const sessionProviders = useMemo(() => [
+    {
+      type: 'amundi' as const, name: 'Amundi', provider: 'Amundi Épargne Salariale',
+      active: amundiStatus?.isActive ?? false, lastSyncedAt: amundiStatus?.lastSyncCompletedAt ?? null,
+    },
+    {
+      type: 'bourse-direct' as const, name: 'Bourse Direct', provider: 'Bourse Direct',
+      active: bourseDirectStatus?.isActive ?? false, lastSyncedAt: bourseDirectStatus?.lastSyncCompletedAt ?? null,
+    },
+    {
+      type: 'degiro' as const, name: 'DEGIRO', provider: 'DEGIRO',
+      active: degiroStatus?.isActive ?? false, lastSyncedAt: degiroStatus?.lastSyncedAt ?? null,
+    },
+    {
+      type: 'ibkr' as const, name: 'Interactive Brokers', provider: 'Interactive Brokers',
+      active: ibkrStatus?.connected ?? false, lastSyncedAt: ibkrStatus?.lastSyncedAt ?? null,
+    },
+  ], [amundiStatus, bourseDirectStatus, degiroStatus, ibkrStatus])
+
   const retryBankMutation    = useRetryBankSync()
   const syncExchangeMutation = useSyncCryptoExchange()
   const syncWalletMutation   = useSyncCryptoWallet()
@@ -131,6 +186,10 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const initiateBoursoMutation = useInitiateBoursoAuth()
   const completeBoursoMutation = useCompleteBoursoAuth()
   const reconnectBankMutation = useReconnectBankSync()
+  const syncAmundiMutation       = useSyncAmundi()
+  const syncBourseDirectMutation = useSyncBourseDirect()
+  const syncDegiroMutation       = useSyncDegiro()
+  const syncIbkrMutation         = useSyncIbkr()
 
   // Track syncing state per connection
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set())
@@ -220,6 +279,18 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         lastSyncedAt: boursoAccount?.lastSyncedAt ?? null,
       })
     }
+    for (const provider of sessionProviders) {
+      const hasAccount = accounts?.some(a => a.provider === provider.provider) ?? false
+      if (!provider.active && !hasAccount) continue
+      list.push({
+        id: provider.type,
+        providerType: provider.type,
+        name: provider.name,
+        status: provider.active ? 'active' : 'SESSION_EXPIRED',
+        lastSyncedAt: provider.lastSyncedAt,
+        needsReauth: !provider.active,
+      })
+    }
     if (finaryStatus?.connected) {
       list.push({
         id: 'finary',
@@ -230,7 +301,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       })
     }
     return list
-  }, [banks, exchanges, wallets, hasTrAccount, accounts, trStatus?.isActive, hasBoursoAccount, boursoStatus?.isActive, finaryStatus])
+  }, [banks, exchanges, wallets, hasTrAccount, accounts, trStatus?.isActive, hasBoursoAccount, boursoStatus?.isActive, finaryStatus, sessionProviders])
 
   const handleSync = useCallback((connection: SyncConnection) => {
     // TR without active session: open inline auth instead of syncing
@@ -242,6 +313,15 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     // Bourso without active session: open inline auth
     if (connection.providerType === 'bourso' && !boursoStatus?.isActive) {
       setBoursoAuthStep('credentials')
+      return
+    }
+    // The remaining session providers each re-authenticate through their own multi-step form
+    // (credentials, MFA, a Flex token). Rather than duplicate four flows in this modal, send
+    // the user to the tab that owns them -- firing the sync would only return a 401.
+    const reauthTab = connection.needsReauth ? REAUTH_TAB[connection.providerType] : undefined
+    if (reauthTab) {
+      navigate(`/sync?tab=${reauthTab}`)
+      onOpenChange(false)
       return
     }
 
@@ -294,6 +374,18 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       case 'bourso':
         syncBoursoMutation.mutate(undefined, rowCallbacks(formatGeneric))
         break
+      case 'amundi':
+        syncAmundiMutation.mutate(undefined, rowCallbacks(formatGeneric))
+        break
+      case 'bourse-direct':
+        syncBourseDirectMutation.mutate(undefined, rowCallbacks(formatGeneric))
+        break
+      case 'degiro':
+        syncDegiroMutation.mutate(undefined, rowCallbacks(formatGeneric))
+        break
+      case 'ibkr':
+        syncIbkrMutation.mutate(undefined, rowCallbacks(formatGeneric))
+        break
       case 'finary':
         navigate('/sync?tab=finary')
         onOpenChange(false)
@@ -308,33 +400,38 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     syncWalletMutation,
     syncTrMutation,
     syncBoursoMutation,
+    syncAmundiMutation,
+    syncBourseDirectMutation,
+    syncDegiroMutation,
+    syncIbkrMutation,
     navigate,
     onOpenChange,
     queryClient,
     t,
   ])
 
+  // "Sync all" only fires what a single click can actually complete: Finary is a manual
+  // two-phase import, and any session needing re-authentication would just fail. Those rows
+  // keep their own button, which opens the right form instead.
+  const isBatchSyncable = useCallback((c: SyncConnection) =>
+    c.providerType !== 'finary' &&
+    !c.needsReauth &&
+    !(c.providerType === 'tr' && !trStatus?.isActive) &&
+    !(c.providerType === 'bourso' && !boursoStatus?.isActive)
+  , [trStatus?.isActive, boursoStatus?.isActive])
+
   const handleSyncAll = useCallback(() => {
-    // Skip Finary (manual two-phase flow), TR/Bourso without active session
     connections
-      .filter(c =>
-        c.providerType !== 'finary' &&
-        !(c.providerType === 'tr' && !trStatus?.isActive) &&
-        !(c.providerType === 'bourso' && !boursoStatus?.isActive)
-      )
+      .filter(isBatchSyncable)
       .forEach(connection => {
         if (!syncingIds.has(connection.id)) {
           handleSync(connection)
         }
       })
-  }, [connections, syncingIds, handleSync, trStatus?.isActive, boursoStatus?.isActive])
+  }, [connections, syncingIds, handleSync, isBatchSyncable])
 
   const isSyncAll = syncingIds.size > 0 && connections
-    .filter(c =>
-      c.providerType !== 'finary' &&
-      !(c.providerType === 'tr' && !trStatus?.isActive) &&
-      !(c.providerType === 'bourso' && !boursoStatus?.isActive)
-    )
+    .filter(isBatchSyncable)
     .every(c => syncingIds.has(c.id))
 
   // --- TR inline auth ---
@@ -484,6 +581,8 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
               const isFinary = connection.providerType === 'finary'
               const isTr = connection.providerType === 'tr'
               const isBourso = connection.providerType === 'bourso'
+              // Sends the user to the tab owning that provider's auth form rather than syncing.
+              const opensTab = connection.needsReauth && REAUTH_TAB[connection.providerType] !== undefined
 
               return (
                 <Card key={connection.id} size="sm">
@@ -495,8 +594,10 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{connection.name}</span>
                             <Badge variant={statusVariant(connection.status)} className="text-xs">
-                              {(isTr || isBourso) && connection.status === 'SESSION_EXPIRED'
-                                ? t(isBourso ? 'sync.bourso.noSession' : 'sync.tr.noSession')
+                              {connection.status === 'SESSION_EXPIRED'
+                                ? (isTr || isBourso)
+                                  ? t(isBourso ? 'sync.bourso.noSession' : 'sync.tr.noSession')
+                                  : t('sync.all.sessionExpired')
                                 : connection.status}
                             </Badge>
                             {isTr && (
@@ -554,11 +655,11 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                           variant="ghost"
                           disabled={isSyncing}
                           onClick={() => handleSync(connection)}
-                          title={isFinary ? t('sync.all.openFinary') : undefined}
+                          title={isFinary ? t('sync.all.openFinary') : opensTab ? t('sync.all.reconnect') : undefined}
                         >
                           {isSyncing ? (
                             <Loader2 className="size-4 animate-spin" />
-                          ) : isFinary ? (
+                          ) : isFinary || opensTab ? (
                             <ExternalLink className="size-4" />
                           ) : (
                             <RefreshCw className="size-4" />

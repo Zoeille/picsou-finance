@@ -17,6 +17,7 @@ import com.picsou.model.BalanceSnapshot;
 import com.picsou.dto.OwnershipRequest;
 import com.picsou.dto.OwnershipResponse;
 import com.picsou.dto.PropertyValuationResponse;
+import com.picsou.service.AccountConnectionService;
 import com.picsou.service.AccountOwnershipService;
 import com.picsou.service.AccountService;
 import com.picsou.service.CryptoExchangeSyncService;
@@ -45,13 +46,16 @@ public class AccountController {
     private final CryptoExchangeSyncService cryptoExchangeSyncService;
     private final PropertyValuationService propertyValuationService;
     private final AccountOwnershipService ownershipService;
+    private final AccountConnectionService accountConnectionService;
 
     public AccountController(AccountService accountService, UserContext userContext,
                             ManualTransactionService manualTransactionService,
                             RealizedPnlService realizedPnlService,
                             CryptoExchangeSyncService cryptoExchangeSyncService,
                             PropertyValuationService propertyValuationService,
-                            AccountOwnershipService ownershipService) {
+                            AccountOwnershipService ownershipService,
+                            AccountConnectionService accountConnectionService) {
+        this.accountConnectionService = accountConnectionService;
         this.accountService = accountService;
         this.userContext = userContext;
         this.manualTransactionService = manualTransactionService;
@@ -82,10 +86,24 @@ public class AccountController {
         return accountService.update(id, req, userContext.currentMemberId());
     }
 
+    /**
+     * What deleting this account would also remove, so the confirmation can name it before the
+     * user commits. Read-only companion to {@link #delete}.
+     */
+    @GetMapping("/{id}/deletion-impact")
+    public AccountConnectionService.DeletionImpact deletionImpact(@PathVariable Long id) {
+        return accountConnectionService.describeDeletion(id, userContext.currentMemberId());
+    }
+
+    /**
+     * Goes through {@link AccountConnectionService}, not {@code accountService.delete}: the
+     * connection feeding this account is removed with it when no other account is left on it,
+     * otherwise it keeps syncing and rebuilding what the user just deleted.
+     */
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
-        accountService.delete(id, userContext.currentMemberId());
+        accountConnectionService.deleteAccount(id, userContext.currentMemberId());
     }
 
     @GetMapping("/{id}/history")

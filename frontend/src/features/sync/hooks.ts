@@ -10,6 +10,7 @@ import {
   bourseDirectApi,
   degiroApi,
   amundiApi,
+  ibkrApi,
 } from './api'
 import type {
   ExchangeType,
@@ -32,6 +33,7 @@ export const syncKeys = {
   bourseDirect: () => [...syncKeys.all, 'bourse-direct'] as const,
   degiro: () => [...syncKeys.all, 'degiro'] as const,
   amundi: () => [...syncKeys.all, 'amundi'] as const,
+  ibkr: () => [...syncKeys.all, 'ibkr'] as const,
   exchanges: () => [...syncKeys.all, 'exchanges'] as const,
   wallets: () => [...syncKeys.all, 'wallets'] as const,
   finary: () => [...syncKeys.all, 'finary'] as const,
@@ -456,6 +458,52 @@ export function useClearAmundiSession() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Interactive Brokers
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared with the "Sync all" modal, which is why this lives here rather than inline in
+ * IbkrTab: two components polling IBKR under different query keys would show two different
+ * connection states in the same session.
+ */
+export function useIbkrStatus() {
+  return useQuery({
+    queryKey: syncKeys.ibkr(),
+    queryFn: ibkrApi.getStatus,
+    staleTime: 30_000,
+  })
+}
+
+export function useConnectIbkr() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ token, queryId }: { token: string; queryId: string }) =>
+      ibkrApi.connect(token, queryId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: syncKeys.ibkr() }),
+  })
+}
+
+export function useSyncIbkr() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ibkrApi.sync,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.ibkr() })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useDisconnectIbkr() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ibkrApi.disconnect,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: syncKeys.ibkr() }),
   })
 }
 

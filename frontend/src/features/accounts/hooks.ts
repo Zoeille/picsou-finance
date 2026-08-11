@@ -246,6 +246,20 @@ export function useUpdateAccount() {
   })
 }
 
+/**
+ * What the confirmation dialog needs to warn about before a deletion: whether the connection
+ * feeding this account goes with it, and its name. Fetched on demand (when a dialog opens with
+ * an id) rather than folded into the account list, which would cost one query per account for
+ * a value only ever read at that moment.
+ */
+export function useAccountDeletionImpact(accountId: number | null) {
+  return useQuery({
+    queryKey: ['accounts', accountId, 'deletion-impact'],
+    queryFn: () => accountsApi.deletionImpact(accountId!),
+    enabled: accountId !== null,
+  })
+}
+
 export function useDeleteAccount() {
   const queryClient = useQueryClient()
   return useMutation({

@@ -478,6 +478,9 @@ public class SyncService {
             if (account.getLogoUrl() == null && requisition.getLogoUrl() != null) {
                 account.setLogoUrl(requisition.getLogoUrl());
             }
+            // Also on the update path, so accounts that predate V76 and the ones its
+            // name-matching backfill had to leave NULL get linked on their next sync.
+            account.setRequisitionId(requisition.getId());
         } else {
             account = Account.builder()
                 .member(member)
@@ -491,6 +494,7 @@ public class SyncService {
                 .isManual(false)
                 .color("#6366f1")
                 .logoUrl(requisition.getLogoUrl())
+                .requisitionId(requisition.getId())
                 .build();
         }
 

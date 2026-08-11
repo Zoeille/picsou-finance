@@ -8,7 +8,16 @@ import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { AccountTypeBadge } from '@/components/shared/AccountTypeBadge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { formatCurrency, formatDate, formatTimeAgo, localeFromLanguage } from '@/lib/utils'
+import {
+  FRESHNESS_TEXT_CLASS,
+  formatCurrency,
+  formatDate,
+  formatTimeAgo,
+  freshnessLevel,
+  localeFromLanguage,
+  type FreshnessLevel,
+} from '@/lib/utils'
+import { SYNC_FRESHNESS_BOUNDS_MS, VALUATION_FRESHNESS_BOUNDS_MS } from '@/lib/constants'
 import { logoKeyUrl, providerLogoUrl } from '@/lib/provider-logos'
 import { PROPERTY_KIND_ICONS } from '@/lib/property-icons'
 
@@ -18,11 +27,11 @@ interface AccountCardProps {
 }
 
 /**
- * Synced accounts whose data is older than this are flagged: live prices keep
- * the numbers moving, so without an explicit signal a dead provider session
- * (e.g. Trade Republic) looks perfectly healthy.
+ * Levels that earn the warning icon and its tooltip, on top of the colour. Colour alone
+ * carries no meaning for a colour-blind reader, and live prices keep the numbers moving --
+ * so without an explicit signal a dead provider session looks perfectly healthy.
  */
-const SYNC_STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000
+const WARNING_LEVELS: ReadonlySet<FreshnessLevel> = new Set<FreshnessLevel>(['stale', 'old'])
 
 /**
  * The bundled asset the account itself points at (a wallet's `logoKey`) when it has one, else
@@ -88,25 +97,28 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
     : account.provider
 
   // Lazy initializer keeps the impure Date.now() out of render; the slow tick
-  // lets a long-lived tab cross the 48h threshold without a remount (the whole
-  // point of the badge is catching sessions that die while the app sits open).
+  // lets a long-lived tab cross a threshold without a remount (the whole point
+  // of the badge is catching sessions that die while the app sits open).
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 5 * 60 * 1000)
     return () => clearInterval(id)
   }, [])
-  const isSyncStale =
-    !account.isManual &&
-    account.lastSyncedAt != null &&
-    now - new Date(account.lastSyncedAt).getTime() > SYNC_STALE_THRESHOLD_MS
 
-  // Only a sync date can go stale: a valuation date comes from a manual account the
-  // staleness badge deliberately ignores, and an old estimate is not a dead session.
+  // A valuation is judged on its own scale, not the sync one: property estimates refresh
+  // monthly against sources that move twice a year, so a 40-day-old figure is healthy where a
+  // 40-day-old bank balance is not. Both are graded, though -- age is age, and an estimate
+  // nobody has refreshed in six months is worth seeing.
   const freshness = property?.lastValuedAt
-    ? { label: t('accounts.lastValuation'), date: property.lastValuedAt, stale: false }
+    ? { label: t('accounts.lastValuation'), date: property.lastValuedAt, bounds: VALUATION_FRESHNESS_BOUNDS_MS }
     : account.lastSyncedAt
-      ? { label: t('accounts.lastSync'), date: account.lastSyncedAt, stale: isSyncStale }
+      ? { label: t('accounts.lastSync'), date: account.lastSyncedAt, bounds: SYNC_FRESHNESS_BOUNDS_MS }
       : null
+
+  const level = freshness ? freshnessLevel(freshness.date, freshness.bounds, now) : 'unknown'
+  // The warning names a dead provider session and tells the user to reconnect, which is
+  // meaningless for a figure they type in themselves. Manual accounts still get the colour.
+  const warn = !account.isManual && WARNING_LEVELS.has(level)
 
   return (
     <Card
@@ -151,11 +163,11 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
             </p>
           )}
           {freshness && (
-            freshness.stale ? (
+            warn ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                    <p className={`mt-1 flex items-center gap-1 text-xs ${FRESHNESS_TEXT_CLASS[level]}`}>
                       <TriangleAlert className="size-3 shrink-0" />
                       {t('accounts.syncStale', { time: formatTimeAgo(freshness.date) })}
                     </p>
@@ -164,7 +176,7 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className={`mt-1 text-xs ${FRESHNESS_TEXT_CLASS[level]}`}>
                 {freshness.label}: {formatDate(freshness.date)}
               </p>
             )

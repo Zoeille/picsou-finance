@@ -143,6 +143,7 @@
     "editAccount": "Editar cuenta",
     "deleteAccount": "Eliminar cuenta",
     "deleteConfirm": "¿Eliminar esta cuenta y todos sus datos?",
+    "deleteRemovesConnection": "La conexión {{connection}} se eliminará también y dejará de sincronizarse.",
     "noAccounts": "Sin cuentas",
     "balance": "Saldo",
     "lastSync": "Última sincronización",
@@ -589,6 +590,8 @@
       "noConnections": "Sin conexiones de sincronización activas",
       "lastSync": "Última sincronización",
       "openFinary": "Abrir la página de Finary para sincronizar",
+      "sessionExpired": "Sesión caducada",
+      "reconnect": "Volver a conectar desde la pestaña del proveedor",
       "trManualInfo": "Trade Republic es el único banco que requiere volver a autenticarse manualmente. Tendrás que introducir de nuevo tu número de teléfono y tu PIN en cada sincronización.",
       "trSlowWarning": "La conexión puede tardar unos instantes, es normal."
     },

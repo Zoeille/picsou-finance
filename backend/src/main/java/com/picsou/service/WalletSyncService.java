@@ -122,7 +122,27 @@ public class WalletSyncService {
         return sync(wallet.getId(), memberId);
     }
 
+    /**
+     * Explicit, user-triggered sync of one wallet.
+     *
+     * <p>Turns the "account was deleted" skip into a 422 that names the way out. Deleting the
+     * account now removes the wallet with it, so a wallet in that state predates that rule; it
+     * can never produce an account again, and silently returning success would tell the user
+     * their click worked when nothing happened.
+     */
     public AccountResponse sync(Long walletId, Long memberId) {
+        Account account = syncWallet(walletId, memberId).orElseThrow(() -> new SyncException(
+            "This wallet's account was deleted. Remove the wallet from Sync -> Wallets to stop tracking it."));
+        return accountService.toResponse(account);
+    }
+
+    /**
+     * Syncs one wallet and returns the account it wrote, or {@link Optional#empty()} when that
+     * account was soft-deleted by the user — the scheduled path treats that as a skip rather
+     * than a failure. Deals in the entity, leaving the DTO to the public caller: the emptiness
+     * here means "nothing was synced", which a nullable response would blur.
+     */
+    private Optional<Account> syncWallet(Long walletId, Long memberId) {
         WalletAddress wallet = walletRepository.findByIdAndMemberId(walletId, memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
@@ -195,7 +215,14 @@ public class WalletSyncService {
                 ? wallet.getLabel()
                 : wallet.getChain().name() + " Wallet";
 
-            Account account = resolveAccount(externalId, name, balanceEur, nativeSymbol, memberId);
+            // Skip the rest of this sync when the user deleted the account: the chain will
+            // keep returning this address forever, and that is not consent to bring it back.
+            // Same rule as every other connector -- see SyncService.upsertAccount.
+            Optional<Account> resolved = resolveAccount(externalId, name, balanceEur, nativeSymbol, memberId);
+            if (resolved.isEmpty()) {
+                return Optional.empty();
+            }
+            Account account = resolved.get();
 
             // Keep every asset actually held on-chain (positive balance), regardless
             // of whether its price resolved this cycle — a transient CoinGecko outage
@@ -218,7 +245,7 @@ public class WalletSyncService {
 
             accountService.upsertSnapshot(account, balanceEur, LocalDate.now());
 
-            return accountService.toResponse(account);
+            return Optional.of(account);
 
         } catch (WalletRpcException | SyncException ex) {
             // Expected external failure (bad RPC response, no balances): a routine
@@ -238,10 +265,16 @@ public class WalletSyncService {
             .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
         String externalId = "wallet_" + wallet.getChain().name().toLowerCase(Locale.ROOT) + "_" + wallet.getId();
+        // Soft delete, not a row delete: balance_snapshot cascades on account, so hard-deleting
+        // here would erase the wallet's whole net-worth history along with it. It also keeps the
+        // resurrection guard armed, so nothing rebuilds the account before the wallet row goes.
         accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId)
-            .ifPresent(accountRepository::delete);
+            .ifPresent(account -> {
+                account.setDeletedAt(Instant.now());
+                accountRepository.save(account);
+            });
         walletRepository.delete(wallet);
-        log.info("Removed wallet {} and associated account", walletId);
+        log.info("Removed wallet {} and soft-deleted its account", walletId);
     }
 
     public ResyncSummary resyncAll(Long memberId) {
@@ -250,8 +283,15 @@ public class WalletSyncService {
         List<Chain> failed = new ArrayList<>();
         for (WalletAddress wallet : wallets) {
             try {
-                sync(wallet.getId(), memberId);
-                succeeded++;
+                // syncWallet, not sync: a wallet whose account the user deleted is skipped, and
+                // skipping is neither a success nor a failure. Going through sync() would raise
+                // the "account was deleted" SyncException here and log an ERROR every scheduled
+                // run for a state the user chose on purpose.
+                if (syncWallet(wallet.getId(), memberId).isPresent()) {
+                    succeeded++;
+                } else {
+                    log.info("Wallet {} skipped: its account was deleted", wallet.getId());
+                }
             } catch (Exception ex) {
                 log.error("Wallet resync failed for {} {}", wallet.getChain(), wallet.getAddress(), ex);
                 failed.add(wallet.getChain());
@@ -275,8 +315,20 @@ public class WalletSyncService {
             .orElseThrow(() -> new SyncException("This wallet type isn't supported yet."));
     }
 
-    private Account resolveAccount(String externalId, String name, BigDecimal balanceEur, String ticker, Long memberId) {
+    /**
+     * Returns {@link Optional#empty()} when the matching account was soft-deleted by the user.
+     * Without this the scheduled resync inserted a brand new row on every run — one duplicate
+     * per deletion, each starting its snapshot history over.
+     */
+    private Optional<Account> resolveAccount(String externalId, String name, BigDecimal balanceEur, String ticker, Long memberId) {
         Optional<Account> existing = accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId);
+
+        if (existing.isEmpty() &&
+            accountRepository.existsSoftDeletedByExternalAccountIdAndMemberId(externalId, memberId)) {
+            log.info("Skipping resurrection of soft-deleted wallet account externalId={} member={}",
+                externalId, memberId);
+            return Optional.empty();
+        }
 
         Account account;
         if (existing.isPresent()) {
@@ -303,7 +355,7 @@ public class WalletSyncService {
         }
 
         try {
-            return accountRepository.save(account);
+            return Optional.of(accountRepository.save(account));
         } catch (DataIntegrityViolationException ex) {
             // Lost a race: another sync of this same wallet (a double-click, or a user sync
             // colliding with the scheduler) inserted the account between our lookup and this
@@ -312,8 +364,8 @@ public class WalletSyncService {
             // it: external_account_id carries only a plain index today, so the reconciliation
             // relies on whichever constraint the insert did violate.
             log.warn("Concurrent account creation for {} -- reusing the winning row", externalId);
-            return accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId)
-                .orElseThrow(() -> ex);
+            return Optional.of(accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId)
+                .orElseThrow(() -> ex));
         }
     }
 

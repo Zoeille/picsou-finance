@@ -74,3 +74,20 @@ export const EXCHANGE_API_SECRET_MAX_LENGTH = 300
  * future logout path forgot to explicitly clear it via queryClient.clear().
  */
 export const SESSION_PROBE_GC_TIME = 5 * 60 * 1000
+
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+
+/**
+ * Upper bound of each freshness level, in ms since the date being judged. Read in order:
+ * the first bound not exceeded wins, and anything past the last one is `old`.
+ *
+ * Two scales because the two dates are produced on entirely different cadences, and a scale
+ * that cries wolf is one users learn to ignore. Bank and wallet syncs run daily
+ * (`SchedulerService.dailyBankSync`), so a figure over a day old means something is wrong.
+ * Property valuations run monthly (`monthlyPropertyValuation`, 1st of the month) against
+ * sources that themselves refresh twice a year — a 40-day-old estimate is the system working
+ * as designed, and would be permanently red on the sync scale.
+ */
+export const SYNC_FRESHNESS_BOUNDS_MS = { fresh: DAY_MS, recent: 2 * DAY_MS, stale: 7 * DAY_MS }
+export const VALUATION_FRESHNESS_BOUNDS_MS = { fresh: 35 * DAY_MS, recent: 60 * DAY_MS, stale: 90 * DAY_MS }

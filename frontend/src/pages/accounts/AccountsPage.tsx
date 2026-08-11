@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useAccounts, useUpdateAccount, useDeleteAccount, useUpdateDebtMetadata } from '@/features/accounts/hooks'
+import { useAccounts, useAccountDeletionImpact, useUpdateAccount, useDeleteAccount, useUpdateDebtMetadata } from '@/features/accounts/hooks'
 import { useHistory } from '@/features/history/hooks'
 import { AccountForm } from '@/components/shared/AccountForm'
 import { AddAccountModal } from '@/components/shared/AddAccountModal'
@@ -94,6 +94,10 @@ export function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [filter, setFilter] = useState<AssetFilter>('ALL')
+
+  // Deleting the last account on a connection removes that connection too, and a bank one
+  // costs a full OAuth re-authorisation to get back -- so the dialog names it first.
+  const { data: deletionImpact } = useAccountDeletionImpact(deleteId)
 
   // All account IDs for history query (split mode for per-account breakdown)
   const allAccountIds = useMemo(() => (accounts ?? []).map(a => a.id), [accounts])
@@ -450,7 +454,11 @@ export function AccountsPage() {
         open={deleteId !== null}
         onOpenChange={(open) => { if (!open) setDeleteId(null) }}
         title={t('accounts.deleteAccount')}
-        description={t('accounts.deleteConfirm')}
+        description={
+          deletionImpact?.removesConnection
+            ? `${t('accounts.deleteConfirm')} ${t('accounts.deleteRemovesConnection', { connection: deletionImpact.connectionLabel })}`
+            : t('accounts.deleteConfirm')
+        }
         onConfirm={handleConfirmDelete}
         loading={deleteAccount.isPending}
         variant="destructive"

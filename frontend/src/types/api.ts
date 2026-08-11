@@ -510,6 +510,15 @@ export interface TrSessionStatus {
   expiresAt: string | null
 }
 
+/**
+ * What deleting an account costs beyond the account itself. `connectionLabel` names the
+ * connection that goes with it — null when nothing else is removed.
+ */
+export interface AccountDeletionImpact {
+  removesConnection: boolean
+  connectionLabel: string | null
+}
+
 export interface IbkrConnectionStatus {
   connected: boolean
   connectionId: number | null

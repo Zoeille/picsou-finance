@@ -20,6 +20,7 @@ import type {
   DegiroAuthInitResponse,
   AmundiSessionStatus,
   AmundiAuthInitResponse,
+  IbkrConnectionStatus,
 } from '@/types/api'
 
 // --- Bank Sync (Enable Banking) ---
@@ -236,6 +237,17 @@ export const amundiApi = {
       .then(r => r.data),
 
   clearSession: () => api.delete('/amundi/session'),
+}
+
+export const ibkrApi = {
+  getStatus: () => api.get<IbkrConnectionStatus>('/ibkr/status').then(r => r.data),
+
+  connect: (token: string, queryId: string) =>
+    api.post('/ibkr/connect', { token, queryId }).then(r => r.data),
+
+  sync: () => api.post<Account[]>('/ibkr/sync').then(r => r.data),
+
+  disconnect: () => api.delete('/ibkr/connection').then(r => r.data),
 }
 
 // --- Finary ---

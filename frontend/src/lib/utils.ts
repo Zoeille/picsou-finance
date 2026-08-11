@@ -169,6 +169,48 @@ export function formatTimeAgo(dateStr: string | null | undefined, locale = getLo
   return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(-days, 'day')
 }
 
+export type FreshnessLevel = 'fresh' | 'recent' | 'stale' | 'old' | 'unknown'
+
+/** Upper bound of each level, in ms. See the two scales in `lib/constants.ts`. */
+export interface FreshnessBounds {
+  fresh: number
+  recent: number
+  stale: number
+}
+
+/**
+ * How old a date is, bucketed. `unknown` covers a missing date — never synced, never valued —
+ * which is not the same as "very old" and must not read as an alarm.
+ *
+ * `now` is a parameter rather than a `Date.now()` call so callers stay pure and testable; the
+ * card that uses this re-renders on a timer to cross a boundary without a remount.
+ */
+export function freshnessLevel(
+  dateStr: string | null | undefined,
+  bounds: FreshnessBounds,
+  now: number = Date.now(),
+): FreshnessLevel {
+  if (!dateStr) return 'unknown'
+  const age = now - toDate(dateStr).getTime()
+  // A date in the future (clock skew between the server and this browser) is as fresh as it gets.
+  if (age < bounds.fresh) return 'fresh'
+  if (age < bounds.recent) return 'recent'
+  if (age < bounds.stale) return 'stale'
+  return 'old'
+}
+
+/**
+ * Text colour per level. Both themes are spelled out: the 600 shades are unreadable on a dark
+ * background and the 400s wash out on a light one.
+ */
+export const FRESHNESS_TEXT_CLASS: Record<FreshnessLevel, string> = {
+  fresh: 'text-emerald-600 dark:text-emerald-400',
+  recent: 'text-yellow-600 dark:text-yellow-400',
+  stale: 'text-orange-600 dark:text-orange-400',
+  old: 'text-red-600 dark:text-red-400',
+  unknown: 'text-muted-foreground',
+}
+
 export function safeRedirect(redirect: string | null, fallback = '/'): string {
   if (!redirect || !redirect.startsWith('/')) return fallback
   return redirect

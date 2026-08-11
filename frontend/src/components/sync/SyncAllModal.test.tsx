@@ -5,10 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-const { apiGet, apiPost, apiDelete } = vi.hoisted(() => ({
+const { apiGet, apiPost, apiDelete, navigate } = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   apiDelete: vi.fn(),
+  navigate: vi.fn(),
 }))
 
 vi.mock('@/lib/api-client', () => ({
@@ -26,7 +27,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
 }))
 
 const { SyncAllModal } = await import('./SyncAllModal')
@@ -62,12 +63,43 @@ function mockStatusEndpoints() {
         return Promise.resolve({ data: { isActive: false, expiresAt: null } })
       case '/finary/status':
         return Promise.resolve({ data: { connected: false, status: null, lastSyncedAt: null } })
+      case '/amundi/status':
+        return Promise.resolve({ data: amundiStatus })
+      case '/bourse-direct/status':
+        return Promise.resolve({ data: { isActive: false, syncStatus: 'IDLE', lastSyncError: null, expiresAt: null, lastSyncStartedAt: null, lastSyncCompletedAt: null } })
+      case '/degiro/status':
+        return Promise.resolve({ data: { isActive: false, status: null, lastSyncedAt: null } })
+      case '/ibkr/status':
+        return Promise.resolve({ data: { connected: false, connectionId: null, status: null, lastSyncedAt: null, maskedToken: null } })
       case '/accounts':
-        return Promise.resolve({ data: [TR_ACCOUNT] })
+        return Promise.resolve({ data: accountsFixture })
       default:
         return Promise.reject(new Error(`Unexpected GET ${url}`))
     }
   })
+}
+
+/** Overridden per test to drive the session-provider rows. */
+let amundiStatus: Record<string, unknown>
+let accountsFixture: unknown[]
+
+const AMUNDI_INACTIVE = {
+  isActive: false, syncStatus: 'IDLE', lastSyncError: null,
+  lastSyncStartedAt: null, lastSyncCompletedAt: null,
+}
+
+const AMUNDI_ACCOUNT = {
+  ...TR_ACCOUNT,
+  id: 2,
+  name: 'PEG — GROUPE ORANGE',
+  type: 'EMPLOYEE_SAVINGS',
+  provider: 'Amundi Épargne Salariale',
+}
+
+/** Resets the per-test fixtures to "only Trade Republic exists". */
+function resetFixtures() {
+  amundiStatus = AMUNDI_INACTIVE
+  accountsFixture = [TR_ACCOUNT]
 }
 
 function makeClient() {
@@ -112,6 +144,7 @@ describe('SyncAllModal Trade Republic inline auth', () => {
     apiGet.mockReset()
     apiPost.mockReset()
     apiDelete.mockReset()
+    resetFixtures()
     mockStatusEndpoints()
   })
 
@@ -174,5 +207,80 @@ describe('SyncAllModal Trade Republic inline auth', () => {
 
     expect(await screen.findByLabelText('sync.tr.tan')).toBeInTheDocument()
     expect(screen.queryByText(/sync\.tr\.errors\./)).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * The modal knew six provider types and the Sync page had nine tabs, so Amundi, Bourse Direct,
+ * DEGIRO and IBKR were simply absent from "Sync accounts" — invisible to anyone who only ever
+ * opens the dashboard. These pin the two halves of the rule that decides a row's presence.
+ */
+describe('SyncAllModal session providers', () => {
+  beforeEach(() => {
+    apiGet.mockReset()
+    apiPost.mockReset()
+    apiDelete.mockReset()
+    navigate.mockReset()
+    resetFixtures()
+    mockStatusEndpoints()
+  })
+
+  it('omits a provider that is neither connected nor holding accounts', async () => {
+    renderModal()
+
+    // Trade Republic proves the list rendered before asserting an absence.
+    expect(await screen.findByText('Trade Republic')).toBeInTheDocument()
+    expect(screen.queryByText('Amundi')).not.toBeInTheDocument()
+    expect(screen.queryByText('Bourse Direct')).not.toBeInTheDocument()
+    expect(screen.queryByText('DEGIRO')).not.toBeInTheDocument()
+    expect(screen.queryByText('Interactive Brokers')).not.toBeInTheDocument()
+  })
+
+  it('lists a provider whose session is live', async () => {
+    amundiStatus = { ...AMUNDI_INACTIVE, isActive: true, syncStatus: 'SUCCESS', lastSyncCompletedAt: '2026-08-10T08:00:00Z' }
+    renderModal()
+
+    expect(await screen.findByText('Amundi')).toBeInTheDocument()
+  })
+
+  /**
+   * The case that made this a bug rather than a missing feature: the user had two live Amundi
+   * accounts and no way to sync them from the dashboard. A dead session must not hide the row,
+   * or there is nowhere to notice it needs reconnecting.
+   */
+  it('lists a provider with accounts even when its session has expired', async () => {
+    accountsFixture = [TR_ACCOUNT, AMUNDI_ACCOUNT]
+    renderModal()
+
+    const amundiRow = (await screen.findByText('Amundi')).closest('[data-slot="card"]') as HTMLElement
+    expect(amundiRow).not.toBeNull()
+    expect(within(amundiRow).getByText('sync.all.sessionExpired')).toBeInTheDocument()
+  })
+
+  it('syncs through the provider endpoint when the session is live', async () => {
+    amundiStatus = { ...AMUNDI_INACTIVE, isActive: true, syncStatus: 'IDLE' }
+    apiPost.mockResolvedValue({ data: amundiStatus })
+    renderModal()
+
+    const amundiRow = (await screen.findByText('Amundi')).closest('[data-slot="card"]') as HTMLElement
+    fireEvent.click(within(amundiRow).getByRole('button'))
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/amundi/sync'))
+  })
+
+  /**
+   * An expired session cannot be repaired from this modal -- its provider needs credentials,
+   * an MFA code or a Flex token. Firing the sync would only return a 401, so the row hands the
+   * user to the tab that owns that form instead.
+   */
+  it('opens the provider tab instead of firing a doomed sync when the session has expired', async () => {
+    accountsFixture = [TR_ACCOUNT, AMUNDI_ACCOUNT]
+    renderModal()
+
+    const amundiRow = (await screen.findByText('Amundi')).closest('[data-slot="card"]') as HTMLElement
+    fireEvent.click(within(amundiRow).getByRole('button'))
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sync?tab=amundi'))
+    expect(apiPost).not.toHaveBeenCalledWith('/amundi/sync')
   })
 })

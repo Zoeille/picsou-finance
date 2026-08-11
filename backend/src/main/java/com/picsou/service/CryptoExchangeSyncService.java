@@ -263,10 +263,15 @@ public class CryptoExchangeSyncService {
             .orElseThrow(() -> new ResourceNotFoundException("Exchange session not found"));
 
         String externalId = externalIdOf(session.getExchangeType());
+        // Soft delete, like every other removal path: balance_snapshot cascades on account, so
+        // deleting the row would take the exchange's whole net-worth history with it.
         accountRepository.findByExternalAccountIdAndMemberId(externalId, memberId)
-            .ifPresent(accountRepository::delete);
+            .ifPresent(account -> {
+                account.setDeletedAt(Instant.now());
+                accountRepository.save(account);
+            });
         sessionRepository.delete(session);
-        log.info("Removed exchange session {} and associated account", sessionId);
+        log.info("Removed exchange session {} and soft-deleted its account", sessionId);
     }
 
     public void resyncAll(Long memberId) {

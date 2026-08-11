@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { cn, formatCurrency, formatDate, formatPercent, localeFromLanguage, parseDate, todayLabel } from './utils'
+import { cn, formatCurrency, formatDate, formatPercent, freshnessLevel, localeFromLanguage, parseDate, todayLabel } from './utils'
 
 describe('cn', () => {
   it('merges class names', () => {
@@ -166,5 +166,42 @@ describe('parseDate', () => {
       const displayed = formatDate(iso, locale, format)
       expect(parseDate(displayed, locale, format), `${locale}/${format} → ${displayed}`).toBe(iso)
     }
+  })
+})
+
+describe('freshnessLevel', () => {
+  const NOW = new Date('2026-08-11T12:00:00Z').getTime()
+  const DAY = 24 * 60 * 60 * 1000
+  const bounds = { fresh: DAY, recent: 2 * DAY, stale: 7 * DAY }
+  const ago = (ms: number) => new Date(NOW - ms).toISOString()
+
+  it('buckets an age against the bounds it is given', () => {
+    expect(freshnessLevel(ago(60 * 60 * 1000), bounds, NOW)).toBe('fresh')
+    expect(freshnessLevel(ago(1.5 * DAY), bounds, NOW)).toBe('recent')
+    expect(freshnessLevel(ago(3 * DAY), bounds, NOW)).toBe('stale')
+    expect(freshnessLevel(ago(30 * DAY), bounds, NOW)).toBe('old')
+  })
+
+  it('treats each bound as exclusive, so a level ends exactly where the next begins', () => {
+    expect(freshnessLevel(ago(DAY - 1), bounds, NOW)).toBe('fresh')
+    expect(freshnessLevel(ago(DAY), bounds, NOW)).toBe('recent')
+  })
+
+  /** Never synced is not "very old": it must not read as an alarm about ageing data. */
+  it('reports a missing date as unknown rather than old', () => {
+    expect(freshnessLevel(null, bounds, NOW)).toBe('unknown')
+    expect(freshnessLevel(undefined, bounds, NOW)).toBe('unknown')
+  })
+
+  /** A date-only string is local midnight, not UTC -- the property valuation date's shape. */
+  it('reads a date-only value without a timezone shift', () => {
+    const today = new Date(NOW)
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    expect(freshnessLevel(iso, bounds, NOW)).toBe('fresh')
+  })
+
+  /** Server clock ahead of the browser: an age below zero is as fresh as it gets, not old. */
+  it('treats a future date as fresh', () => {
+    expect(freshnessLevel(ago(-DAY), bounds, NOW)).toBe('fresh')
   })
 })
