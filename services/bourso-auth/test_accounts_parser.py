@@ -14,7 +14,8 @@ from accounts_parser import (
     INVALID_DATA,
     AccountsFormatError,
     account_type,
-    assign_tickers,
+    guard_symbol_collisions,
+    describe_payload,
     is_own_account,
     money_close,
     parse_amount,
@@ -29,11 +30,17 @@ def money(value, currency="EUR"):
 
 
 def summary(cash="100.00", valuation="900.00", total="1000.00", positions=None):
+    """The real shape: a list of view sections, the account in one and the lines
+    in another. Reading both off the first section is what reported a funded PEA
+    as having no positions."""
     return [
         {
-            "id": "acc",
+            "id": "summary",
+            "label": "Synthèse",
+            "headings": [{"id": "h1"}],
             "account": {
                 "name": "PEA DOE",
+                "reference": "0123",
                 "currency": "EUR",
                 "balance": money(0),
                 "cash": money(cash),
@@ -41,8 +48,16 @@ def summary(cash="100.00", valuation="900.00", total="1000.00", positions=None):
                 "total": money(total),
                 "gainLoss": money("120.00"),
             },
+            "actions": [],
+        },
+        {
+            "id": "positions",
+            "label": "Positions",
+            "headings": [{"id": "h1"}],
+            "actions": [],
             "positions": positions if positions is not None else [position()],
-        }
+            "count": 1,
+        },
     ]
 
 
@@ -50,7 +65,10 @@ def position(symbol="1rTCW8", quantity="10", amount="900.00", currency="EUR", **
     raw = {
         "symbol": symbol,
         "label": "Amundi MSCI World",
+        "isin": "IE00B4L5Y983",
         "permalink": f"/cours/{symbol}/",
+        "exchangeCode": "XPAR",
+        "currency": "EUR",
         "quantity": {"value": quantity, "decimals": 4, "currency": None},
         "buyingPrice": money("75.00"),
         "amount": money(amount, currency),
@@ -210,6 +228,26 @@ class TradingSummaryTest(unittest.TestCase):
         self.assertEqual(parsed["positions"][0]["quoteCurrency"], "USD")
         self.assertIsNone(parsed["positions"][0]["buyingPriceEur"])
 
+    def test_reads_the_isin_the_trading_board_ships_with_each_line(self):
+        parsed = parse_trading_summary(summary(), "acc")
+        self.assertEqual(parsed["positions"][0]["isin"], "IE00B4L5Y983")
+
+    def test_a_line_without_a_usable_isin_still_syncs(self):
+        # The ISIN only resolves a Yahoo ticker; the money is in `amount`.
+        for broken in (None, "", "NOT-AN-ISIN"):
+            parsed = parse_trading_summary(summary(positions=[position(isin=broken)]), "acc")
+            self.assertIsNone(parsed["positions"][0]["isin"])
+            self.assertEqual(parsed["positions"][0]["currentValueEur"], Decimal("900.00"))
+
+    def test_finds_the_lines_whichever_section_carries_them(self):
+        reordered = list(reversed(summary()))
+        self.assertEqual(len(parse_trading_summary(reordered, "acc")["positions"]), 1)
+
+    def test_an_empty_positions_section_does_not_mask_a_populated_one(self):
+        sections = summary()
+        sections.insert(1, {"id": "other", "positions": [], "count": 0})
+        self.assertEqual(len(parse_trading_summary(sections, "acc")["positions"]), 1)
+
     def test_a_missing_valuation_field_is_refused(self):
         broken = summary()
         del broken[0]["account"]["valuation"]
@@ -222,21 +260,53 @@ class TradingSummaryTest(unittest.TestCase):
             parse_trading_summary(summary(positions=[position(amount=float("nan"))]), "acc")
 
 
-class TickerAssignmentTest(unittest.TestCase):
-    def test_attaches_resolved_isins(self):
-        resolved = assign_tickers([{"symbol": "1rTCW8"}], {"1rTCW8": "IE00BJ0KDQ92"})
-        self.assertEqual(resolved[0]["isin"], "IE00BJ0KDQ92")
+class SymbolCollisionTest(unittest.TestCase):
+    def test_lines_carrying_their_own_isin_never_collide(self):
+        guard_symbol_collisions([
+            {"symbol": "1rTCW8", "isin": "IE00B4L5Y983"},
+            {"symbol": "1rTCW8", "isin": "IE00BJ0KDQ92"},
+        ])
 
-    def test_an_unresolved_symbol_still_syncs(self):
-        resolved = assign_tickers([{"symbol": "1rTCW8"}], {})
-        self.assertIsNone(resolved[0]["isin"])
+    def test_one_isin_less_line_is_fine(self):
+        guard_symbol_collisions([{"symbol": "1rTCW8", "isin": None}])
 
-    def test_two_unresolved_positions_sharing_a_symbol_are_refused(self):
+    def test_two_isin_less_positions_sharing_a_symbol_are_refused(self):
         # They would merge into one holding downstream, silently halving the
         # portfolio.
         with self.assertRaises(AccountsFormatError) as raised:
-            assign_tickers([{"symbol": "1rTCW8"}, {"symbol": "1rtcw8"}], {})
+            guard_symbol_collisions([
+                {"symbol": "1rTCW8", "isin": None}, {"symbol": "1rtcw8", "isin": None},
+            ])
         self.assertEqual(raised.exception.code, INVALID_DATA)
+
+
+class DescribePayloadTest(unittest.TestCase):
+    """The diagnostic that says where a field moved to. It must never leak a value."""
+
+    def test_reports_containers_and_key_names(self):
+        described = describe_payload(
+            [{"id": "x", "account": {"cash": {"value": 1}}, "positions": None}]
+        )
+        self.assertEqual(described, "list[1]({id,account:{cash},positions:null})")
+
+    def test_never_prints_a_value(self):
+        described = describe_payload(
+            [{"account": {"name": "PEA DOE", "total": {"value": 143088.89}}}]
+        )
+        self.assertNotIn("143088", described)
+        self.assertNotIn("PEA DOE", described)
+
+    def test_bounds_long_collections(self):
+        self.assertTrue(describe_payload([{"a": 1}] * 40).startswith("list[40]("))
+        self.assertIn("…", describe_payload([{"a": 1}] * 40))
+
+    def test_a_zero_line_account_says_where_the_positions_went(self):
+        payload = [{"id": "acc", "account": summary()[0]["account"], "lines": []}]
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_trading_summary(payload, "acc")
+        self.assertEqual(raised.exception.code, INCOMPLETE)
+        self.assertIn("payload=", str(raised.exception))
+        self.assertIn("lines:list[0]", str(raised.exception))
 
 
 class ToleranceTest(unittest.TestCase):

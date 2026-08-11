@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reconcile with its lines is refused wholesale and the last valid data kept.
   Accounts BoursoBank aggregates from *other* banks are deliberately left out —
   they would duplicate an Enable Banking connection. Reachable from the Sync
-  page, the Add-account modal and the setup wizard, in all four locales.
+  page, the Add-account modal and the setup wizard, in all four locales, and its
+  accounts carry the BoursoBank mark rather than a color circle. Validated
+  end-to-end against a live account, PEA included.
   See [feature notes](docs/features/bourso-bank.md) and the
   [ADR](docs/decisions/2026-08-11-boursobank-httpx-sidecar.md).
 - **Amundi Épargne Salariale sync.** Connect an Amundi account and import every

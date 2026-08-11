@@ -1,8 +1,8 @@
 """The sidecar's own glue: page extractors and the accounts flow end to end.
 
 `_collect_accounts` is driven through an `httpx.MockTransport` so the whole
-chain -- home page, dashboard, trading board, ISIN feed, response model -- is
-exercised without touching BoursoBank.
+chain -- home page, dashboard, trading board, response model -- is exercised
+without touching BoursoBank.
 """
 
 import json
@@ -42,9 +42,12 @@ def money(value, currency="EUR"):
     return {"value": value, "decimals": 2, "currency": currency}
 
 
+# Two view sections, as BoursoBank actually serves it: the account summary in
+# one, the position rows in another, each line carrying its own ISIN.
 TRADING_SUMMARY = [
     {
-        "id": PEA_ID,
+        "id": "summary",
+        "label": "Synthèse",
         "account": {
             "name": "PEA DOE",
             "currency": "EUR",
@@ -53,19 +56,28 @@ TRADING_SUMMARY = [
             "total": money("143088.89"),
             "gainLoss": money("12000.00"),
         },
+        "actions": [],
+    },
+    {
+        "id": "positions",
+        "label": "Positions",
+        "actions": [],
+        "count": 1,
         "positions": [
             {
                 "symbol": "1rTCW8",
                 "label": "Amundi MSCI World UCITS ETF",
+                "isin": "IE00B4L5Y983",
                 "permalink": "/cours/1rTCW8/",
+                "exchangeCode": "XPAR",
+                "currency": "EUR",
                 "quantity": {"value": "1000", "decimals": 4, "currency": None},
                 "buyingPrice": money("128.00"),
                 "amount": money("140000.00"),
                 "last": money("140.00"),
-                "gainLoss": money("12000.00"),
             }
         ],
-    }
+    },
 ]
 
 
@@ -77,9 +89,7 @@ def build_client(handler) -> httpx.AsyncClient:
     )
 
 
-def default_handler(
-    *, home=HOME_HTML, dashboard=DASHBOARD_HTML, trading=None, trading_status=200, isin="IE00B4L5Y983"
-):
+def default_handler(*, home=HOME_HTML, dashboard=DASHBOARD_HTML, trading=None, trading_status=200):
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if request.url.host == "clients.boursobank.com" and path == "/":
@@ -90,10 +100,8 @@ def default_handler(
             if trading_status != 200:
                 return httpx.Response(trading_status, json={})
             return httpx.Response(200, json=trading if trading is not None else TRADING_SUMMARY)
-        if "/feed/instrument/quote/" in path:
-            if isin is None:
-                return httpx.Response(404, json={})
-            return httpx.Response(200, json={"isin": isin})
+        # No instrument-quote call: the trading board ships the ISIN itself, so
+        # any extra upstream request here is a regression.
         raise AssertionError(f"unexpected request: {request.url}")
 
     return handler
@@ -216,8 +224,10 @@ class CollectAccountsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(pea.positions[0].currentValueEur, Decimal("140000.00"))
         self.assertTrue(pea.snapshotComplete)
 
-    async def test_an_unresolved_isin_still_syncs_the_position(self):
-        async with build_client(default_handler(isin=None)) as client:
+    async def test_a_line_without_an_isin_still_syncs(self):
+        stripped = json.loads(json.dumps(TRADING_SUMMARY))
+        del stripped[1]["positions"][0]["isin"]
+        async with build_client(default_handler(trading=stripped)) as client:
             accounts = await _collect_accounts(client)
 
         pea = next(account for account in accounts if account.type == "PEA")
@@ -249,7 +259,7 @@ class CollectAccountsTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_portfolio_that_does_not_reconcile_is_refused(self):
         truncated = json.loads(json.dumps(TRADING_SUMMARY))
-        truncated[0]["positions"] = []
+        truncated[1]["positions"] = []
         async with build_client(default_handler(trading=truncated)) as client:
             with self.assertRaises(AccountsFormatError) as raised:
                 await _collect_accounts(client)

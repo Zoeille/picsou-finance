@@ -1,10 +1,9 @@
 # Feature: BoursoBank sync
 
 > Last updated: 2026-08-11
-> Status: ⚠ **Not yet validated against a live account** — the contract is taken
-> from a maintained reference implementation rather than guessed, and every
-> deterministic boundary is tested, but nobody has signed in for real yet. See
-> "Verification boundaries".
+> Status: ✅ **Validated end-to-end against a live BoursoBank account**
+> (2026-08-11) — login, dashboard, PEA with 9 positions, reconciled exactly.
+> See "Verification boundaries" for what that run did and did not exercise.
 
 ## Context
 
@@ -134,8 +133,21 @@ GET {API_URL}/_user_/_{hash}_/trading/accounts/summary/{accountId}
     ?_host=tradingboard.boursobank.com&position=ACCOUNTING&responseFormat=true
 ```
 
-which returns the account's `cash`, `valuation`, `total` and every position, each
-money field shaped `{value, decimals, currency}`.
+**The response is a list of view sections, not one object per account**, and the
+figures are split across them:
+
+```text
+[ {id, label, headings[], account:{cash, valuation, total, gainLoss, …}, actions[]},
+  {id, label, headings[], actions[], positions:[…], count} ]
+```
+
+Reading `positions` off the same section as `account` finds a funded account with
+no lines — which is exactly how this first failed in the wild. Each is therefore
+taken from whichever section carries it, and the richest positions list wins
+(a section can carry an empty one, which would look just like a cash-only
+account). Every money field is shaped `{value, decimals, currency}`, and `amount`
+is the line's **market** value — confirmed live, since `Σ amount` reconciled to
+the broker's own `valuation` to the cent.
 
 `API_URL` and `USER_HASH` are re-read from the inline `window.BRS_CONFIG` on
 every sync rather than persisted, so a session blob can never go stale against
@@ -163,12 +175,23 @@ each is to bite:
 - Positions on a cash account, a missing cash balance on a securities account,
   duplicate accounts, an unsupported type → `INVALID_DATA`.
 
-### ISIN resolution is best-effort, on purpose
+### ISIN comes with the position
 
-BoursoBank's trading board exposes only its own instrument symbol (`1rTCW8`), not
-an ISIN. The sidecar looks the ISIN up through the public instrument feed and
+Each position row carries its own `isin` alongside BoursoBank's internal symbol:
+
+```text
+{symbol, label, isin, permalink, exchangeCode, delay, quantity, alerts,
+ buyingPrice, currency, amount, last, gainLoss, …}
+```
+
 `OpenFigiIsinConverter` turns it into a Yahoo ticker, exactly as Bourse Direct and
-DEGIRO do — but a failure is **not** fatal: the position keeps its BoursoBank
+DEGIRO do. An earlier revision looked the ISIN up through a separate instrument
+feed; that endpoint was never needed and has been removed, along with one upstream
+request per instrument. The contract test asserts the sidecar makes **no** call
+beyond the home page, the dashboard and one trading summary per securities
+account, so it cannot creep back.
+
+A missing or malformed ISIN is **not** fatal: the position keeps its BoursoBank
 symbol as its ticker.
 
 That is what puts `BoursoBank` in `AccountService.PROVIDER_VALUED`. A line with
@@ -217,6 +240,8 @@ usable one so the scheduler simply retries.
 - `frontend/src/components/sync/BoursoPanel.tsx` (serves the Sync tab and the
   Add-account modal), `frontend/src/pages/sync/BoursoTab.tsx`
 - `frontend/src/features/sync/{api,hooks}.ts` — `boursoApi`, `useBourso*`
+- `frontend/public/providers/boursobank.png` + `lib/provider-logos.ts` — every
+  BoursoBank account carries the brand mark rather than a color circle
 - i18n namespace `sync.bourso.*` in all four locales
 
 Reuses: `CryptoEncryption`, `AccountService.upsertSnapshot`,
@@ -257,6 +282,12 @@ See [the ADR](../decisions/2026-08-11-boursobank-httpx-sidecar.md).
 - **The trading board is authoritative over the dashboard tile** for a securities
   account: its `total` is the figure the reconciliations ran against.
 - **`API_URL` in `BRS_CONFIG` has escaped slashes** (`https:\/\/…`).
+- **The trading summary splits `account` and `positions` across sections.** Do
+  not read them off the same list entry; that is the bug that reported a funded
+  PEA as empty on the first live run.
+- **`describe_payload` fires only when an account is funded but reports no
+  line**, and prints key names and collection sizes — never a value. It is what
+  located the split above; keep it that way rather than dumping the response.
 - **Single replica.** Pending app-push validations live in the sidecar's process
   memory with a 600 s TTL, exactly as for Bourse Direct and Amundi.
 - **`V78` drops and recreates `bourso_session`.** The V23 table held a
@@ -267,13 +298,13 @@ See [the ADR](../decisions/2026-08-11-boursobank-httpx-sidecar.md).
 
 ## Verification boundaries
 
-`services/bourso-auth` — 72 tests, run inside the built image in CI: pad decoding
+`services/bourso-auth` — 80 tests, run inside the built image in CI: pad decoding
 against the real SVGs (and its refusal on an unknown one), password encoding, the
 dashboard parsed from a real captured page including the third-party filter and
 the loan exclusion, a card that stops parsing failing the sync, reconciliation
-accepted and refused either side of the tolerance, the ISIN-less fallback and its
-collision refusal, cookie round-tripping with per-cookie domains, pending TTL, and
-the HTTP contract.
+accepted and refused either side of the tolerance, the ISIN read off the position and its
+absent/malformed fallbacks, the account and positions found in either section,
+cookie round-tripping with per-cookie domains, pending TTL, and the HTTP contract.
 
 Backend — `BoursoAdapterTest` (16), `BoursoSyncServiceTest` (23),
 `BoursoControllerTest` (11), `BoursoAdapterWiringTest`, `BoursoSyncRecoveryTest`,
@@ -285,24 +316,35 @@ Frontend — `BoursoTab.test.tsx` (6): the app-push wait, the direct sign-in,
 numeric-only credentials, error-code translation, a failed background sync read
 from the polled status, and disconnect.
 
-**What is NOT proven.** No public CI runner can hold BoursoBank credentials or
-approve a push notification, so the live login has never run. Specifically
-unverified:
+**Validated against a live account (2026-08-11).** End to end: the `__brs_mit`
+bootstrap, the virtual keyboard (decoded correctly on the first attempt — the
+login returned its 302 with no retry), the dashboard, and a PEA whose 9 positions
+all resolved through ISIN → OpenFIGI → a Yahoo ticker. Both reconciliations held
+**exactly**: `cash + valuation` matched `total` at `rel_diff = 0.0000`, and the
+sum of the lines matched the broker's valuation to the cent.
 
-- the **app-push polling loop** — `checkwebtoapp` being safe to poll is inferred
-  from BoursoBank's own page doing it, not observed;
-- the **ISIN lookup endpoint** (`_public_/feed/instrument/quote/{symbol}`) — it is
-  the one endpoint here with no upstream reference, which is exactly why its
-  failure is non-fatal;
-- the **`__brs_mit` bootstrap** against a live session.
+That run is also what corrected two things this note previously got wrong: the
+two-section payload shape, and the existence of a separate ISIN feed.
 
-Everything else — the pad, the account markup, the login form fields, the
-trading-board shape — is transcribed from
-[azerpas/bourso-api](https://github.com/azerpas/bourso-api), which is maintained
-and was current as of August 2026.
+**Not observed, still defensive rather than proven:**
 
-A maintainer should perform a live smoke test before release and record the
-result here, as the Amundi and DEGIRO notes do.
+- the **app-push second factor** — the validated account was on a trusted device,
+  so `/initiate` returned without a second factor and `checkwebtoapp` never ran.
+  Its polling loop remains inferred from BoursoBank's own page doing it;
+- **`MFA_TYPE_UNSUPPORTED`** — no SMS prompt was seen;
+- the **ISIN-less fallback** and its **collision refusal** — every line on that
+  account carried a valid ISIN;
+- a **livret** and a **compte-titres ordinaire** — the account held a current
+  account and a PEA only, so `SAVINGS`, `LEP` and `COMPTE_TITRES` are mapped but
+  unexercised against real markup;
+- a **foreign-currency line**, which is why the EUR guard is written to refuse
+  rather than convert.
+
+⚠️ **One limit worth stating.** The completeness check proves every account link
+*of the expected shape* (`/compte/…/{32-hex}/`) was accounted for. It cannot prove
+BoursoBank does not render some account category through a different link shape
+entirely — such a card would be invisible to both the parser and the check. Eyeball
+the imported list against the BoursoBank dashboard after the first sync.
 
 ## Links
 

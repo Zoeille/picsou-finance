@@ -135,6 +135,46 @@ def money_close(actual: Decimal, expected: Decimal) -> bool:
     return difference <= abs(expected) * MONEY_RELATIVE_TOLERANCE
 
 
+def describe_payload(payload: Any, depth: int = 0) -> str:
+    """The *shape* of an upstream response: containers and key names, no values.
+
+    When BoursoBank moves a field, the reconciliation failure alone says only
+    that something is missing, not where it went. This says where. It prints key
+    names and collection sizes and never a value, so it is safe to log.
+    """
+    if isinstance(payload, list):
+        if not payload:
+            return "list[0]"
+        inner = "; ".join(describe_payload(item, depth + 1) for item in payload[:3])
+        suffix = ";…" if len(payload) > 3 else ""
+        return f"list[{len(payload)}]({inner}{suffix})"
+    if isinstance(payload, dict):
+        if depth >= 2:
+            return "{" + ",".join(list(payload)[:12]) + "}"
+        parts = []
+        for key, value in list(payload.items())[:24]:
+            if isinstance(value, (list, dict)):
+                parts.append(f"{key}:{describe_payload(value, depth + 1)}")
+            elif value is None:
+                parts.append(f"{key}:null")
+            else:
+                parts.append(key)
+        return "{" + ",".join(parts) + "}"
+    return "null" if payload is None else type(payload).__name__
+
+
+def relative_difference(actual: Decimal, expected: Decimal) -> str:
+    """How far apart two amounts are, as a ratio, for diagnostics.
+
+    Reported instead of the amounts themselves: a ratio is enough to tell a
+    tolerance rounding error from a field that means something other than what
+    the connector assumed, and it puts no balance in the logs.
+    """
+    if expected == 0:
+        return "n/a" if actual == 0 else "inf"
+    return f"{abs(actual - expected) / abs(expected):.4f}"
+
+
 def _deaccent(value: str) -> str:
     return "".join(
         char
@@ -259,6 +299,24 @@ def _summary_currency(raw: Any) -> str | None:
     return currency.upper() if currency else None
 
 
+_ISIN_RE = re.compile(r"[A-Z]{2}[A-Z0-9]{9}\d")
+
+
+def _position_isin(raw: Any, symbol: str) -> str | None:
+    """The line's ISIN, which the trading board ships alongside its own symbol.
+
+    A malformed one is treated as absent rather than fatal: the ISIN is only how
+    a Yahoo ticker gets resolved, so refusing a whole portfolio over a label
+    would contradict the rule that an unresolved instrument still syncs on the
+    broker's own valuation.
+    """
+    isin = text_value(raw.get("isin"), 12)
+    if isin is None:
+        return None
+    isin = isin.upper()
+    return isin if _ISIN_RE.fullmatch(isin) else None
+
+
 def _parse_position(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         raise AccountsFormatError(FORMAT_CHANGED, "Trading position is not an object")
@@ -287,6 +345,7 @@ def _parse_position(raw: Any) -> dict[str, Any] | None:
     buying_node = raw.get("buyingPrice")
     buying_currency = _summary_currency(buying_node)
     return {
+        "isin": _position_isin(raw, symbol),
         "symbol": symbol,
         "label": label,
         "quantity": quantity,
@@ -298,7 +357,8 @@ def _parse_position(raw: Any) -> dict[str, Any] | None:
             else None
         ),
         "currentPrice": _summary_money(last_node, "last", required=False),
-        "quoteCurrency": _summary_currency(last_node),
+        # The quote's own currency when it carries one, else the position's.
+        "quoteCurrency": _summary_currency(last_node) or text_value(raw.get("currency"), 3),
         "currentValueEur": value_eur,
         "pnlEur": _summary_money(raw.get("gainLoss"), "gainLoss", required=False),
     }
@@ -312,12 +372,19 @@ def parse_trading_summary(payload: Any, account_id: str) -> dict[str, Any]:
       sum(line valuations) ~= portfolio valuation
     """
     items = payload if isinstance(payload, list) else [payload]
-    entry = next((item for item in items if isinstance(item, dict)), None)
-    if entry is None:
+    sections = [item for item in items if isinstance(item, dict)]
+    if not sections:
         raise AccountsFormatError(FORMAT_CHANGED, "Trading summary is empty")
 
-    account = entry.get("account")
-    if not isinstance(account, dict):
+    # The response is a list of view sections, and the account summary and the
+    # position rows live in *different* ones -- reading both off the first
+    # section finds a funded account with no lines. Each is therefore taken from
+    # whichever section carries it, with no assumption about ordering.
+    account = next(
+        (section["account"] for section in sections if isinstance(section.get("account"), dict)),
+        None,
+    )
+    if account is None:
         raise AccountsFormatError(FORMAT_CHANGED, "Trading summary has no account node")
 
     cash = _summary_money(account.get("cash"), "cash")
@@ -330,48 +397,54 @@ def parse_trading_summary(payload: Any, account_id: str) -> dict[str, Any]:
             INVALID_DATA, f"Trading account {account_id[:8]}… is denominated in {currency}"
         )
 
-    raw_positions = entry.get("positions")
-    if raw_positions is None:
-        raw_positions = []
-    if not isinstance(raw_positions, list):
-        raise AccountsFormatError(FORMAT_CHANGED, "Trading positions are not a list")
+    # The richest positions list rather than the first: a section can carry an
+    # empty one, and picking that would look exactly like a cash-only account.
+    position_lists = [
+        section["positions"] for section in sections if isinstance(section.get("positions"), list)
+    ]
+    raw_positions = max(position_lists, key=len) if position_lists else []
 
     positions = [parsed for parsed in (_parse_position(item) for item in raw_positions) if parsed]
+    lines_total = sum((position["currentValueEur"] for position in positions), Decimal("0"))
 
+    # Both checks are measured before either is raised: when one fails, the other
+    # one's ratio is what says whether a field means something else entirely or
+    # whether the read was simply truncated.
+    shape = (
+        f"account {account_id[:8]}…; {len(positions)} of {len(raw_positions)} line(s); "
+        f"cash+valuation vs total={relative_difference(cash + valuation, total)}; "
+        f"lines vs valuation={relative_difference(lines_total, valuation)}"
+    )
+    if not raw_positions:
+        # An account worth something but reporting no line means the positions
+        # moved rather than that the read was truncated -- say where they are now.
+        shape += f"; payload={describe_payload(payload)}"
     if not money_close(cash + valuation, total):
         raise AccountsFormatError(
-            INCOMPLETE, "Trading account total does not reconcile with cash plus valuation"
+            INCOMPLETE, f"Trading account total does not reconcile ({shape})"
         )
-
-    lines_total = sum((position["currentValueEur"] for position in positions), Decimal("0"))
     if not money_close(lines_total, valuation):
         raise AccountsFormatError(
-            INCOMPLETE, "Trading positions do not reconcile with the portfolio valuation"
+            INCOMPLETE, f"Trading positions do not reconcile with the valuation ({shape})"
         )
 
     return {"cashEur": cash, "totalEur": total, "positions": positions}
 
 
-def assign_tickers(positions: list[dict[str, Any]], isins: dict[str, str]) -> list[dict[str, Any]]:
-    """Attach the resolved ISIN to each position, falling back to its symbol.
+def guard_symbol_collisions(positions: list[dict[str, Any]]) -> None:
+    """Refuse two ISIN-less lines that would collapse onto the same ticker.
 
-    BoursoBank's trading board only exposes its own instrument symbol, so the
-    ISIN is looked up separately and may legitimately be missing -- an unresolved
-    line is still a line the user holds. Two positions collapsing onto the same
-    fallback would merge two different instruments into one holding downstream,
-    so that is refused instead.
+    A position without an ISIN keeps BoursoBank's own symbol as its ticker, and
+    two of those sharing one symbol would merge into a single holding
+    downstream -- silently halving the portfolio.
     """
-    resolved = []
     fallbacks: set[str] = set()
     for position in positions:
-        isin = isins.get(position["symbol"])
-        if isin is None:
-            fallback = position["symbol"].upper()
-            if fallback in fallbacks:
-                raise AccountsFormatError(
-                    INVALID_DATA,
-                    f"Two positions without an ISIN share the symbol {fallback}",
-                )
-            fallbacks.add(fallback)
-        resolved.append({**position, "isin": isin})
-    return resolved
+        if position.get("isin"):
+            continue
+        fallback = position["symbol"].upper()
+        if fallback in fallbacks:
+            raise AccountsFormatError(
+                INVALID_DATA, f"Two positions without an ISIN share the symbol {fallback}"
+            )
+        fallbacks.add(fallback)

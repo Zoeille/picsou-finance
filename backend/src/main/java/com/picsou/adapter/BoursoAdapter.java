@@ -31,10 +31,7 @@ public class BoursoAdapter implements BoursoPort {
      * on a validation that was about to succeed.
      */
     private static final Duration DEFAULT_VALIDATION_TIMEOUT = Duration.ofSeconds(150);
-    /**
-     * One dashboard fetch plus one trading-summary call and one ISIN lookup per
-     * distinct instrument. Generous because the ISIN lookups fan out.
-     */
+    /** One home fetch, one dashboard fetch, and one trading call per securities account. */
     private static final Duration DEFAULT_ACCOUNTS_TIMEOUT = Duration.ofSeconds(90);
 
     private final WebClient client;

@@ -24,13 +24,15 @@
  *
  * Keys are the exact `provider` string the backend writes. For crypto exchanges that string is
  * `ExchangeType.name()` (`CryptoExchangeSyncService.resolveAccount`), hence `MERIA` rather than
- * `Meria`; for Amundi it is `AmundiSyncService.PROVIDER`, accent and all; Trade Republic writes
+ * `Meria`; for Amundi it is `AmundiSyncService.PROVIDER`, accent and all, and for BoursoBank
+ * `BoursoSyncService.PROVIDER`; Trade Republic writes
  * its name inline in `TradeRepublicSyncService.upsertAccount`. `provider-logos.test.ts` pins
  * every literal so a rename on either side fails loudly instead of silently dropping the logo.
  */
 export const PROVIDER_LOGOS: Record<string, string> = {
   MERIA: '/exchanges/meria.svg',
   'AMUNDI ÉPARGNE SALARIALE': '/providers/amundi.png',
+  BOURSOBANK: '/providers/boursobank.png',
   'TRADE REPUBLIC': '/providers/trade-republic.svg',
 }
 

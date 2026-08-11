@@ -106,11 +106,13 @@ be accounted for, not just those inside a section that parsed — because the
 section patterns are the fragile part.
 
 Treating an unresolvable ISIN as normal rather than exceptional is the one place
-this connector is deliberately more permissive than its siblings. BoursoBank
-simply does not publish ISINs on the trading board; refusing a sync because a
-label could not be resolved would make the connector unusable for the exact
-accounts it exists to import. The provider-valued fallback already exists for
-precisely this shape of gap.
+this connector is deliberately more permissive than its siblings. Refusing a sync
+because a *label* could not be resolved would make it unusable for the exact
+accounts it exists to import, and the provider-valued fallback already exists for
+precisely this shape of gap. (The first revision believed BoursoBank published no
+ISIN at all and added a speculative lookup endpoint for it. The live run showed
+every position ships its own `isin`; the endpoint was removed. The permissive rule
+stays — it is now cheap insurance rather than the main path.)
 
 ## Trade-offs accepted
 
@@ -123,7 +125,9 @@ precisely this shape of gap.
 - Users on SMS second factor cannot connect until they switch to app validation.
 - A user who also syncs BoursoBank through Enable Banking gets duplicate current
   accounts and prunes one side by hand.
-- No public CI can prove the live login, the push polling loop, or the ISIN feed.
+- No public CI can prove the live login or the push polling loop. The live
+  validation of 2026-08-11 ran on a trusted device, so the app-push path is still
+  only inferred.
 - Single replica: pending validations live in the sidecar's process memory.
 
 ## Consequences
@@ -141,6 +145,18 @@ precisely this shape of gap.
   workflows gain the sidecar; the setup-wizard catalog, the admin toggle and the
   Sync tab are un-hidden, and BoursoBank leaves the disabled list in `SECURITY.md`
   and `ARCHITECTURE.md`.
+
+## Validation
+
+Confirmed end-to-end against a live account on 2026-08-11: `__brs_mit` bootstrap,
+virtual keyboard decoded on the first attempt, dashboard, and a PEA of 9 positions
+reconciling to the cent on both checks. Two things this ADR originally asserted
+were corrected by that run — the trading summary splits `account` and `positions`
+across separate view sections, and the ISIN ships with each position rather than
+needing a lookup. Both had been *inferred* from the reference implementation's
+type definitions rather than observed, which is precisely the class of assumption
+the fail-closed design exists to catch: the connector refused to write anything
+until they were right.
 
 ## Links
 

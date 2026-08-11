@@ -6,7 +6,7 @@
 
 Account cards on the Accounts page (`/accounts`) previously showed only a flat color swatch as the account's visual identity. Enable Banking's institution search already returns a real bank logo URL (`InstitutionData.logoUrl`) that was captured but never surfaced anywhere in the UI. This feature threads that logo through to the account and displays it as a circular avatar, falling back to the existing color when no logo is available.
 
-Connectors integrated by hand against a single provider have no catalog to ask for a logo, so a second, much smaller source was added: a map of brand assets that ship with the frontend, keyed by `Account.provider`. Meria, Amundi and Trade Republic are the entries so far.
+Connectors integrated by hand against a single provider have no catalog to ask for a logo, so a second, much smaller source was added: a map of brand assets that ship with the frontend, keyed by `Account.provider`. Meria, Amundi, BoursoBank and Trade Republic are the entries so far.
 
 On-chain wallets fit neither source. `WalletSyncService` writes the native ticker into `provider` (`BTC`, `SOL`, `ETH`...), so there is nothing stable to key a map on — and the asset a user wants isn't derivable anyway, since the chain can't tell whether the address lives on a Ledger. That case is served by a third source: a key stored on the account itself (`Account.logoKey`), seeded with the generic blockchain mark and swappable from the account form.
 
@@ -18,7 +18,7 @@ There are three logo sources, in priority order:
 
 1. **A bundled asset the account points at** (`Account.logoKey`). Only **on-chain wallets** carry one — the API lets a client swap that key, never attach one to an account that has none, so a crypto *exchange* account can't be given a wallet mark either. It wins over everything else because it is the only source a user chose by hand.
 2. **A provider-supplied URL on the account** (`Account.logoUrl`). Only **Enable Banking** fills it — it's the sole active `BankConnectorPort` implementation that returns one (see [bank-sync.md](./bank-sync.md)). Powens (disabled, experimental) hardcodes `logoUrl = null`.
-3. **A bundled brand asset**, matched on `Account.provider` when neither of the above applies. Currently `MERIA`, Amundi and Trade Republic.
+3. **A bundled brand asset**, matched on `Account.provider` when neither of the above applies. Currently `MERIA`, Amundi, BoursoBank and Trade Republic.
 
 Properties take none of the three: they have no `provider` to key on, no connector to ask, and no logo key of their own, so `AccountCard` marks them with the glyph for their `propertyKind` instead — see [accounts-overview.md](./accounts-overview.md#account-card-anatomy). The kind is picked in the property form, so that mark follows a user choice too, but it is chosen as a property attribute rather than from a logo picker.
 
@@ -40,11 +40,11 @@ The backfill is bounded to a single attempt per requisition via `Requisition.log
 
 `PROVIDER_LOGOS` (`frontend/src/lib/provider-logos.ts`) maps a `provider` string to an asset path, and `providerLogoUrl()` resolves it case-insensitively. For an account with no `logoKey` of its own, `AccountAvatar` falls back to `logoUrl ?? providerLogoUrl(provider)`, so a real connector logo always wins over a bundled one and nothing changes for accounts that already had one. The full order, key included, is in [Rendering](#rendering) below.
 
-The key is the exact string the backend writes as `provider`. For crypto exchanges that is `ExchangeType.name()` (`CryptoExchangeSyncService.resolveAccount()`), hence `MERIA` rather than `Meria`; for Amundi it is `AmundiSyncService.PROVIDER`, i.e. `Amundi Épargne Salariale`, accent included; for Trade Republic it is the `"Trade Republic"` literal inlined in `TradeRepublicSyncService.upsertAccount()`. `provider-logos.test.ts` pins all three literals, so an accidental edit to the map — or an accent that drifts between Unicode normalizations on the frontend side — fails loudly instead of silently reverting to the color circle. It cannot see the backend, though: renaming what the connector writes is caught by nothing (see Gotchas).
+The key is the exact string the backend writes as `provider`. For crypto exchanges that is `ExchangeType.name()` (`CryptoExchangeSyncService.resolveAccount()`), hence `MERIA` rather than `Meria`; for Amundi it is `AmundiSyncService.PROVIDER`, i.e. `Amundi Épargne Salariale`, accent included; for BoursoBank it is `BoursoSyncService.PROVIDER`; for Trade Republic it is the `"Trade Republic"` literal inlined in `TradeRepublicSyncService.upsertAccount()`. `provider-logos.test.ts` pins all four literals, so an accidental edit to the map — or an accent that drifts between Unicode normalizations on the frontend side — fails loudly instead of silently reverting to the color circle. It cannot see the backend, though: renaming what the connector writes is caught by nothing (see Gotchas).
 
 Assets live under `frontend/public/` (`exchanges/` for crypto, `providers/` otherwise) rather than being imported from `src/assets/` like the app's own logo: a missing file then degrades to the account's color circle — exactly what a logo-less account already shows — instead of failing the build. The trade-off is that a typo'd or missing path is invisible at runtime, so `provider-logos.test.ts` expands `import.meta.glob('../../public/**/*.{svg,png}')` and asserts every mapped path exists on disk.
 
-Nothing is written to the database and no backend change was needed: an existing Meria, Amundi or Trade Republic account picks the logo up on the next render, and demo mode gets it for free.
+Nothing is written to the database and no backend change was needed: an existing Meria, Amundi, BoursoBank or Trade Republic account picks the logo up on the next render, and demo mode gets it for free.
 
 ### The wallet logo key
 
@@ -78,6 +78,7 @@ Nothing is written to the database and no backend change was needed: an existing
 - `frontend/src/components/shared/AccountForm.tsx` — renders the picker for accounts that carry a key
 - `frontend/public/exchanges/meria.svg` — Meria's mark
 - `frontend/public/providers/amundi.png` — Amundi's mark
+- `frontend/public/providers/boursobank.png` — BoursoBank's mark
 - `frontend/public/providers/trade-republic.svg` — Trade Republic's mark
 - `frontend/public/wallets/blockchain.svg`, `frontend/public/wallets/ledger.svg` — the two wallet marks
 
@@ -101,7 +102,7 @@ Nothing is written to the database and no backend change was needed: an existing
 
 - **Powens never provides a logo.** `PowensBankConnector.searchInstitutions()` hardcodes `logoUrl = null` for every result. If Powens is ever re-enabled, its accounts will always show the color fallback until the adapter is updated.
 - **Backfill match is best-effort, bounded to one attempt.** `ensureLogoUrl()` matches by institution id first, then falls back to a case-insensitive name match, scoped to the requisition's own country. A renamed institution on the provider side may never match — `logoBackfillAttemptedAt` prevents retrying forever, and the account just keeps showing its color, which degrades gracefully.
-- **A bundled logo is keyed on a free-text column.** `Account.provider` is written by each connector with no shared enum, so renaming what `CryptoExchangeSyncService` stores (today `ExchangeType.name()`), what `AmundiSyncService` stores, or the `"Trade Republic"` literal in `TradeRepublicSyncService` silently drops the logo back to the color circle. The lookup is case-insensitive, which absorbs a `Meria`/`MERIA` change but nothing more — and Amundi's key carries an accent, so it is also sensitive to Unicode normalization.
+- **A bundled logo is keyed on a free-text column.** `Account.provider` is written by each connector with no shared enum, so renaming what `CryptoExchangeSyncService` stores (today `ExchangeType.name()`), what `AmundiSyncService` or `BoursoSyncService` stores, or the `"Trade Republic"` literal in `TradeRepublicSyncService` silently drops the logo back to the color circle. The lookup is case-insensitive, which absorbs a `Meria`/`MERIA` change but nothing more — and Amundi's key carries an accent, so it is also sensitive to Unicode normalization.
 - **A bundled mark needs its own margin.** The avatar is a circle, so the square the image is fitted into is inscribed in it: a mark drawn edge to edge in its `viewBox` gets its corners clipped, and a wide one loses its ends. Brand SVGs ship cropped tight to the artwork, so `trade-republic.svg` and `blockchain.svg` carry a deliberately padded `viewBox`. Padding the avatar instead was rejected — it would shrink every Enable Banking logo, and those already come with their own whitespace.
 - **A mapped asset that isn't there fails silently.** `public/` files aren't resolved at build time, so a typo in `PROVIDER_LOGOS` just yields a 404 and the usual color fallback. `provider-logos.test.ts` is the only thing that catches it — keep it in step when adding an entry.
 - **Changing the account type clears the logo, for good.** A key survives only on a `CRYPTO` account that already stores one (`AccountService.normalizeLogoKey()`). Retyping a wallet and retyping it back does not restore the mark: the account now has no stored key, so neither the picker nor a hand-written `PUT` can put one back, and the next sync won't re-seed it either since the connector only writes the key at account creation.

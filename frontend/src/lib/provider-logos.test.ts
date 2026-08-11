@@ -72,6 +72,13 @@ describe('providerLogoUrl', () => {
     expect(providerLogoUrl('Amundi Épargne Salariale')).toBe('/providers/amundi.png')
   })
 
+  // Copied verbatim from BoursoSyncService.PROVIDER. Every BoursoBank account —
+  // current account, livret and PEA alike — carries it, so a rename on either
+  // side would drop the logo from all of them at once.
+  it('resolves the provider string the BoursoBank connector writes', () => {
+    expect(providerLogoUrl('BoursoBank')).toBe('/providers/boursobank.png')
+  })
+
   // Copied verbatim from the literal TradeRepublicSyncService.upsertAccount() writes.
   it('resolves the provider string the Trade Republic connector writes', () => {
     expect(providerLogoUrl('Trade Republic')).toBe('/providers/trade-republic.svg')
@@ -84,6 +91,8 @@ describe('providerLogoUrl', () => {
   it('matches case-insensitively', () => {
     expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
     expect(providerLogoUrl('AMUNDI ÉPARGNE SALARIALE')).toBe('/providers/amundi.png')
+    // The demo fixtures spell it 'BoursoBank'; the map keys on the upper-cased form.
+    expect(providerLogoUrl('boursobank')).toBe('/providers/boursobank.png')
     expect(providerLogoUrl('TRADE REPUBLIC')).toBe('/providers/trade-republic.svg')
     expect(providerLogoUrl('Meria')).toBe('/exchanges/meria.svg')
   })

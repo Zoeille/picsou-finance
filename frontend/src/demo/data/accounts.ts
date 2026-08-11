@@ -19,9 +19,9 @@ export const mockAccounts: Account[] = [
   },
   {
     id: 2,
-    name: 'PEA Boursorama',
+    name: 'PEA BoursoBank',
     type: 'PEA',
-    provider: 'Boursorama',
+    provider: 'BoursoBank',
     currency: 'EUR',
     currentBalance: 12450.5,
     currentBalanceEur: 12450.5,

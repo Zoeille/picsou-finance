@@ -44,7 +44,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from accounts_parser import (
     AccountsFormatError,
-    assign_tickers,
+    guard_symbol_collisions,
     parse_dashboard,
     parse_trading_summary,
 )
@@ -546,39 +546,6 @@ async def _fetch_trading_account(
     return parse_trading_summary(payload, account_id)
 
 
-async def _resolve_isin(
-    client: httpx.AsyncClient, api_url: str, symbol: str
-) -> tuple[str, str | None]:
-    """Best-effort ISIN lookup for one BoursoBank instrument symbol.
-
-    The trading board only exposes BoursoBank's own symbol, and this quote feed
-    is the endpoint that carries the ISIN alongside it. It is **not** proven
-    against a live account -- unlike everything else here -- so a failure is
-    deliberately non-fatal: the position still syncs with the symbol standing in
-    for the ticker and BoursoBank's own valuation, which is exactly the
-    degradation `AccountService.PROVIDER_VALUED` exists to absorb.
-    """
-    try:
-        response = await client.get(
-            f"{api_url}/_public_/feed/instrument/quote/{symbol}",
-            params={"_host": "tradingboard.boursobank.com"},
-            headers={"Accept": "application/json"},
-        )
-        if response.status_code != 200:
-            return symbol, None
-        payload = response.json()
-    except (httpx.HTTPError, ValueError):
-        log.info("BoursoBank ISIN lookup failed for %s", _log_safe(symbol))
-        return symbol, None
-
-    for candidate in (payload, payload.get("d") if isinstance(payload, dict) else None):
-        if isinstance(candidate, dict):
-            isin = candidate.get("isin")
-            if isinstance(isin, str) and re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}\d", isin.strip()):
-                return symbol, isin.strip()
-    return symbol, None
-
-
 async def _collect_accounts(client: httpx.AsyncClient) -> list[AccountPayload]:
     home = await _home(client)
     if _LOGGED_IN_MARKER not in home:
@@ -593,7 +560,6 @@ async def _collect_accounts(client: httpx.AsyncClient) -> list[AccountPayload]:
         )
 
     payloads: list[dict[str, Any]] = []
-    symbols: set[str] = set()
     for account in accounts:
         entry: dict[str, Any] = {
             "externalId": f"bourso_{account['id']}",
@@ -611,26 +577,14 @@ async def _collect_accounts(client: httpx.AsyncClient) -> list[AccountPayload]:
             entry["balanceEur"] = summary["totalEur"]
             entry["cashBalance"] = summary["cashEur"]
             entry["positions"] = summary["positions"]
-            symbols.update(position["symbol"] for position in summary["positions"])
+            guard_symbol_collisions(entry["positions"])
         payloads.append(entry)
 
-    isins: dict[str, str] = {}
-    if symbols:
-        for symbol, isin in await asyncio.gather(
-            *(_resolve_isin(client, api_url, symbol) for symbol in sorted(symbols))
-        ):
-            if isin:
-                isins[symbol] = isin
-        unresolved = len(symbols) - len(isins)
-        if unresolved:
-            log.info(
-                "BoursoBank: %d of %d instrument(s) kept their symbol as ticker",
-                unresolved,
-                len(symbols),
-            )
-
-    for entry in payloads:
-        entry["positions"] = assign_tickers(entry["positions"], isins)
+    unresolved = sum(
+        1 for entry in payloads for position in entry["positions"] if not position["isin"]
+    )
+    if unresolved:
+        log.info("BoursoBank: %d instrument(s) kept their symbol as ticker", unresolved)
     return [AccountPayload.model_validate(entry) for entry in payloads]
 
 
@@ -678,7 +632,7 @@ async def initiate(req: InitiateRequest) -> dict:
             "sessionState": None,
         }
     except AccountsFormatError as exc:
-        log.warning("BoursoBank login rejected (code=%s)", exc.code)
+        log.warning("BoursoBank login rejected (code=%s): %s", exc.code, exc)
         raise HTTPException(status_code=502, detail=exc.code) from exc
     except VirtualPadError as exc:
         log.warning("BoursoBank virtual keyboard could not be decoded: %s", exc)
@@ -715,6 +669,7 @@ async def complete(req: CompleteRequest) -> dict:
             raise HTTPException(status_code=502, detail="UPSTREAM_FORMAT_CHANGED")
         return {"sessionState": serialize_cookies(client)}
     except AccountsFormatError as exc:
+        log.warning("BoursoBank validation rejected (code=%s): %s", exc.code, exc)
         raise HTTPException(status_code=502, detail=exc.code) from exc
     except HTTPException:
         raise
@@ -738,7 +693,7 @@ async def accounts(req: AccountsRequest) -> list[AccountPayload]:
         restore_cookies(client, req.sessionState)
         return await _collect_accounts(client)
     except AccountsFormatError as exc:
-        log.warning("BoursoBank accounts payload rejected (code=%s)", exc.code)
+        log.warning("BoursoBank accounts payload rejected (code=%s): %s", exc.code, exc)
         raise HTTPException(status_code=502, detail=exc.code) from exc
     except ValidationError as exc:
         log.warning("BoursoBank accounts payload failed validation: %s", exc.error_count())
