@@ -215,30 +215,46 @@ export function useClearTrSession() {
 // ---------------------------------------------------------------------------
 
 export function useBoursoSessionStatus() {
-  return useQuery({
+  const queryClient = useQueryClient()
+  const query = useQuery({
     queryKey: syncKeys.bourso(),
     queryFn: boursoApi.getStatus,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 0,
+    refetchInterval: currentQuery => {
+      const state = currentQuery.state.data?.syncStatus
+      return state === 'QUEUED' || state === 'RUNNING' ? 1_500 : 30_000
+    },
   })
+  const completedAt = query.data?.lastSyncCompletedAt
+  const succeeded = query.data?.syncStatus === 'SUCCESS'
+
+  useEffect(() => {
+    if (!succeeded || !completedAt) return
+    queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+  }, [completedAt, queryClient, succeeded])
+
+  return query
 }
 
 export function useInitiateBoursoAuth() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ customerId, password }: { customerId: string; password: string }) =>
       boursoApi.initiateAuth(customerId, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: syncKeys.bourso() })
+    },
   })
 }
 
 export function useCompleteBoursoAuth() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ processId, code }: { processId: string; code: string }) =>
-      boursoApi.completeAuth(processId, code),
-    onSuccess: () => {
+    mutationFn: ({ processId }: { processId: string }) => boursoApi.completeAuth(processId),
+    onSuccess: status => {
+      queryClient.setQueryData(syncKeys.bourso(), status)
       queryClient.invalidateQueries({ queryKey: syncKeys.bourso() })
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
 }
@@ -246,7 +262,18 @@ export function useCompleteBoursoAuth() {
 export function useSyncBourso() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: () => boursoApi.sync(),
+    mutationFn: boursoApi.sync,
+    onSuccess: status => {
+      queryClient.setQueryData(syncKeys.bourso(), status)
+      queryClient.invalidateQueries({ queryKey: syncKeys.bourso() })
+    },
+  })
+}
+
+export function useClearBoursoSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: boursoApi.clearSession,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: syncKeys.bourso() })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })

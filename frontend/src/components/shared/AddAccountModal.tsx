@@ -18,6 +18,7 @@ import { AddPropertyModal } from '@/components/property/AddPropertyModal'
 import { BankCountrySelect, DEFAULT_BANK_COUNTRY } from '@/components/shared/BankCountrySelect'
 import { CurrencyDisplay } from '@/components/shared/CurrencyDisplay'
 import { BourseDirectPanel } from '@/components/sync/BourseDirectPanel'
+import { BoursoPanel } from '@/components/sync/BoursoPanel'
 import { DegiroPanel } from '@/components/sync/DegiroPanel'
 import { AmundiPanel } from '@/components/sync/AmundiPanel'
 import {
@@ -79,8 +80,8 @@ interface AddAccountModalProps {
 }
 
 type WizardStep =
-  | 'selector' | 'banks' | 'exchanges' | 'wallets' | 'tr' | 'bourseDirect'
-  | 'degiro' | 'amundi' | 'finary' | 'property' | 'manual'
+  | 'selector' | 'banks' | 'exchanges' | 'wallets' | 'tr' | 'bourso'
+  | 'bourseDirect' | 'degiro' | 'amundi' | 'finary' | 'property' | 'manual'
 
 /**
  * Masked variant of InputOTPSlot — replaces the typed character with a bullet
@@ -117,6 +118,7 @@ const SOURCES: { key: WizardStep; icon: typeof Landmark; labelKey: string; descK
   { key: 'exchanges', icon: ArrowLeftRight, labelKey: 'sync.exchanges.title', descKey: 'addAccount.desc.exchanges' },
   { key: 'wallets', icon: Wallet, labelKey: 'sync.wallets.title', descKey: 'addAccount.desc.wallets' },
   { key: 'tr', icon: Smartphone, labelKey: 'sync.tr.title', descKey: 'addAccount.desc.tr' },
+  { key: 'bourso', icon: Landmark, labelKey: 'sync.bourso.title', descKey: 'addAccount.desc.bourso' },
   { key: 'bourseDirect', icon: BriefcaseBusiness, labelKey: 'sync.bourseDirect.title', descKey: 'addAccount.desc.bourseDirect' },
   { key: 'degiro', icon: TrendingUp, labelKey: 'sync.degiro.title', descKey: 'addAccount.desc.degiro' },
   { key: 'amundi', icon: PiggyBank, labelKey: 'sync.amundi.title', descKey: 'addAccount.desc.amundi' },
@@ -252,6 +254,12 @@ export function AddAccountModal({ open, onOpenChange }: AddAccountModalProps) {
               {step === 'exchanges' && <ExchangeWizard onDone={handleDone} onBack={() => setStep('selector')} />}
               {step === 'wallets' && <WalletWizard onDone={handleDone} onBack={() => setStep('selector')} />}
               {step === 'tr' && <TradeRepublicWizard onDone={handleDone} onBack={() => setStep('selector')} />}
+              {step === 'bourso' && (
+                <>
+                  <BackButton onClick={() => setStep('selector')} />
+                  <BoursoPanel onConnected={handleDone} />
+                </>
+              )}
               {step === 'bourseDirect' && (
                 <>
                   <BackButton onClick={() => setStep('selector')} />

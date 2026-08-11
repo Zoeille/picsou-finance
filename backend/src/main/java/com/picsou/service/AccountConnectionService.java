@@ -44,13 +44,14 @@ public class AccountConnectionService {
     private static final String AMUNDI_PREFIX = "amundi_";
     private static final String TR_PREFIX = "tr_";
     private static final String BOURSE_DIRECT_PREFIX = "bd_";
+    private static final String BOURSO_PREFIX = "bourso_";
     private static final String IBKR_PREFIX = "ibkr_";
     private static final String DEGIRO_EXTERNAL_ID = "degiro-portfolio";
 
     /** One connection instance. {@code discriminator} separates two of the same kind. */
     public record ConnectionRef(Kind kind, String discriminator) {}
 
-    public enum Kind { WALLET, EXCHANGE, AMUNDI, TRADE_REPUBLIC, BOURSE_DIRECT, IBKR, DEGIRO, ENABLE_BANKING }
+    public enum Kind { WALLET, EXCHANGE, AMUNDI, TRADE_REPUBLIC, BOURSE_DIRECT, BOURSO, IBKR, DEGIRO, ENABLE_BANKING }
 
     /** What deleting an account is about to cost, for the confirmation dialog. */
     public record DeletionImpact(boolean removesConnection, String connectionLabel) {}
@@ -65,6 +66,7 @@ public class AccountConnectionService {
     private final AmundiSyncService amundiSyncService;
     private final TradeRepublicSyncService tradeRepublicSyncService;
     private final BourseDirectSyncService bourseDirectSyncService;
+    private final BoursoSyncService boursoSyncService;
     private final DegiroSyncService degiroSyncService;
     private final IbkrSyncService ibkrSyncService;
     private final SyncService syncService;
@@ -80,6 +82,7 @@ public class AccountConnectionService {
         AmundiSyncService amundiSyncService,
         TradeRepublicSyncService tradeRepublicSyncService,
         BourseDirectSyncService bourseDirectSyncService,
+        BoursoSyncService boursoSyncService,
         DegiroSyncService degiroSyncService,
         IbkrSyncService ibkrSyncService,
         SyncService syncService
@@ -94,6 +97,7 @@ public class AccountConnectionService {
         this.amundiSyncService = amundiSyncService;
         this.tradeRepublicSyncService = tradeRepublicSyncService;
         this.bourseDirectSyncService = bourseDirectSyncService;
+        this.boursoSyncService = boursoSyncService;
         this.degiroSyncService = degiroSyncService;
         this.ibkrSyncService = ibkrSyncService;
         this.syncService = syncService;
@@ -162,6 +166,7 @@ public class AccountConnectionService {
             if (externalId.startsWith(AMUNDI_PREFIX)) return singleton(Kind.AMUNDI);
             if (externalId.startsWith(TR_PREFIX)) return singleton(Kind.TRADE_REPUBLIC);
             if (externalId.startsWith(BOURSE_DIRECT_PREFIX)) return singleton(Kind.BOURSE_DIRECT);
+            if (externalId.startsWith(BOURSO_PREFIX)) return singleton(Kind.BOURSO);
             if (externalId.startsWith(IBKR_PREFIX)) return singleton(Kind.IBKR);
             if (externalId.equals(DEGIRO_EXTERNAL_ID)) return singleton(Kind.DEGIRO);
         }
@@ -198,6 +203,7 @@ public class AccountConnectionService {
             case AMUNDI -> amundiSyncService.clearSession(memberId);
             case TRADE_REPUBLIC -> tradeRepublicSyncService.clearSession(memberId);
             case BOURSE_DIRECT -> bourseDirectSyncService.clearSession(memberId);
+            case BOURSO -> boursoSyncService.clearSession(memberId);
             case DEGIRO -> degiroSyncService.clearSession(memberId);
             case IBKR -> ibkrSyncService.deleteConnection(memberId);
             case ENABLE_BANKING -> syncService.deleteRequisition(Long.valueOf(ref.discriminator()), memberId);
@@ -215,6 +221,7 @@ public class AccountConnectionService {
             case AMUNDI -> "Amundi";
             case TRADE_REPUBLIC -> "Trade Republic";
             case BOURSE_DIRECT -> "Bourse Direct";
+            case BOURSO -> "BoursoBank";
             case DEGIRO -> "DEGIRO";
             case IBKR -> "Interactive Brokers";
             case ENABLE_BANKING -> requisitionRepository

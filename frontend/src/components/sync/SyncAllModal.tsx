@@ -33,7 +33,6 @@ import {
   Lock,
   PiggyBank,
   ShieldCheck,
-  User,
 } from 'lucide-react'
 import {
   useBankSyncStatus,
@@ -49,8 +48,6 @@ import {
   useInitiateTrAuth,
   useCompleteTrAuth,
   useSyncBourso,
-  useInitiateBoursoAuth,
-  useCompleteBoursoAuth,
   useReconnectBankSync,
   useAmundiStatus,
   useSyncAmundi,
@@ -96,6 +93,7 @@ const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{
 /** Which Sync-page tab each provider re-authenticates on. */
 const REAUTH_TAB: Partial<Record<SyncConnection['providerType'], string>> = {
   amundi: 'amundi',
+  bourso: 'bourso',
   'bourse-direct': 'bourse-direct',
   degiro: 'degiro',
   ibkr: 'ibkr',
@@ -144,10 +142,8 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const { data: ibkrStatus } = useIbkrStatus()
   const { data: accounts } = useAccounts()
 
-  // Detect if user has a TR / BoursoBank account
-  const hasTrAccount     = accounts?.some(a => a.provider === 'Trade Republic') ?? false
-  // BoursoBank disabled for 1.0.0 — sidecar integration not finished.
-  const hasBoursoAccount = false
+  // Detect if user has a TR account
+  const hasTrAccount = accounts?.some(a => a.provider === 'Trade Republic') ?? false
 
   // Mutations
   /**
@@ -162,6 +158,11 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       type: 'amundi' as const, name: 'Amundi', provider: 'Amundi Épargne Salariale',
       active: amundiStatus?.isActive ?? false, lastSyncedAt: amundiStatus?.lastSyncCompletedAt ?? null,
       failed: amundiStatus?.syncStatus === 'FAILED',
+    },
+    {
+      type: 'bourso' as const, name: 'BoursoBank', provider: 'BoursoBank',
+      active: boursoStatus?.isActive ?? false, lastSyncedAt: boursoStatus?.lastSyncCompletedAt ?? null,
+      failed: boursoStatus?.syncStatus === 'FAILED',
     },
     {
       type: 'bourse-direct' as const, name: 'Bourse Direct', provider: 'Bourse Direct',
@@ -182,7 +183,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       active: ibkrStatus?.connected ?? false, lastSyncedAt: ibkrStatus?.lastSyncedAt ?? null,
       failed: ibkrStatus?.status === 'ERROR',
     },
-  ], [amundiStatus, bourseDirectStatus, degiroStatus, ibkrStatus])
+  ], [amundiStatus, boursoStatus, bourseDirectStatus, degiroStatus, ibkrStatus])
 
   const retryBankMutation    = useRetryBankSync()
   const syncExchangeMutation = useSyncCryptoExchange()
@@ -191,8 +192,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const initiateTrMutation   = useInitiateTrAuth()
   const completeTrMutation   = useCompleteTrAuth()
   const syncBoursoMutation   = useSyncBourso()
-  const initiateBoursoMutation = useInitiateBoursoAuth()
-  const completeBoursoMutation = useCompleteBoursoAuth()
   const reconnectBankMutation = useReconnectBankSync()
   const syncAmundiMutation       = useSyncAmundi()
   const syncBourseDirectMutation = useSyncBourseDirect()
@@ -212,14 +211,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
 
   // Per-connection sync/retry errors, keyed by connection id
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
-
-  // BoursoBank inline auth state
-  const [boursoAuthStep, setBoursoAuthStep] = useState<'idle' | 'credentials' | 'mfa'>('idle')
-  const [boursoCustomerId, setBoursoCustomerId] = useState('')
-  const [boursoPassword, setBoursoPassword] = useState('')
-  const [boursoMfaCode, setBoursoMfaCode] = useState('')
-  const [boursoProcessId, setBoursoProcessId] = useState<string | null>(null)
-  const [boursoMfaInfo, setBoursoMfaInfo] = useState<{ type: string; contact: string } | null>(null)
 
   const isLoading = banksLoading || exchangesLoading || walletsLoading
 
@@ -277,16 +268,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         lastSyncedAt: trAccount?.lastSyncedAt ?? null,
       })
     }
-    if (hasBoursoAccount) {
-      const boursoAccount = accounts?.find(a => a.provider === 'BoursoBank')
-      list.push({
-        id: 'bourso',
-        providerType: 'bourso',
-        name: 'BoursoBank',
-        status: boursoStatus?.isActive ? 'active' : 'SESSION_EXPIRED',
-        lastSyncedAt: boursoAccount?.lastSyncedAt ?? null,
-      })
-    }
     for (const provider of sessionProviders) {
       const hasAccount = accounts?.some(a => a.provider === provider.provider) ?? false
       if (!provider.active && !hasAccount) continue
@@ -315,18 +296,13 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       })
     }
     return list
-  }, [banks, exchanges, wallets, hasTrAccount, accounts, trStatus?.isActive, hasBoursoAccount, boursoStatus?.isActive, finaryStatus, sessionProviders])
+  }, [banks, exchanges, wallets, hasTrAccount, accounts, trStatus?.isActive, finaryStatus, sessionProviders])
 
   const handleSync = useCallback((connection: SyncConnection) => {
     // TR without active session: open inline auth instead of syncing
     if (connection.providerType === 'tr' && !trStatus?.isActive) {
       setTrAuthError(null)
       setTrAuthStep('phone')
-      return
-    }
-    // Bourso without active session: open inline auth
-    if (connection.providerType === 'bourso' && !boursoStatus?.isActive) {
-      setBoursoAuthStep('credentials')
       return
     }
     // The remaining session providers each re-authenticate through their own multi-step form
@@ -408,7 +384,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     }
   }, [
     trStatus?.isActive,
-    boursoStatus?.isActive,
     retryBankMutation,
     syncExchangeMutation,
     syncWalletMutation,
@@ -430,9 +405,8 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const isBatchSyncable = useCallback((c: SyncConnection) =>
     c.providerType !== 'finary' &&
     !c.needsReauth &&
-    !(c.providerType === 'tr' && !trStatus?.isActive) &&
-    !(c.providerType === 'bourso' && !boursoStatus?.isActive)
-  , [trStatus?.isActive, boursoStatus?.isActive])
+    !(c.providerType === 'tr' && !trStatus?.isActive)
+  , [trStatus?.isActive])
 
   const handleSyncAll = useCallback(() => {
     connections
@@ -511,55 +485,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     setTrAuthError(null)
   }
 
-  // --- BoursoBank inline auth ---
-  function handleBoursoInitiate(e: React.FormEvent) {
-    e.preventDefault()
-    initiateBoursoMutation.mutate(
-      { customerId: boursoCustomerId, password: boursoPassword },
-      {
-        onSuccess: (data) => {
-          if (!data.mfaRequired) {
-            setBoursoAuthStep('idle')
-            setBoursoCustomerId('')
-            setBoursoPassword('')
-            queryClient.invalidateQueries({ queryKey: ['accounts'] })
-            queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-            queryClient.invalidateQueries({ queryKey: ['sync', 'bourso'] })
-          } else {
-            setBoursoProcessId(data.processId)
-            setBoursoMfaInfo({ type: data.mfaType ?? 'MFA', contact: data.contact ?? '' })
-            setBoursoAuthStep('mfa')
-          }
-        },
-      },
-    )
-  }
-
-  function handleBoursoComplete(e: React.FormEvent) {
-    e.preventDefault()
-    if (!boursoProcessId) return
-    completeBoursoMutation.mutate(
-      { processId: boursoProcessId, code: boursoMfaCode },
-      {
-        onSuccess: () => {
-          resetBoursoAuth()
-          queryClient.invalidateQueries({ queryKey: ['accounts'] })
-          queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-          queryClient.invalidateQueries({ queryKey: ['sync', 'bourso'] })
-        },
-      },
-    )
-  }
-
-  function resetBoursoAuth() {
-    setBoursoAuthStep('idle')
-    setBoursoCustomerId('')
-    setBoursoPassword('')
-    setBoursoMfaCode('')
-    setBoursoProcessId(null)
-    setBoursoMfaInfo(null)
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -598,7 +523,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
               const isSyncing = syncingIds.has(connection.id)
               const isFinary = connection.providerType === 'finary'
               const isTr = connection.providerType === 'tr'
-              const isBourso = connection.providerType === 'bourso'
               // Sends the user to the tab owning that provider's auth form rather than syncing.
               const opensTab = connection.needsReauth && REAUTH_TAB[connection.providerType] !== undefined
 
@@ -613,8 +537,8 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                             <span className="text-sm font-medium">{connection.name}</span>
                             <Badge variant={statusVariant(connection.status)} className="text-xs">
                               {connection.status === 'SESSION_EXPIRED'
-                                ? (isTr || isBourso)
-                                  ? t(isBourso ? 'sync.bourso.noSession' : 'sync.tr.noSession')
+                                ? isTr
+                                  ? t('sync.tr.noSession')
                                   : t('sync.all.sessionExpired')
                                 : connection.status}
                             </Badge>
@@ -685,87 +609,6 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         </Button>
                       </div>
                     </div>
-
-                    {/* BoursoBank inline auth form */}
-                    {isBourso && boursoAuthStep !== 'idle' && !boursoStatus?.isActive && (
-                      <div className="mt-3 border-t pt-3">
-                        {boursoAuthStep === 'credentials' && (
-                          <form onSubmit={handleBoursoInitiate} className="space-y-3">
-                            <div className="space-y-1">
-                              <Label htmlFor="bourso-modal-id">
-                                <User className="size-3 inline-block mr-1" />
-                                {t('sync.bourso.customerId')}
-                              </Label>
-                              <Input
-                                id="bourso-modal-id"
-                                type="text"
-                                inputMode="numeric"
-                                value={boursoCustomerId}
-                                onChange={e => setBoursoCustomerId(e.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="bourso-modal-pwd">
-                                <Lock className="size-3 inline-block mr-1" />
-                                {t('sync.bourso.password')}
-                              </Label>
-                              <Input
-                                id="bourso-modal-pwd"
-                                type="password"
-                                inputMode="numeric"
-                                value={boursoPassword}
-                                onChange={e => setBoursoPassword(e.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <Button type="submit" size="sm" disabled={initiateBoursoMutation.isPending}>
-                                {initiateBoursoMutation.isPending && <Loader2 className="size-3 animate-spin" />}
-                                {t('sync.bourso.connect')}
-                              </Button>
-                              <Button type="button" size="sm" variant="outline" onClick={resetBoursoAuth}>
-                                {t('common.cancel')}
-                              </Button>
-                            </div>
-                          </form>
-                        )}
-                        {boursoAuthStep === 'mfa' && (
-                          <form onSubmit={handleBoursoComplete} className="space-y-3">
-                            {boursoMfaInfo && (
-                              <p className="text-xs text-muted-foreground">
-                                {t('sync.bourso.mfaPrompt', { mfaType: boursoMfaInfo.type, contact: boursoMfaInfo.contact })}
-                              </p>
-                            )}
-                            <div className="space-y-1">
-                              <Label htmlFor="bourso-modal-mfa">
-                                <ShieldCheck className="size-3 inline-block mr-1" />
-                                {t('sync.bourso.mfaCode')}
-                              </Label>
-                              <Input
-                                id="bourso-modal-mfa"
-                                type="text"
-                                inputMode="numeric"
-                                autoComplete="one-time-code"
-                                value={boursoMfaCode}
-                                onChange={e => setBoursoMfaCode(e.target.value)}
-                                autoFocus
-                                required
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <Button type="submit" size="sm" disabled={completeBoursoMutation.isPending}>
-                                {completeBoursoMutation.isPending && <Loader2 className="size-3 animate-spin" />}
-                                {t('sync.bourso.connect')}
-                              </Button>
-                              <Button type="button" size="sm" variant="outline" onClick={resetBoursoAuth}>
-                                {t('common.cancel')}
-                              </Button>
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    )}
 
                     {/* TR inline auth form */}
                     {isTr && trAuthStep !== 'idle' && !trStatus?.isActive && (

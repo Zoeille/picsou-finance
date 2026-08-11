@@ -48,7 +48,7 @@ com.picsou/
 ├── adapter/        Port implementations + util/BitcoinKeyUtils
 │   ├── EnableBankingBankConnector (bank sync)
 │   ├── PowensBankConnector (Powens / Budget Insight — experimental, disabled in 1.0.0)
-│   ├── BoursoAdapter (BoursoBank — disabled in 1.0.0)
+│   ├── BoursoAdapter (BoursoBank — current accounts, livrets and PEA/CTO sidecar)
 │   ├── DegiroAdapter (DEGIRO — compte-titres sync; requires `degiro-auth` uncommented in docker-compose.yml)
 │   ├── CoinGeckoPriceProvider, YahooFinancePriceProvider (prices)
 │   ├── OpenFigiIsinConverter (ISIN → Yahoo ticker)
@@ -248,7 +248,7 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 | Trade Republic | Broker sync via Python microservice | `TR_AUTH_URL` |
 | Bourse Direct | PEA/CTO sync via internal Python sidecar | `BOURSE_DIRECT_AUTH_URL` |
 | Amundi Épargne Salariale | PEE/PEG/PERCO/PER sync via internal Python sidecar | `AMUNDI_AUTH_URL` |
-| BoursoBank | Bank sync via Python sidecar (**disabled in 1.0.0**) | `BOURSO_AUTH_URL` |
+| BoursoBank | Current accounts, livrets and PEA/CTO sync via internal Python sidecar | `BOURSO_AUTH_URL` |
 | DEGIRO | Compte-titres sync via internal Python sidecar (sidecar off by default — uncomment in `docker-compose.yml`) | `DEGIRO_AUTH_URL` |
 | Binance | Crypto exchange balances | Via CryptoExchangePort |
 | Meria | Crypto exchange balances (wallets + staking + lending) | Via CryptoExchangePort |
@@ -273,10 +273,6 @@ Computed on the fly from `Debt` (principal, rate, term, fees) — no per-month r
 
 ## Disabled / experimental integrations
 
-- **BoursoBank** — code (adapter, controller, V23 migration) and Python sidecar
-  ship in 1.0.0 but the sidecar is commented out in `docker-compose.yml` and all
-  UI entry points (setup wizard catalog, sync tab, admin toggle) are hidden.
-  Re-enable only after the integration is finished and reviewed.
 - **Powens / Budget Insight** — `PowensBankConnector` ships in 1.0.0 but is
   experimental and has not been tested end-to-end against a real Powens tenant.
   The `@Primary` annotation was removed so Enable Banking remains the injected

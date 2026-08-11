@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **BoursoBank sync — current accounts, livrets and, above all, the PEA.**
+  Enable Banking cannot reach a securities account (PSD2 covers payment accounts
+  only), so the envelope that often holds the largest balance was invisible.
+  Picsou now signs in to BoursoBank directly and imports the current accounts,
+  the livrets and the PEA/CTO with their cash, their total and every open
+  position. A browserless Python sidecar handles the login: BoursoBank hands out
+  its one anti-bot token in the page itself, so no Chromium is needed. The
+  virtual keyboard — whose digits are images rather than text, on purpose — is
+  decoded by matching each button's SVG. Only app validation is supported as a
+  second factor; an SMS prompt is reported as such rather than as a wrong
+  password, since every failed attempt counts toward a lockout. Credentials are
+  never persisted, only the encrypted session. A portfolio whose total does not
+  reconcile with its lines is refused wholesale and the last valid data kept.
+  Accounts BoursoBank aggregates from *other* banks are deliberately left out —
+  they would duplicate an Enable Banking connection. Reachable from the Sync
+  page, the Add-account modal and the setup wizard, in all four locales.
+  See [feature notes](docs/features/bourso-bank.md) and the
+  [ADR](docs/decisions/2026-08-11-boursobank-httpx-sidecar.md).
 - **Amundi Épargne Salariale sync.** Connect an Amundi account and import every
   funded employee savings plan — PEE/PEG, PERCO, PER Collectif — as its own
   account, leaving emptied and closed dispositifs out,

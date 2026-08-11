@@ -40,6 +40,11 @@ jobs:
             context: services/amundi-auth
             dockerfile: services/amundi-auth/Dockerfile
             versioned: false
+          - name: bourso-auth
+            image: ${{ github.repository }}/bourso-auth
+            context: services/bourso-auth
+            dockerfile: services/bourso-auth/Dockerfile
+            versioned: false
 
     steps:
       - name: Checkout

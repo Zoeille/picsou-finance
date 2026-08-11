@@ -60,7 +60,7 @@ function mockStatusEndpoints() {
       case '/tr/status':
         return Promise.resolve({ data: { isActive: false, expiresAt: null } })
       case '/bourso/status':
-        return Promise.resolve({ data: { isActive: false, expiresAt: null } })
+        return Promise.resolve({ data: { isActive: false, syncStatus: 'IDLE', lastSyncError: null, lastSyncStartedAt: null, lastSyncCompletedAt: null } })
       case '/finary/status':
         return Promise.resolve({ data: { connected: false, status: null, lastSyncedAt: null } })
       case '/amundi/status':

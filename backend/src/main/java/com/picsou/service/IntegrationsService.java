@@ -4,6 +4,7 @@ import com.picsou.config.EnableBankingConfigProvider;
 import com.picsou.model.AppSetting;
 import com.picsou.repository.AppSettingRepository;
 import com.picsou.repository.BourseDirectSessionRepository;
+import com.picsou.repository.BoursoSessionRepository;
 import com.picsou.repository.FinarySessionRepository;
 import com.picsou.repository.TradeRepublicSessionRepository;
 import org.slf4j.Logger;
@@ -34,17 +35,20 @@ public class IntegrationsService {
     private final TradeRepublicSessionRepository tradeRepublicSessions;
     private final FinarySessionRepository finarySessions;
     private final BourseDirectSessionRepository bourseDirectSessions;
+    private final BoursoSessionRepository boursoSessions;
 
     public IntegrationsService(AppSettingRepository settingRepository,
                                EnableBankingConfigProvider enableBankingConfig,
                                TradeRepublicSessionRepository tradeRepublicSessions,
                                FinarySessionRepository finarySessions,
-                               BourseDirectSessionRepository bourseDirectSessions) {
+                               BourseDirectSessionRepository bourseDirectSessions,
+                               BoursoSessionRepository boursoSessions) {
         this.settingRepository = settingRepository;
         this.enableBankingConfig = enableBankingConfig;
         this.tradeRepublicSessions = tradeRepublicSessions;
         this.finarySessions = finarySessions;
         this.bourseDirectSessions = bourseDirectSessions;
+        this.boursoSessions = boursoSessions;
     }
 
     @Transactional
@@ -84,9 +88,10 @@ public class IntegrationsService {
      *       ({@link EnableBankingConfigProvider#isConfiguredLenient()}).</li>
      *   <li><strong>traderepublic</strong> / <strong>finary</strong> — a login
      *       session row exists (these have no env config; auth is runtime).</li>
-     *   <li><strong>boursobank</strong> (sidecar reachability, network-only) and
-     *       <strong>crypto</strong> (no config to detect) — no cheap signal, so
-     *       they fall back to the stored flag.</li>
+     *   <li><strong>boursedirect</strong> / <strong>boursobank</strong> — an
+     *       active sidecar session row exists.</li>
+     *   <li><strong>crypto</strong> (no config to detect) — no cheap signal, so
+     *       it falls back to the stored flag.</li>
      * </ul>
      *
      * <p>Because it ORs detection with the flag, this can only <em>reveal</em> a
@@ -107,6 +112,7 @@ public class IntegrationsService {
             case "traderepublic" -> tradeRepublicSessions.count() > 0;
             case "finary" -> finarySessions.count() > 0;
             case "boursedirect" -> bourseDirectSessions.existsByActiveTrue();
+            case "boursobank" -> boursoSessions.existsByActiveTrue();
             default -> false;
         };
     }

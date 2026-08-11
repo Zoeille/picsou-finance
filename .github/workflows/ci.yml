@@ -69,6 +69,27 @@ jobs:
           picsou-bourse-direct-auth:test
           python -m unittest discover -v
 
+  bourso-sidecar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the browserless sidecar image
+        run: docker build --tag picsou-bourso-auth:test services/bourso-auth
+      - name: Run parser, contract and lifecycle tests
+        run: >-
+          docker run --rm
+          --env PYTHONPATH=/app
+          --volume "${{ github.workspace }}/services/bourso-auth/fixtures.py:/tests/fixtures.py:ro"
+          --volume "${{ github.workspace }}/services/bourso-auth/test_virtual_pad.py:/tests/test_virtual_pad.py:ro"
+          --volume "${{ github.workspace }}/services/bourso-auth/test_accounts_parser.py:/tests/test_accounts_parser.py:ro"
+          --volume "${{ github.workspace }}/services/bourso-auth/test_main.py:/tests/test_main.py:ro"
+          --volume "${{ github.workspace }}/services/bourso-auth/test_lifecycle.py:/tests/test_lifecycle.py:ro"
+          --workdir /tests
+          picsou-bourso-auth:test
+          python -m unittest discover -v
+
   amundi-sidecar:
     runs-on: ubuntu-latest
     steps:

@@ -4,6 +4,8 @@ app:
     url: ${TR_AUTH_URL:http://127.0.0.1:8001}
   bourse-direct-auth:
     url: ${BOURSE_DIRECT_AUTH_URL:http://127.0.0.1:8002}
+  bourso-auth:
+    url: ${BOURSO_AUTH_URL:http://127.0.0.1:8004}
   enablebanking:
     private-key-path: ${ENABLEBANKING_PRIVATE_KEY_PATH:.local/keys/enablebanking-private.pem}
 

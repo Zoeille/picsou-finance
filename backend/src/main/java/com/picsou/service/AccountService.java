@@ -52,10 +52,15 @@ public class AccountService {
      * Yahoo cannot quote some of their instruments -- and never quotes Amundi's
      * FCPE units -- so a partial live total would understate these accounts,
      * for épargne salariale all the way down to zero. See {@link #liveBalanceEur}.
+     *
+     * <p>BoursoBank belongs here for a different reason: its trading board
+     * exposes only its own instrument symbol, so a line whose ISIN cannot be
+     * resolved is unpriceable by construction rather than by accident.
      */
     private static final Set<String> PROVIDER_VALUED = Set.of(
         BourseDirectSyncService.PROVIDER,
-        AmundiSyncService.PROVIDER
+        AmundiSyncService.PROVIDER,
+        BoursoSyncService.PROVIDER
     );
 
     private final AccountRepository accountRepository;

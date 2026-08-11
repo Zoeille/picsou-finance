@@ -451,6 +451,25 @@ class AccountServiceTest {
         assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("1234.56");
     }
 
+    /**
+     * BoursoBank's trading board exposes only its own instrument symbol, so a
+     * line whose ISIN never resolved is unpriceable by construction. Without the
+     * provider-valued fallback the PEA reads as its cash sleeve alone.
+     */
+    @Test
+    void liveBalanceEur_boursoBank_usesTheProviderTotalWhenALineKeptItsBoursoSymbol() {
+        Account account = Account.builder().id(5L).name("PEA DOE")
+            .type(AccountType.PEA).provider("BoursoBank")
+            .currency("EUR").currentBalance(new BigDecimal("143088.89")).build();
+        AccountHolding holding = AccountHolding.builder()
+            .ticker("1rTCW8").quantity(new BigDecimal("1000"))
+            .providerValueEur(new BigDecimal("140000.00")).build();
+        when(holdingRepository.findByAccount_Id(5L)).thenReturn(List.of(holding));
+        stubQuotes("1RTCW8", null);
+
+        assertThat(accountService.liveBalanceEur(account)).isEqualByComparingTo("143088.89");
+    }
+
     @Test
     void calculateInvestedAmount_includesCashAndPrefersBrokerEurCostBasis() {
         Account account = Account.builder().id(3L)

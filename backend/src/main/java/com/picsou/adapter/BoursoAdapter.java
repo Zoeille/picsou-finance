@@ -1,198 +1,252 @@
 package com.picsou.adapter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.picsou.exception.SyncException;
-import com.picsou.model.AccountType;
+import com.picsou.port.BoursoErrorCode;
 import com.picsou.port.BoursoPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 @Component
 public class BoursoAdapter implements BoursoPort {
-
     private static final Logger log = LoggerFactory.getLogger(BoursoAdapter.class);
+    private static final Duration DEFAULT_AUTH_TIMEOUT = Duration.ofSeconds(45);
+    /**
+     * An app push waits on a human unlocking their phone. The sidecar caps that
+     * wait at 120 s, so this has to sit above it or the adapter would time out
+     * on a validation that was about to succeed.
+     */
+    private static final Duration DEFAULT_VALIDATION_TIMEOUT = Duration.ofSeconds(150);
+    /**
+     * One dashboard fetch plus one trading-summary call and one ISIN lookup per
+     * distinct instrument. Generous because the ISIN lookups fan out.
+     */
+    private static final Duration DEFAULT_ACCOUNTS_TIMEOUT = Duration.ofSeconds(90);
 
-    private final WebClient    sidecarClient;
+    private final WebClient client;
     private final ObjectMapper objectMapper;
+    private final Duration authTimeout;
+    private final Duration validationTimeout;
+    private final Duration accountsTimeout;
 
+    @Autowired
     public BoursoAdapter(
-        ObjectMapper objectMapper,
-        @Value("${app.bourso-auth.url:http://bourso-auth:8001}") String boursoAuthUrl
+        @Value("${app.bourso-auth.url:http://bourso-auth:8001}") String url,
+        ObjectMapper objectMapper
     ) {
-        this.objectMapper   = objectMapper;
-        this.sidecarClient  = WebClient.builder()
-            .baseUrl(boursoAuthUrl)
-            .build();
+        this(
+            WebClient.builder().baseUrl(url).build(),
+            objectMapper,
+            DEFAULT_AUTH_TIMEOUT,
+            DEFAULT_VALIDATION_TIMEOUT,
+            DEFAULT_ACCOUNTS_TIMEOUT
+        );
+    }
+
+    BoursoAdapter(WebClient client, ObjectMapper objectMapper) {
+        this(client, objectMapper, DEFAULT_AUTH_TIMEOUT, DEFAULT_VALIDATION_TIMEOUT, DEFAULT_ACCOUNTS_TIMEOUT);
+    }
+
+    BoursoAdapter(
+        WebClient client,
+        ObjectMapper objectMapper,
+        Duration authTimeout,
+        Duration validationTimeout,
+        Duration accountsTimeout
+    ) {
+        this.client = client;
+        this.objectMapper = objectMapper;
+        this.authTimeout = authTimeout;
+        this.validationTimeout = validationTimeout;
+        this.accountsTimeout = accountsTimeout;
     }
 
     @Override
     public InitiateResult initiateAuth(String customerId, String password) {
-        log.info("Delegating BoursoBank auth initiation to bourso-auth sidecar");
-
-        JsonNode response = sidecarClient.post()
-            .uri("/initiate")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("customerId", customerId, "password", password))
-            .retrieve()
-            .bodyToMono(JsonNode.class)
-            .onErrorResume(WebClientResponseException.class, ex -> {
-                log.error("bourso-auth /initiate failed ({}) : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-                return Mono.error(new SyncException(
-                    "BoursoBank authentication failed. Please check your credentials and try again."));
-            })
-            .timeout(Duration.ofSeconds(30))
-            .blockOptional()
-            .orElseThrow(() -> new SyncException("No response from the BoursoBank service. Please try again later."));
-
-        String processId = response.path("processId").asText(null);
-        if (processId == null || processId.isBlank()) {
-            throw new SyncException("BoursoBank did not return a valid session. Please try again.");
-        }
-
-        boolean mfaRequired = response.path("mfaRequired").asBoolean(false);
-        if (!mfaRequired) {
-            String cookies = response.path("sessionCookies").asText(null);
-            if (cookies == null || cookies.isBlank()) {
-                throw new SyncException("BoursoBank authentication did not complete. Please try again.");
-            }
-            return new InitiateResult(processId, false, null, null, cookies);
-        }
-
-        return new InitiateResult(
-            processId,
-            true,
-            response.path("mfaType").asText("UNKNOWN"),
-            response.path("contact").asText(""),
-            null
+        return post(
+            "/initiate",
+            Map.of("customerId", customerId, "password", password),
+            InitiateResult.class,
+            authTimeout,
+            "Could not initiate BoursoBank authentication",
+            BoursoErrorCode.INVALID_CREDENTIALS
         );
     }
 
     @Override
-    public String completeAuth(String processId, String code) {
-        log.info("Delegating BoursoBank MFA completion to bourso-auth sidecar, processId={}", processId);
-
-        JsonNode response = sidecarClient.post()
-            .uri("/complete")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("processId", processId, "code", code))
-            .retrieve()
-            .bodyToMono(JsonNode.class)
-            .onErrorResume(WebClientResponseException.class, ex -> {
-                log.error("bourso-auth /complete failed ({}) : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-                return Mono.error(new SyncException(
-                    "The verification code is invalid or has expired. Please request a new one."));
-            })
-            .timeout(Duration.ofSeconds(60))
-            .blockOptional()
-            .orElseThrow(() -> new SyncException("No response from the BoursoBank service. Please try again later."));
-
-        String cookies = response.path("sessionCookies").asText(null);
-        if (cookies == null || cookies.isBlank()) {
-            throw new SyncException("BoursoBank verification did not complete. Please try again.");
-        }
-        return cookies;
+    public String completeAuth(String processId) {
+        // The sidecar forbids unknown fields but declares `code`, so the key has
+        // to carry an explicit null rather than be omitted.
+        Map<String, Object> body = new HashMap<>();
+        body.put("processId", processId);
+        body.put("code", null);
+        SessionResponse response = post(
+            "/complete",
+            body,
+            SessionResponse.class,
+            validationTimeout,
+            "Could not complete BoursoBank authentication",
+            BoursoErrorCode.APP_VALIDATION_TIMEOUT
+        );
+        return response.sessionState();
     }
 
     @Override
-    public List<BoursoAccountData> fetchAccounts(String sessionCookies) {
-        log.info("Fetching BoursoBank accounts via bourso-auth sidecar");
-
-        JsonNode response = sidecarClient.post()
-            .uri("/accounts")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("sessionCookies", sessionCookies))
-            .retrieve()
-            .bodyToMono(JsonNode.class)
-            .onErrorResume(WebClientResponseException.class, ex -> {
-                if (ex.getStatusCode().value() == 401) {
-                    return Mono.error(new SyncException("SESSION_EXPIRED"));
-                }
-                log.error("bourso-auth /accounts failed ({}) : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-                return Mono.error(new SyncException(
-                    "Could not fetch your BoursoBank accounts. Please try again later."));
-            })
-            .timeout(Duration.ofSeconds(60))
-            .blockOptional()
-            .orElseThrow(() -> new SyncException("No response from the BoursoBank service. Please try again later."));
-
-        List<BoursoAccountData> result = new ArrayList<>();
-        if (!response.isArray()) {
-            throw new SyncException("Unexpected response from the BoursoBank service. Please try again later.");
-        }
-
-        for (JsonNode acc : response) {
-            String externalId = acc.path("id").asText();
-            String name       = acc.path("name").asText();
-            AccountType type  = parseAccountType(acc.path("type").asText("OTHER"));
-            BigDecimal balance = BigDecimal.valueOf(acc.path("balance").asDouble(0));
-
-            List<BoursoPosition> positions = new ArrayList<>();
-            for (JsonNode p : acc.path("positions")) {
-                positions.add(new BoursoPosition(
-                    nullIfBlank(p.path("isin").asText()),
-                    p.path("symbol").asText(),
-                    p.path("label").asText(),
-                    BigDecimal.valueOf(p.path("quantity").asDouble(0)),
-                    BigDecimal.valueOf(p.path("buyingPrice").asDouble(0)),
-                    BigDecimal.valueOf(p.path("currentPrice").asDouble(0))
-                ));
-            }
-
-            List<BoursoTransaction> transactions = new ArrayList<>();
-            int skippedTransactions = 0;
-            for (JsonNode t : acc.path("transactions")) {
-                LocalDate txDate;
-                try {
-                    txDate = LocalDate.parse(t.path("date").asText());
-                } catch (DateTimeParseException ex) {
-                    skippedTransactions++;
-                    continue;
-                }
-                transactions.add(new BoursoTransaction(
-                    txDate,
-                    t.path("label").asText(),
-                    BigDecimal.valueOf(t.path("amount").asDouble(0)),
-                    t.path("category").asText("")
-                ));
-            }
-
-            if (skippedTransactions > 0) {
-                log.warn("BoursoBank account {}: dropped {} transaction(s) with an unparsable date",
-                    externalId, skippedTransactions);
-            }
-
-            result.add(new BoursoAccountData(externalId, name, type, balance, positions, transactions));
-        }
-
-        log.info("BoursoBank: fetched {} accounts", result.size());
-        return result;
-    }
-
-    private AccountType parseAccountType(String s) {
+    public List<AccountData> fetchAccounts(String sessionState) {
         try {
-            return AccountType.valueOf(s);
-        } catch (IllegalArgumentException ex) {
-            log.warn("BoursoBank returned unknown account type '{}' — mapping it to OTHER", s);
-            return AccountType.OTHER;
+            AccountData[] response = client.post().uri("/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("sessionState", sessionState))
+                .retrieve().bodyToMono(AccountData[].class)
+                .timeout(accountsTimeout).block();
+            if (response == null || response.length == 0) {
+                throw coded(
+                    BoursoErrorCode.PORTFOLIO_INCOMPLETE,
+                    "BoursoBank returned no account",
+                    null
+                );
+            }
+            return List.of(response);
+        } catch (RuntimeException ex) {
+            throw mapError("Could not fetch BoursoBank accounts", ex, null);
         }
     }
 
-    private String nullIfBlank(String s) {
-        return (s == null || s.isBlank()) ? null : s;
+    private <T> T post(
+        String path,
+        Object body,
+        Class<T> type,
+        Duration timeout,
+        String message,
+        BoursoErrorCode authenticationFailure
+    ) {
+        try {
+            T response = client.post().uri(path).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body).retrieve().bodyToMono(type)
+                .timeout(timeout).block();
+            if (response == null) {
+                throw coded(BoursoErrorCode.UPSTREAM_UNAVAILABLE, message, null);
+            }
+            return response;
+        } catch (RuntimeException ex) {
+            throw mapError(message, ex, authenticationFailure);
+        }
     }
+
+    private SyncException mapError(
+        String message,
+        RuntimeException ex,
+        BoursoErrorCode authenticationFailure
+    ) {
+        if (ex instanceof SyncException sync) return sync;
+        if (causedByTimeout(ex)) {
+            log.warn("{}: sidecar request timed out", message);
+            return coded(
+                BoursoErrorCode.UPSTREAM_UNAVAILABLE,
+                "BoursoBank took too long to respond. Please try again.",
+                ex
+            );
+        }
+        if (ex instanceof WebClientResponseException response) {
+            BoursoErrorCode upstreamCode = responseCode(response);
+            if (upstreamCode != null) {
+                return coded(upstreamCode, friendlyMessage(upstreamCode), ex);
+            }
+            if (response.getStatusCode().value() == 401 && authenticationFailure != null) {
+                return coded(authenticationFailure, friendlyMessage(authenticationFailure), ex);
+            }
+            if (response.getStatusCode().value() == 410) {
+                return coded(
+                    BoursoErrorCode.AUTH_ATTEMPT_EXPIRED,
+                    friendlyMessage(BoursoErrorCode.AUTH_ATTEMPT_EXPIRED),
+                    ex
+                );
+            }
+            if (response.getStatusCode().is5xxServerError()) {
+                log.warn("BoursoBank sidecar returned status {}", response.getStatusCode().value());
+                return coded(
+                    BoursoErrorCode.UPSTREAM_UNAVAILABLE,
+                    friendlyMessage(BoursoErrorCode.UPSTREAM_UNAVAILABLE),
+                    ex
+                );
+            }
+        }
+        log.error(message, ex);
+        return coded(BoursoErrorCode.UPSTREAM_UNAVAILABLE, message, ex);
+    }
+
+    private BoursoErrorCode responseCode(WebClientResponseException response) {
+        try {
+            JsonNode body = objectMapper.readTree(response.getResponseBodyAsString());
+            JsonNode detailNode = body.path("detail");
+            if (!detailNode.isTextual() || detailNode.asText().isBlank()) {
+                log.debug(
+                    "BoursoBank error response has no textual detail code (status={})",
+                    response.getStatusCode().value()
+                );
+                return null;
+            }
+            String detail = detailNode.asText();
+            try {
+                return BoursoErrorCode.valueOf(detail);
+            } catch (IllegalArgumentException ex) {
+                log.warn("BoursoBank sidecar returned unknown error code '{}'", detail);
+                return null;
+            }
+        } catch (JsonProcessingException ex) {
+            log.warn(
+                "Could not parse BoursoBank sidecar error response (status={})",
+                response.getStatusCode().value(),
+                ex
+            );
+            return null;
+        }
+    }
+
+    private boolean causedByTimeout(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof TimeoutException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private String friendlyMessage(BoursoErrorCode code) {
+        return switch (code) {
+            case INVALID_CREDENTIALS -> "BoursoBank rejected the customer number or password";
+            case MFA_TYPE_UNSUPPORTED ->
+                "BoursoBank asked for an SMS or e-mail code, which Picsou cannot handle. "
+                    + "Switch your BoursoBank security settings to app validation.";
+            case APP_VALIDATION_TIMEOUT -> "The BoursoBank app validation was not confirmed in time";
+            case AUTH_ATTEMPT_EXPIRED -> "The BoursoBank authentication attempt expired";
+            case SESSION_EXPIRED -> "The BoursoBank session expired";
+            case PORTFOLIO_INCOMPLETE -> "BoursoBank returned an incomplete portfolio";
+            case UPSTREAM_FORMAT_CHANGED -> "The BoursoBank website format changed";
+            case INVALID_DATA -> "BoursoBank returned invalid account data";
+            case UPSTREAM_UNAVAILABLE, INTERNAL_ERROR -> "BoursoBank is temporarily unavailable";
+        };
+    }
+
+    private SyncException coded(BoursoErrorCode code, String message, Throwable cause) {
+        return new SyncException(message, cause, code.name());
+    }
+
+    private record SessionResponse(String sessionState) {}
 }

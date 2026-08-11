@@ -518,6 +518,24 @@ handlers.set(key('POST', '/amundi/auth/complete'), () => demoAmundiStatus)
 handlers.set(key('POST', '/amundi/sync'), () => demoAmundiStatus)
 handlers.set(key('DELETE', '/amundi/session'), () => null)
 
+// BoursoBank — same convention. Its demo accounts already carry
+// `provider: 'BoursoBank'`, so without these the Sync-all modal would list a
+// connection whose status request falls through to `{}`.
+const demoBoursoStatus = {
+  isActive: false,
+  syncStatus: 'IDLE',
+  lastSyncStartedAt: null,
+  lastSyncCompletedAt: null,
+  lastSyncError: null,
+}
+handlers.set(key('GET', '/bourso/status'), () => demoBoursoStatus)
+handlers.set(key('POST', '/bourso/auth/initiate'), () => ({
+  processId: null, mfaRequired: false, mfaType: null,
+}))
+handlers.set(key('POST', '/bourso/auth/complete'), () => demoBoursoStatus)
+handlers.set(key('POST', '/bourso/sync'), () => demoBoursoStatus)
+handlers.set(key('DELETE', '/bourso/session'), () => null)
+
 // Trade Republic - session status
 handlers.set(key('GET', '/tr/status'), () => ({ isActive: false, expiresAt: null }))
 

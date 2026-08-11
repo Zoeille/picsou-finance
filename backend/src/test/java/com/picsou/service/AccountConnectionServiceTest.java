@@ -48,6 +48,7 @@ class AccountConnectionServiceTest {
     @Mock AmundiSyncService amundiSyncService;
     @Mock TradeRepublicSyncService tradeRepublicSyncService;
     @Mock BourseDirectSyncService bourseDirectSyncService;
+    @Mock BoursoSyncService boursoSyncService;
     @Mock DegiroSyncService degiroSyncService;
     @Mock IbkrSyncService ibkrSyncService;
     @Mock SyncService syncService;
@@ -56,8 +57,8 @@ class AccountConnectionServiceTest {
         return new AccountConnectionService(
             accountRepository, accountService, walletRepository, exchangeSessionRepository,
             requisitionRepository, walletSyncService, cryptoExchangeSyncService, amundiSyncService,
-            tradeRepublicSyncService, bourseDirectSyncService, degiroSyncService, ibkrSyncService,
-            syncService);
+            tradeRepublicSyncService, bourseDirectSyncService, boursoSyncService, degiroSyncService,
+            ibkrSyncService, syncService);
     }
 
     private static Account account(long id, String externalId) {
@@ -161,6 +162,10 @@ class AccountConnectionServiceTest {
         given(account(10L, "bd_12345"));
         service().deleteAccount(10L, MEMBER_ID);
         verify(bourseDirectSyncService).clearSession(MEMBER_ID);
+
+        given(account(15L, "bourso_a8a23172b7e7c91c538831578242112e"));
+        service().deleteAccount(15L, MEMBER_ID);
+        verify(boursoSyncService).clearSession(MEMBER_ID);
 
         given(account(20L, "degiro-portfolio"));
         service().deleteAccount(20L, MEMBER_ID);

@@ -527,16 +527,44 @@ export interface IbkrConnectionStatus {
   maskedToken: string | null
 }
 
-export interface BoursoSessionStatus {
+interface BoursoSessionStatusBase {
   isActive: boolean
-  expiresAt: string | null
+  lastSyncStartedAt: string | null
+  lastSyncCompletedAt: string | null
 }
 
+export type BoursoSessionStatus =
+  | (BoursoSessionStatusBase & {
+      syncStatus: 'FAILED'
+      lastSyncError: BoursoErrorCode
+    })
+  | (BoursoSessionStatusBase & {
+      syncStatus: 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCESS'
+      lastSyncError: null
+    })
+
+/**
+ * No `INVALID_OTP`: BoursoBank's app validation is the only second factor the
+ * connector drives, so there is never a code to reject. An SMS or e-mail prompt
+ * surfaces as `MFA_TYPE_UNSUPPORTED` instead.
+ */
+export type BoursoErrorCode =
+  | 'INVALID_CREDENTIALS'
+  | 'MFA_TYPE_UNSUPPORTED'
+  | 'APP_VALIDATION_TIMEOUT'
+  | 'AUTH_ATTEMPT_EXPIRED'
+  | 'SESSION_EXPIRED'
+  | 'PORTFOLIO_INCOMPLETE'
+  | 'UPSTREAM_FORMAT_CHANGED'
+  | 'UPSTREAM_UNAVAILABLE'
+  | 'INVALID_DATA'
+  | 'INTERNAL_ERROR'
+
+/** `mfaType` is always `APP_PUSH` when a second factor is required. */
 export interface BoursoAuthInitResponse {
   processId: string | null
   mfaRequired: boolean
-  mfaType: string | null
-  contact: string | null
+  mfaType: 'APP_PUSH' | null
 }
 
 export type DegiroSessionStatusValue = 'ACTIVE' | 'REAUTH_REQUIRED' | 'FAILED'

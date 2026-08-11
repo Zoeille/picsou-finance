@@ -149,16 +149,20 @@ export const boursoApi = {
       .post<BoursoAuthInitResponse>('/bourso/auth/initiate', { customerId, password })
       .then(r => r.data),
 
-  completeAuth: (processId: string, code: string) =>
+  // No code: the user approves the push in the BoursoBank app, and the request
+  // stays open until they do.
+  completeAuth: (processId: string) =>
     api
-      .post<BoursoSessionStatus>('/bourso/auth/complete', { processId, code })
+      .post<BoursoSessionStatus>('/bourso/auth/complete', { processId })
       .then(r => r.data),
 
   sync: () =>
-    api.post<Account[]>('/bourso/sync').then(r => r.data),
+    api.post<BoursoSessionStatus>('/bourso/sync').then(r => r.data),
 
   getStatus: () =>
-    api.get<BoursoSessionStatus>('/bourso/status').then(r => r.data),
+    api
+      .get<BoursoSessionStatus>('/bourso/status', { skipGlobalErrorRedirect: true })
+      .then(r => r.data),
 
   clearSession: () =>
     api.delete('/bourso/session'),

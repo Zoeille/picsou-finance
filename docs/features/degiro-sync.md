@@ -240,4 +240,4 @@ keeping an eye on across future syncs, especially the 2FA response shape.
 - ADR: [Session-only, no stored TOTP secret](../decisions/2026-08-05-degiro-session-only-no-stored-totp.md)
 - Related ADR: [Ports and adapters](../decisions/2026-01-01-ports-and-adapters.md)
 - Related ADR: [Bourse Direct isolated sidecar](../decisions/2026-07-21-bourse-direct-isolated-atomic-sync.md) (the "fail closed, never overwrite last known good" discipline this integration follows)
-- Sibling integration: [bourso-bank.md](bourso-bank.md) (closest architectural analog — `httpx`-only sidecar, also unwired from the UI)
+- Sibling integration: [bourso-bank.md](bourso-bank.md) (closest architectural analog — `httpx`-only sidecar, no browser)

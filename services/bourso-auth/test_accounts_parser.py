@@ -1,0 +1,253 @@
+"""Parsing rules for the dashboard HTML and the trading board's JSON.
+
+Every case here is a way a partial or misread response could quietly replace a
+correct portfolio. The dashboard cases run against `fixtures.DASHBOARD_HTML`,
+which is markup BoursoBank actually served.
+"""
+
+import unittest
+from decimal import Decimal
+
+from accounts_parser import (
+    FORMAT_CHANGED,
+    INCOMPLETE,
+    INVALID_DATA,
+    AccountsFormatError,
+    account_type,
+    assign_tickers,
+    is_own_account,
+    money_close,
+    parse_amount,
+    parse_dashboard,
+    parse_trading_summary,
+)
+from fixtures import DASHBOARD_HTML
+
+
+def money(value, currency="EUR"):
+    return {"value": value, "decimals": 2, "currency": currency}
+
+
+def summary(cash="100.00", valuation="900.00", total="1000.00", positions=None):
+    return [
+        {
+            "id": "acc",
+            "account": {
+                "name": "PEA DOE",
+                "currency": "EUR",
+                "balance": money(0),
+                "cash": money(cash),
+                "valuation": money(valuation),
+                "total": money(total),
+                "gainLoss": money("120.00"),
+            },
+            "positions": positions if positions is not None else [position()],
+        }
+    ]
+
+
+def position(symbol="1rTCW8", quantity="10", amount="900.00", currency="EUR", **overrides):
+    raw = {
+        "symbol": symbol,
+        "label": "Amundi MSCI World",
+        "permalink": f"/cours/{symbol}/",
+        "quantity": {"value": quantity, "decimals": 4, "currency": None},
+        "buyingPrice": money("75.00"),
+        "amount": money(amount, currency),
+        "last": money("90.00"),
+        "gainLoss": money("150.00"),
+    }
+    raw.update(overrides)
+    return raw
+
+
+class AmountTest(unittest.TestCase):
+    def test_parses_french_formatting(self):
+        self.assertEqual(parse_amount("11 010,00"), Decimal("11010.00"))
+        self.assertEqual(parse_amount("143 088,89 €"), Decimal("143088.89"))
+        self.assertEqual(parse_amount("1 234,5"), Decimal("1234.5"))
+        self.assertEqual(parse_amount("42"), Decimal("42"))
+
+    def test_reads_the_unicode_minus_boursobank_renders(self):
+        # U+2212, not ASCII '-': a loan parsed as positive would flip a debt
+        # into an asset.
+        self.assertEqual(parse_amount("− 94 959,82"), Decimal("-94959.82"))
+
+    def test_refuses_rather_than_defaulting_to_zero(self):
+        for bad in ("", "   ", "n/a", "-", "€"):
+            self.assertIsNone(parse_amount(bad))
+
+
+class AccountTypeTest(unittest.TestCase):
+    def test_maps_trading_accounts_onto_their_envelope(self):
+        self.assertEqual(account_type("trading", "PEA DOE"), "PEA")
+        self.assertEqual(account_type("trading", "PEA-PME"), "PEA")
+        self.assertEqual(account_type("trading", "Compte titres ordinaire"), "COMPTE_TITRES")
+
+    def test_maps_savings_accounts(self):
+        self.assertEqual(account_type("savings", "LEP"), "LEP")
+        self.assertEqual(account_type("savings", "Livret d'Épargne Populaire"), "LEP")
+        self.assertEqual(account_type("savings", "LIVRET DEVELOPPEMENT DURABLE"), "SAVINGS")
+
+    def test_a_savings_label_merely_containing_lep_is_not_an_lep(self):
+        self.assertEqual(account_type("savings", "Livret Leplus"), "SAVINGS")
+
+    def test_banking_is_the_default(self):
+        self.assertEqual(account_type("banking", "BoursoBank"), "CHECKING")
+
+
+class OwnAccountTest(unittest.TestCase):
+    def test_recognises_the_bank_under_both_names(self):
+        self.assertTrue(is_own_account("BoursoBank"))
+        self.assertTrue(is_own_account("Boursorama Banque"))
+
+    def test_aggregated_banks_are_not_ours(self):
+        self.assertFalse(is_own_account("Crédit Agricole"))
+        self.assertFalse(is_own_account("CIC"))
+
+
+class DashboardTest(unittest.TestCase):
+    def test_parses_a_real_dashboard(self):
+        accounts, third_party = parse_dashboard(DASHBOARD_HTML)
+
+        self.assertEqual(third_party, 2)
+        self.assertEqual(
+            [(account["type"], account["name"]) for account in accounts],
+            [
+                ("CHECKING", "BoursoBank"),
+                ("SAVINGS", "LIVRET DEVELOPPEMENT DURABLE SOLIDAIRE"),
+                ("PEA", "PEA DOE"),
+            ],
+        )
+        self.assertEqual(accounts[0]["balanceEur"], Decimal("20810.50"))
+        self.assertEqual(accounts[2]["balanceEur"], Decimal("143088.89"))
+
+    def test_the_loan_is_excluded_without_failing_the_completeness_check(self):
+        accounts, _ = parse_dashboard(DASHBOARD_HTML)
+        self.assertNotIn("Prêt personnel", [account["name"] for account in accounts])
+
+    def test_a_card_that_stops_parsing_fails_the_whole_sync(self):
+        # Silently dropping it would delete a real account's holdings and write
+        # a wrong net worth; the previous connector did exactly that.
+        broken = DASHBOARD_HTML.replace("c-info-box__account-sub-label", "c-info-box__bank", 1)
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_dashboard(broken)
+        self.assertEqual(raised.exception.code, FORMAT_CHANGED)
+
+    def test_a_page_without_any_section_is_refused(self):
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_dashboard("<html><body>Maintenance</body></html>")
+        self.assertEqual(raised.exception.code, FORMAT_CHANGED)
+
+    def test_a_dashboard_of_only_third_party_accounts_is_incomplete(self):
+        foreign = DASHBOARD_HTML.replace("BoursoBank", "Crédit Mutuel")
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_dashboard(foreign)
+        self.assertEqual(raised.exception.code, INCOMPLETE)
+
+
+class TradingSummaryTest(unittest.TestCase):
+    def test_normalises_an_account_and_its_positions(self):
+        parsed = parse_trading_summary(summary(), "acc")
+
+        self.assertEqual(parsed["cashEur"], Decimal("100.00"))
+        self.assertEqual(parsed["totalEur"], Decimal("1000.00"))
+        self.assertEqual(len(parsed["positions"]), 1)
+        line = parsed["positions"][0]
+        self.assertEqual(line["symbol"], "1rTCW8")
+        self.assertEqual(line["quantity"], Decimal("10"))
+        self.assertEqual(line["buyingPriceEur"], Decimal("75.00"))
+        self.assertEqual(line["currentPrice"], Decimal("90.00"))
+        self.assertEqual(line["quoteCurrency"], "EUR")
+        self.assertEqual(line["currentValueEur"], Decimal("900.00"))
+        self.assertEqual(line["pnlEur"], Decimal("150.00"))
+
+    def test_accepts_a_difference_inside_the_tolerance(self):
+        parsed = parse_trading_summary(summary(total="1000.04"), "acc")
+        self.assertEqual(parsed["totalEur"], Decimal("1000.04"))
+
+    def test_a_total_that_does_not_reconcile_is_refused(self):
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_trading_summary(summary(total="1500.00"), "acc")
+        self.assertEqual(raised.exception.code, INCOMPLETE)
+
+    def test_lines_that_do_not_add_up_to_the_valuation_are_refused(self):
+        # The failure mode this exists for: a truncated position list still
+        # looks like a valid portfolio, just a smaller one.
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_trading_summary(summary(positions=[position(amount="400.00")]), "acc")
+        self.assertEqual(raised.exception.code, INCOMPLETE)
+
+    def test_an_empty_portfolio_of_pure_cash_reconciles(self):
+        parsed = parse_trading_summary(
+            summary(cash="1000.00", valuation="0", total="1000.00", positions=[]), "acc"
+        )
+        self.assertEqual(parsed["positions"], [])
+
+    def test_a_fully_sold_line_is_dropped_without_breaking_reconciliation(self):
+        parsed = parse_trading_summary(
+            summary(positions=[position(), position(symbol="1rTX", quantity="0", amount="0")]),
+            "acc",
+        )
+        self.assertEqual(len(parsed["positions"]), 1)
+
+    def test_a_position_valued_in_a_foreign_currency_is_refused(self):
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_trading_summary(summary(positions=[position(currency="USD")]), "acc")
+        self.assertEqual(raised.exception.code, INVALID_DATA)
+
+    def test_a_native_quote_keeps_its_currency_and_drops_the_cost_basis(self):
+        # A USD cost basis recorded as EUR reports a gain the size of the FX
+        # spread; null is the honest answer.
+        parsed = parse_trading_summary(
+            summary(
+                positions=[
+                    position(last=money("90.00", "USD"), buyingPrice=money("75.00", "USD"))
+                ]
+            ),
+            "acc",
+        )
+        self.assertEqual(parsed["positions"][0]["quoteCurrency"], "USD")
+        self.assertIsNone(parsed["positions"][0]["buyingPriceEur"])
+
+    def test_a_missing_valuation_field_is_refused(self):
+        broken = summary()
+        del broken[0]["account"]["valuation"]
+        with self.assertRaises(AccountsFormatError) as raised:
+            parse_trading_summary(broken, "acc")
+        self.assertEqual(raised.exception.code, FORMAT_CHANGED)
+
+    def test_a_non_finite_amount_cannot_slip_through(self):
+        with self.assertRaises(AccountsFormatError):
+            parse_trading_summary(summary(positions=[position(amount=float("nan"))]), "acc")
+
+
+class TickerAssignmentTest(unittest.TestCase):
+    def test_attaches_resolved_isins(self):
+        resolved = assign_tickers([{"symbol": "1rTCW8"}], {"1rTCW8": "IE00BJ0KDQ92"})
+        self.assertEqual(resolved[0]["isin"], "IE00BJ0KDQ92")
+
+    def test_an_unresolved_symbol_still_syncs(self):
+        resolved = assign_tickers([{"symbol": "1rTCW8"}], {})
+        self.assertIsNone(resolved[0]["isin"])
+
+    def test_two_unresolved_positions_sharing_a_symbol_are_refused(self):
+        # They would merge into one holding downstream, silently halving the
+        # portfolio.
+        with self.assertRaises(AccountsFormatError) as raised:
+            assign_tickers([{"symbol": "1rTCW8"}, {"symbol": "1rtcw8"}], {})
+        self.assertEqual(raised.exception.code, INVALID_DATA)
+
+
+class ToleranceTest(unittest.TestCase):
+    def test_absolute_tolerance_covers_rounding(self):
+        self.assertTrue(money_close(Decimal("100.04"), Decimal("100.00")))
+        self.assertFalse(money_close(Decimal("100.20"), Decimal("100.00")))
+
+    def test_relative_tolerance_scales_with_the_amount(self):
+        self.assertTrue(money_close(Decimal("100050"), Decimal("100000")))
+        self.assertFalse(money_close(Decimal("100200"), Decimal("100000")))
+
+
+if __name__ == "__main__":
+    unittest.main()
