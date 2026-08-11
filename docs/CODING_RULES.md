@@ -1,6 +1,6 @@
 # Coding Rules — non-negotiable charter
 
-> Last updated: 2026-07-12
+> Last updated: 2026-08-10
 
 The **conventions** in [`docs/conventions/`](./conventions/) describe *how* we write code in each
 area. This file is shorter and stricter: it holds the **non-negotiables** — the rules whose
@@ -35,15 +35,21 @@ In review, this is a hard gate:
 
 shadcn/ui primitives are generated. Customize via **theme tokens** (`--radius`, color tokens in
 `index.css`) or the shadcn CLI — never by editing the primitive off its scale. In particular, never
-inflate a control's radius (e.g. `rounded-md` → `rounded-full` on `Button`). See
+inflate a control's radius (e.g. `rounded-lg` → `rounded-full` on `Button`). The one sanctioned
+exception is an **app-wide, on-scale** standard that is ratified in an ADR and written down in the
+convention — the radius ladder is the only current instance; a one-screen tweak never qualifies. See
 [`docs/features/ui-control-shape-system.md`](./features/ui-control-shape-system.md) and
-[`docs/conventions/frontend.md`](./conventions/frontend.md).
+[`docs/conventions/design-system.md`](./conventions/design-system.md).
 
 ## 2. Follow the theme, not per-component styling
 
-Radius, color, and control sizing come from `--radius` and the semantic color tokens. Never hardcode
-`rounded-full`/`rounded-xl` on interactive text controls, and never use raw palette classes
-(`text-gray-*` — they render blue here). Detail: [`docs/conventions/frontend.md`](./conventions/frontend.md).
+Radius, color, and control sizing come from `--radius` and the semantic color tokens. Radius follows
+the [ladder](./conventions/design-system.md#1-shape--the-radius-ladder) — surface `4xl` / panel `2xl` / row `xl` /
+control `lg` — so never hardcode `rounded-full` or `rounded-2xl` on an interactive text control, and
+never restate a radius a primitive already provides. Never use raw palette classes
+(`text-gray-*` — they render blue here). **Every visual decision — shape, color, type, spacing,
+elevation, motion, which component to reach for — is settled in
+[`docs/conventions/design-system.md`](./conventions/design-system.md). Read it before writing UI.**
 
 ## 3. Layers stay separated
 

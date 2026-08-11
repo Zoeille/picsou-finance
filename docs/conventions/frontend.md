@@ -165,74 +165,28 @@ const DashboardPage = lazy(() =>
 
 ## Styling
 
+**All visual rules live in [`design-system.md`](./design-system.md)** — the radius ladder, color
+tokens, typography, spacing, elevation, motion, icons, layout, the four data states, accessibility,
+the component-picking table, and the grep-able conformance checks. Read it before writing any UI.
+Do not restate its rules here; a second copy is how the shape convention drifted in the first place
+(see [`CODING_RULES.md`](../CODING_RULES.md) rule 0).
+
+The code-level facts that belong to *this* file:
+
 ### Tailwind CSS v4
 
 - Imported via `@import "tailwindcss"` in `index.css`.
 - oklch color tokens for both light and dark themes (defined in `:root` and `.dark`).
 - Font: **Geist Variable** (`@fontsource-variable/geist`).
-- Radius scale from `--radius` base.
+- Radius scale derived from the `--radius` base in the `@theme inline` block.
 
 ### shadcn/ui
 
-Components in `components/ui/` are **generated** — avoid one-off product styling inside them. App-wide primitive standards such as button or tab sizing may live there when the change deliberately applies across the whole application; document those standards in this file.
-
-#### Controls — input, button, menu, and segment sizing
-
-Text inputs, text buttons, tabs, dropdown menus, segmented controls, and pill filters should use the same readable CTA rhythm as the setup wizard:
-
-- Height: `h-10`
-- Horizontal padding: `px-8` for normal buttons, `px-4` for inputs/selects, `px-6` for dense segmented controls
-- Font size: `text-sm`
-- Shape: **follow the shadcn theme radius, all derived from `--radius` in `index.css`.** Interactive text controls are `rounded-md` (buttons, filter chips, tabs/segmented items, menu items); their containers (segmented control, dropdown menu, popover) are `rounded-lg`. Never hardcode `rounded-full`, `rounded-xl`, or `rounded-2xl` on a text control or its container — a pill button next to `rounded-lg` cards reads as a foreign design system. `rounded-full` is reserved for avatars, switches, badges, and status dots; larger radii (`rounded-xl`/`rounded-2xl`/`rounded-4xl`) belong to cards and large surfaces only.
-
-Avoid local `h-6`, `h-7`, `h-8`, `h-9`, `text-xs`, or narrow `px-2` overrides for text controls, and never re-pill a control with a `rounded-full` className that overrides the shadcn `Button`/`Tabs` primitive. OTP slots should follow the same readable `h-10` control rhythm unless a dense, space-constrained surface has a documented reason to shrink them. Reserve smaller sizing for pure icon buttons, badges, dense table data, chart labels, and non-interactive metadata.
-
-`Label` and `CardDescription` are app-wide readable primitives (`text-sm`). Do not shrink form labels or section descriptions locally unless the element is truly dense metadata rather than an input label.
-
-Color swatches should use a stable visible size and selection ring. Avoid
-`scale-*` transforms on selected or hovered swatches because cards and dialogs
-often clip overflow, which makes round swatches look cut off.
-
-Code-copy rows and settings navigation rows follow the same readable scale:
-their visible value container should be at least `min-h-10`, use `rounded-xl`
-and `px-4`, and the associated action button should be full-width on mobile
-then at least `min-w-36` on desktop. Avoid local `p-2`, `px-2 py-1.5`, and
-`text-xs` on these rows.
-
-Transitions must name the animated properties explicitly. Do not use
-`transition-all`; prefer bounded values such as
-`transition-[border-color,background-color,color]`, `transition-[width]`, or
-`transition-transform`.
-
-#### Focus styling
-
-Picsou uses a centralized `:focus-visible` ring in `index.css` for keyboard focus
-on interactive elements. Avoid one-off `focus:*`, `focus-visible:*`,
-`group-focus:*`, or `focus-within:*` Tailwind classes on normal controls unless a
-component needs to become visible only when focused, such as a skip link.
-
-#### Page layout
-
-Top-level app pages should start flush with the main content column, not centered inside `mx-auto` wrappers. Use `PageHeader` so every page title carries the same date surtitle and action alignment as the dashboard. Empty pages that are the primary page state should center their `EmptyState` in the remaining viewport height; nested empty states inside cards or modals should stay compact.
-
-#### Color tokens — always semantic, never raw palette
-
-All theme color tokens are defined in the `@theme` block of `frontend/src/index.css`. **Never use raw palette classes** (`text-gray-*`, `bg-gray-*`, etc.) — they bypass the theme tokens and do not adapt to dark mode.
-
-| Intent | Use |
-|--------|-----|
-| Primary text | `text-foreground` |
-| Muted / secondary text | `text-muted-foreground` |
-| Subtle background | `bg-muted` |
-| Card background | `bg-card` |
-| Primary action color | `text-primary` / `bg-primary` |
-| Destructive / error | `text-destructive` |
-
-**Exception:** intentional status colors (`text-green-*`, `text-red-*`, `text-amber-*`, etc.) are fine when used as semantic UI signals (sync status badges, financial gain/loss indicators). Always include dark-mode variants or use the `dark:` prefix for those.
-
-### Icons
-
-Use icons from `lucide-react` as direct JSX components (e.g., `<Pencil className="size-4" />`). No other icon libraries.
+Components in `components/ui/` are **generated** — avoid one-off product styling inside them.
+App-wide primitive standards (control sizing, the radius ladder) may live there when the change
+deliberately applies across the whole application and is ratified in an ADR; document those
+standards in [`design-system.md`](./design-system.md). `shadcn add <component>` resets them, so
+re-apply the standard after regenerating a primitive.
 
 ## Internationalization
 
@@ -250,7 +204,9 @@ Use icons from `lucide-react` as direct JSX components (e.g., `<Pencil className
 
 ## Charts
 
-Recharts v3 for all data visualizations. Chart color tokens (`--chart-1` through `--chart-5`) are defined in the Tailwind theme.
+Recharts v3 for all data visualizations. Chart color tokens (`--chart-1` through `--chart-5`) are
+defined in the Tailwind theme. Visual rules (tooltip shape, legend marks, empty state, locale-aware
+labels): [`design-system.md`](./design-system.md) § Charts.
 
 ## Scripts
 
@@ -270,15 +226,17 @@ e2e specs (which need a browser) and fail. Keep unit tests under `src/`, e2e und
 
 ## Don'ts
 
-- **Never use raw palette classes** (`text-gray-*`, `bg-gray-*`) — always semantic tokens (`text-foreground`, `bg-muted`). The gray palette is remapped to blue.
+Visual don'ts (raw palette classes, pilled controls, restated radii, `transition-all`, inline
+styles, icon libraries, one-off focus rings) live in
+[`design-system.md`](./design-system.md) § Don'ts, with the greps that catch them.
+
+Code-level don'ts:
+
 - **Never create API functions in components** — all API calls go in `features/*/api.ts`.
 - **Never create hooks outside `features/`** — domain hooks live in `features/*/hooks.ts`. Only generic UI hooks (like `use-mobile`) go in `hooks/`.
 - **Never use Redux, Context, or global state for server data** — TanStack Query only.
-- **Never edit files in `components/ui/`** — these are shadcn/ui generated. Customize via theme tokens or the shadcn CLI. In particular, never inflate a primitive's radius away from the shadcn scale (e.g. `rounded-md`→`rounded-full` on `Button`, `rounded-lg`→`rounded-2xl` on `DropdownMenu`).
-- **Never hardcode `rounded-full` / `rounded-xl` / `rounded-2xl` on interactive text controls** (buttons, filter chips, tabs, segmented items, menu items) or use a `rounded-full` className to override a shadcn primitive. Shape follows the `--radius` theme: `rounded-md` for controls, `rounded-lg` for their containers. `rounded-full` is only for avatars, switches, badges, and status dots.
-- **Never use icon libraries other than `lucide-react`.**
+- **Never edit files in `components/ui/`** — these are shadcn/ui generated. Customize via theme tokens or the shadcn CLI. The only sanctioned exception is an app-wide, on-scale standard ratified in an ADR and documented in [`design-system.md`](./design-system.md).
 - **Never hardcode user-visible strings** — always use `useTranslation()`.
-- **Never use CSS modules, styled-components, or inline style objects** — Tailwind only.
 - **Never call `Math.random()`/`Date.now()` in render** — lazy `useState(() => …)` initializer (React Compiler `purity`).
 - **Never seed/reset form state in a `useEffect(…, [open])`** — use the key-remount + lazy-init pattern (`set-state-in-effect`).
 - **Never use RHF `watch('x')`** — use `useWatch({ control, name: 'x' })` (`incompatible-library`).

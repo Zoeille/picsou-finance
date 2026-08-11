@@ -20,7 +20,7 @@ src/
   features/         Domain slices: api.ts + hooks.ts per feature
   components/
     layout/         AppSidebar, AppLayout
-    ui/             shadcn/ui — DO NOT EDIT
+    ui/             shadcn/ui — generated, don't edit (one exception below)
     shared/         App-specific reusable (PageHeader, etc.)
   stores/           Zustand (auth-store, app-store)
   lib/              api-client.ts, utils.ts, constants.ts, query-client.ts
@@ -41,4 +41,20 @@ src/
 
 ## Conventions
 
-Full conventions (styling, icons, i18n, charts, state management details): see [`docs/conventions/frontend.md`](../docs/conventions/frontend.md)
+**Design — read first for any UI work:** [`docs/conventions/design-system.md`](../docs/conventions/design-system.md).
+The radius ladder, color tokens, type scale, spacing, elevation, motion, the component-picking
+table, the four data states, a11y, and the conformance greps. Compose the primitives and inherit —
+a class that sets radius/height/font-size/color on something a primitive already renders is a
+finding.
+
+**The one sanctioned edit inside `components/ui/`:** an **app-wide, on-scale** standard ratified in
+an ADR and written down in the design system — today that is only the radius ladder
+([ADR 2026-08-10](../docs/decisions/2026-08-10-ui-radius-ladder.md)), which assigns a rung to
+`button`, `input`, `input-otp`, `item`, `tabs`, `dropdown-menu`, `tooltip`, `chart`, `empty`,
+`partition-bar`, `progress` and `dialog`. A one-screen tweak never qualifies. Because these are
+generated files, **`shadcn add <component>` resets the rung — re-apply it from the ladder** rather
+than accepting the regenerated default. Everything else in `ui/` stays untouched: customize via the
+theme tokens in `index.css` or the shadcn CLI.
+
+**Code — state, hooks, API layer, routing, i18n wiring, types:**
+[`docs/conventions/frontend.md`](../docs/conventions/frontend.md)

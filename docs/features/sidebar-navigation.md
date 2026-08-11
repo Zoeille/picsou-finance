@@ -1,6 +1,6 @@
 # Feature: Navigation (Sidebar + Mobile Bottom Nav)
 
-> Last updated: 2026-07-12
+> Last updated: 2026-08-10
 
 ## Context
 
@@ -36,6 +36,14 @@ A fixed bottom bar with the Picsou logo centered and 2 nav items on each side:
 - Safe area padding for iOS notch: `env(safe-area-inset-bottom)`
 - `AppLayout` adds `pb-20 md:pb-0` on main content to avoid overlap
 
+### Shell shape
+
+Both shells follow the [radius ladder](../conventions/design-system.md#1-shape--the-radius-ladder). The desktop
+`<nav>` is a full-height floating surface, so it takes the **surface** rung (`rounded-4xl`) and
+matches the cards beside it; the mobile bar is a compact 64px dock, so it takes the **panel** rung
+(`rounded-2xl`). Nav rows inherit the **row** rung from the `Item` primitive — don't restate
+`rounded-xl` on them.
+
 ### Active state (shared pattern)
 
 Active nav items keep Lucide icons stroke-only. The item gets `ring-1 ring-border` when active, and the icon box switches from `text-muted-foreground` to `text-foreground`. Do not use SVG fill for active nav states.
@@ -45,7 +53,9 @@ Active nav items keep Lucide icons stroke-only. The item gets `ring-1 ring-borde
 - `frontend/src/components/layout/AppSidebar.tsx` — desktop sidebar with `NavItem`, admin profile switcher, and bottom-pinned account/settings access
 - `frontend/src/components/layout/MobileBottomNav.tsx` — mobile bottom navbar
 - `frontend/src/components/layout/AppLayout.tsx` — renders sidebar (desktop) + bottom nav (mobile)
-- `frontend/src/components/ui/item.tsx` — `Item` / `ItemMedia` / `ItemContent` primitives (do not edit)
+- `frontend/src/components/ui/item.tsx` — `Item` / `ItemMedia` / `ItemContent` primitives. Generated:
+  don't edit, except for the app-wide radius ladder ratified in
+  [ADR 2026-08-10](../decisions/2026-08-10-ui-radius-ladder.md), which sets `Item` to the row rung
 - `frontend/src/i18n/locales/{fr,en}.json` — `nav.*` keys for labels
 - `frontend/src/assets/horizontal-white-picsou.svg` — horizontal wordmark logo used at the top of the desktop sidebar
 - `frontend/src/assets/picsou_logo_white.svg` — icon-only logo used in mobile nav

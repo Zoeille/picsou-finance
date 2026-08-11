@@ -33,6 +33,8 @@ bun run test:e2e     # Playwright E2E tests
 
 ## Code conventions
 
+**Touching the UI? Read [`docs/conventions/design-system.md`](docs/conventions/design-system.md) first** — it is the single authority for shape, color, typography, spacing, elevation, motion, which component to reach for, and the four data states. Compose the shadcn primitives and inherit; never restyle them per page.
+
 See [`docs/conventions/`](docs/conventions/) and module-specific instruction files (`backend/CLAUDE.md`, `frontend/CLAUDE.md`).
 
 ## Project architecture
