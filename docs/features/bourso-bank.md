@@ -257,7 +257,7 @@ Reuses: `CryptoEncryption`, `AccountService.upsertSnapshot`,
 | App push only | It is the only second factor proven upstream | Best-effort SMS/e-mail — untestable, and each failed attempt counts toward a lockout |
 | Store cookies only, re-read `BRS_CONFIG` each sync | Nothing persisted can go stale; the session blob stays opaque to Java | Persisting `API_URL`/`USER_HASH` alongside |
 | Exclude aggregated third-party accounts | They duplicate Enable Banking with worse freshness | Importing everything and letting the user prune |
-| ISIN failure is non-fatal, provider valuation covers it | The trading board has no ISIN; refusing the sync over a label would be absurd | Failing the sync, or dropping the line |
+| ISIN failure is non-fatal, provider valuation covers it | Each position ships its own `isin`, but a missing or unresolvable one only costs the Yahoo quote — the line keeps BoursoBank's symbol as its ticker and the account is still valued | Failing the sync, or dropping the line |
 | Reconcile in both sidecar and service | A total that disagrees with its lines means a partial read | Trusting the payload |
 
 See [the ADR](../decisions/2026-08-11-boursobank-httpx-sidecar.md).

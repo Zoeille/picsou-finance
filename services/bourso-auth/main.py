@@ -103,7 +103,13 @@ _BAD_CREDENTIALS_MARKERS = (
 async def _pending_sweeper() -> None:
     while True:
         await asyncio.sleep(PENDING_SWEEP_SECONDS)
-        await _cleanup_expired()
+        try:
+            await _cleanup_expired()
+        except Exception:
+            # One bad sweep must not end the task: without it, expired pending
+            # states keep their client and cookie jar until shutdown and
+            # MAX_PENDING eventually rejects every new login.
+            log.warning("BoursoBank pending sweep failed", exc_info=True)
 
 
 @asynccontextmanager

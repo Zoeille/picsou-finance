@@ -22,7 +22,7 @@ There are three logo sources, in priority order:
 
 Properties take none of the three: they have no `provider` to key on, no connector to ask, and no logo key of their own, so `AccountCard` marks them with the glyph for their `propertyKind` instead — see [accounts-overview.md](./accounts-overview.md#account-card-anatomy). The kind is picked in the property form, so that mark follows a user choice too, but it is chosen as a property attribute rather than from a logo picker.
 
-Everything else — manual accounts, Binance, Bourse Direct, BoursoBank, Finary, loans — still shows the color fallback. The only user-editable visual fields are `color` and, on a wallet, that logo key: there is no free-form logo upload and no picker on any other account type.
+Everything else — manual accounts, Binance, Bourse Direct, Finary, loans — still shows the color fallback. The only user-editable visual fields are `color` and, on a wallet, that logo key: there is no free-form logo upload and no picker on any other account type.
 
 ### Capture at connection time
 
