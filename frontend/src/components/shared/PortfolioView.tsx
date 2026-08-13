@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { formatApiError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { accountTypeLabelKey } from '@/lib/constants'
 import { Search } from 'lucide-react'
 
 type SortBy = 'value' | 'pnl'
@@ -19,16 +20,6 @@ const SORT_OPTIONS: { value: SortBy; labelKey: string }[] = [
   { value: 'value', labelKey: 'portfolio.sortByValue' },
   { value: 'pnl', labelKey: 'portfolio.sortByPnl' },
 ]
-
-const ACCOUNT_TYPE_I18N: Record<string, string> = {
-  PEA: 'accountTypes.pea',
-  COMPTE_TITRES: 'accountTypes.compteTitres',
-  CRYPTO: 'accountTypes.crypto',
-  CHECKING: 'accountTypes.checking',
-  SAVINGS: 'accountTypes.savings',
-  LEP: 'accountTypes.lep',
-  OTHER: 'accountTypes.other',
-}
 
 function PortfolioItem({ line }: { line: PortfolioLine }) {
   const { t } = useTranslation()
@@ -57,7 +48,7 @@ function PortfolioItem({ line }: { line: PortfolioLine }) {
       {/* Right side */}
       <div className="flex shrink-0 items-center gap-5">
         <Badge variant="outline">
-          {t(ACCOUNT_TYPE_I18N[line.accountType] ?? line.accountType)}
+          {t(accountTypeLabelKey(line.accountType))}
         </Badge>
 
         {/* PnL */}

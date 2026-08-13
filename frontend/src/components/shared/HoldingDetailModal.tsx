@@ -15,18 +15,7 @@ import {
 import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
 import { type TimeRange } from '@/components/shared/TimeRangeSelector'
 import { formatDate } from '@/lib/utils'
-
-const ACCOUNT_TYPE_I18N: Record<string, string> = {
-  PEA: 'accountTypes.pea',
-  COMPTE_TITRES: 'accountTypes.compteTitres',
-  CRYPTO: 'accountTypes.crypto',
-  CHECKING: 'accountTypes.checking',
-  SAVINGS: 'accountTypes.savings',
-  LEP: 'accountTypes.lep',
-  REAL_ESTATE: 'accountTypes.realEstate',
-  LOAN: 'accountTypes.loan',
-  OTHER: 'accountTypes.other',
-}
+import { accountTypeLabelKey } from '@/lib/constants'
 
 type ChartMode = 'holding' | 'price'
 
@@ -219,7 +208,7 @@ export function HoldingDetailModal({ line, onClose }: HoldingDetailModalProps) {
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">{t('holdings.type')}</p>
                   <Badge variant="outline">
-                    {t(ACCOUNT_TYPE_I18N[line.accountType] ?? `accountTypes.${line.accountType.toLowerCase()}`)}
+                    {t(accountTypeLabelKey(line.accountType))}
                   </Badge>
                 </div>
               </div>

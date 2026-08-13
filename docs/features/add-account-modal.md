@@ -85,13 +85,19 @@ lender field is the same control on the same form value: a loan's provider *is* 
 It never blocks on the search. An unconfigured or failing catalog simply shows no suggestions,
 and the typed name is saved as before.
 
-### Account type list
+### Account type labels
 
-The type dropdowns — the manual form's and the Finary mapping step's — both render
-`ACCOUNT_TYPES` from `frontend/src/lib/constants.ts`. The Finary step used to hold its own copy
-and derive each label key from the type name (`type.toLowerCase()`, with special cases for
-`COMPTE_TITRES` and `REAL_ESTATE`); that only held while every key was the lowercased value and
-broke as soon as a type needed its own (`livretA`, `employeeSavings`). One list, one label map.
+`ACCOUNT_TYPES` and `accountTypeLabelKey()` (`frontend/src/lib/constants.ts`) are the only
+list of account types and the only way to get one's translation key. Five call sites used to
+carry their own copy — the two type dropdowns (this modal's manual form and its Finary mapping
+step), `AccountTypeBadge`, `HoldingsCard`, `PortfolioView` and `HoldingDetailModal` — and three
+of them derived the key from the type name (`type.toLowerCase()`, with special cases bolted on
+for `COMPTE_TITRES` and `REAL_ESTATE`).
+
+That derivation only held while every key was the lowercased value. Adding `LIVRET_A` broke it
+immediately: the badge beside the account name rendered the literal string
+`accountTypes.livret_a`. `constants.test.ts` now pins every type to a key that exists in all
+four locales, and the partial maps are gone.
 
 ### SyncPage integration
 

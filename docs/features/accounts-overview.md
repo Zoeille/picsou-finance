@@ -162,6 +162,7 @@ AccountsPage
   [CSS relative color ADR](../decisions/2026-04-08-css-relative-color-syntax.md)). The
   account palette runs from indigo to yellow; a raw yellow-500 glyph on its own pale tint is
   barely visible in light mode.
+- **Never derive an account type's label key from its name.** `accountTypeLabelKey()` in `lib/constants.ts` is the only mapping; a local `type.toLowerCase()` renders the raw key (`accountTypes.livret_a`) for any type whose key isn't simply its lowercased value. See [add-account-modal.md](./add-account-modal.md#account-type-labels).
 - **`TYPE_TO_GROUP` must cover every `AccountType`** — if a new type is added to the enum but not to this map, those accounts silently disappear from the ALL chart.
 - **`currentBalanceEur` is the account's full value, not the viewer's share.** Co-owned accounts carry `sharePercent` alongside it (see [account-ownership-shares.md](account-ownership-shares.md)); anything summing balances on this page must apply it, because the server only weights its own aggregates.
 - **`Account.id` cast to `number`** — virtual group accounts use string keys (`'STOCKS'`, `'CRYPTO'`) cast as `number` via `as unknown as number`. This works because Recharts uses `dataKey` as a string lookup, but it's fragile.
