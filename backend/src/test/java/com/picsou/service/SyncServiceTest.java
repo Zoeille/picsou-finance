@@ -11,10 +11,10 @@ import com.picsou.port.BankConnectorPort.InstitutionData;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.RequisitionRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,7 +40,25 @@ class SyncServiceTest {
     @Mock AccountService accountService;
     @Mock RequisitionLifecycleWriter requisitionLifecycleWriter;
 
-    @InjectMocks SyncService syncService;
+    SyncService syncService;
+
+    /**
+     * The real resolver over the mocked connector, not a mock of it: the logo assertions below
+     * are about which institution the sync path ends up matching, and stubbing the resolver
+     * would assert nothing but that SyncService calls it.
+     */
+    @BeforeEach
+    void wireSyncService() {
+        syncService = new SyncService(
+            bankConnector,
+            accountRepository,
+            requisitionRepository,
+            familyMemberRepository,
+            accountService,
+            requisitionLifecycleWriter,
+            new BankLogoResolver(bankConnector)
+        );
+    }
 
     /**
      * initiateConnection resolves the logo itself from the server-side institution

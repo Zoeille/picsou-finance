@@ -1,6 +1,6 @@
 # Feature: Accounts Overview (PnL chart + summary card + asset type filters)
 
-> Last updated: 2026-08-10
+> Last updated: 2026-08-13
 
 ## Context
 
@@ -95,7 +95,7 @@ Six asset categories defined in `AccountsPage.tsx`:
 |-----------|--------------|-------------|
 | STOCKS | PEA, COMPTE_TITRES | `#6366f1` |
 | METALS | OTHER | `#eab308` |
-| SAVINGS | LEP, SAVINGS | `#22c55e` |
+| SAVINGS | LEP, LIVRET_A, LDDS, LIVRET_JEUNE, PEL, CEL, SAVINGS | `#22c55e` |
 | CHECKING | CHECKING | `#0ea5e9` |
 | CRYPTO | CRYPTO | `#f97316` |
 | REAL_ESTATE | REAL_ESTATE | `#a855f7` |

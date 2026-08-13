@@ -1,5 +1,6 @@
 package com.picsou.migration;
 
+import com.picsou.model.AccountType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import jakarta.persistence.EntityManagerFactory;
+
+import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,5 +85,20 @@ class SchemaMappingValidationTest {
         // so the context would have failed before the test body ran.
         assertThat(entityManagerFactory).isNotNull();
         assertThat(entityManagerFactory.getMetamodel().getEntities()).isNotEmpty();
+    }
+
+    /**
+     * {@code ddl-auto=validate} checks column types, not the labels of a native enum — so a
+     * constant added to {@link AccountType} without the matching {@code ALTER TYPE} passes every
+     * test on H2 and then fails in production the first time someone saves an account of that
+     * type. This is the check that catches the missing migration.
+     */
+    @Test
+    void everyAccountTypeExistsInThePostgresEnum() {
+        List<String> labels = entityManagerFactory.createEntityManager()
+            .createNativeQuery("SELECT unnest(enum_range(NULL::account_type))::text", String.class)
+            .getResultList();
+
+        assertThat(labels).containsAll(Stream.of(AccountType.values()).map(Enum::name).toList());
     }
 }

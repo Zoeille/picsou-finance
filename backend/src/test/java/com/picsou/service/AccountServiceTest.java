@@ -55,6 +55,7 @@ class AccountServiceTest {
     @Mock DebtRepository debtRepository;
     @Mock PriceService priceService;
     @Mock LoanAmortizationService loanAmortizationService;
+    @Mock BankLogoResolver bankLogoResolver;
     @InjectMocks AccountService accountService;
 
     private Account ownedAccount() {
@@ -121,7 +122,7 @@ class AccountServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         accountService.update(1L, new AccountRequest("Livret", AccountType.SAVINGS, "BTC", "EUR",
-            null, false, "#f59e0b", null, null), 7L);
+            null, false, "#f59e0b", null, null, null), 7L);
 
         assertThat(account.getLogoKey()).isNull();
     }
@@ -137,7 +138,7 @@ class AccountServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         accountService.update(1L, new AccountRequest("Meria", AccountType.CRYPTO, "MERIA", "EUR",
-            null, false, "#f59e0b", null, "ledger"), 7L);
+            null, false, "#f59e0b", null, "ledger", null), 7L);
 
         assertThat(exchange.getLogoKey()).isNull();
     }
@@ -148,7 +149,7 @@ class AccountServiceTest {
 
         AccountResponse created = accountService.create(
             new AccountRequest("Livret", AccountType.SAVINGS, null, "EUR",
-                null, true, "#f59e0b", null, "ledger"),
+                null, true, "#f59e0b", null, "ledger", null),
             FamilyMember.builder().id(7L).build());
 
         assertThat(created.logoKey()).isNull();
@@ -162,15 +163,134 @@ class AccountServiceTest {
 
         AccountResponse created = accountService.create(
             new AccountRequest("BITCOIN Wallet", AccountType.CRYPTO, "BTC", "EUR",
-                null, false, "#f59e0b", null, "ledger"),
+                null, false, "#f59e0b", null, "ledger", null),
             FamilyMember.builder().id(7L).build());
 
         assertThat(created.logoKey()).isNull();
     }
 
+    // --- Bank logo on a manual account -------------------------------------------------
+
+    @Test
+    void create_resolvesTheBankLogoOfAManualAccountFromTheInstitutionThePickerSent() {
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(bankLogoResolver.logoUrlOrNull("FR", "Crédit Agricole::FR::personal", "Crédit Agricole"))
+            .thenReturn("https://cdn.example/ca.png");
+
+        AccountResponse created = accountService.create(
+            bankRequest("Crédit Agricole", "Crédit Agricole::FR::personal", true),
+            FamilyMember.builder().id(7L).build());
+
+        assertThat(created.logoUrl()).isEqualTo("https://cdn.example/ca.png");
+    }
+
+    @Test
+    void create_searchesTheDefaultCountryWhenNoInstitutionWasPicked() {
+        // A hand-typed bank name, or the MCP tools. An unfiltered search would pull the whole
+        // multi-country catalog on a path that runs on every account write.
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.create(bankRequest("Crédit Agricole", null, true),
+            FamilyMember.builder().id(7L).build());
+
+        verify(bankLogoResolver).logoUrlOrNull("FR", null, "Crédit Agricole");
+    }
+
+    @Test
+    void create_doesNotLookUpALogoForASyncedAccount() {
+        // A connector owns its accounts' logos -- Enable Banking copies one off the requisition,
+        // and a named provider (Trade Republic, BoursoBank) resolves a bundled asset client-side.
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AccountResponse created = accountService.create(
+            bankRequest("Trade Republic", null, false),
+            FamilyMember.builder().id(7L).build());
+
+        assertThat(created.logoUrl()).isNull();
+        verify(bankLogoResolver, never()).logoUrlOrNull(any(), any(), any());
+    }
+
+    @Test
+    void update_reResolvesTheLogoWhenTheBankChanges() {
+        Account account = manualBankAccount("Crédit Agricole", "https://cdn.example/ca.png");
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(bankLogoResolver.logoUrlOrNull("FR", "BNP Paribas::FR::personal", "BNP Paribas"))
+            .thenReturn("https://cdn.example/bnp.png");
+
+        accountService.update(1L, bankRequest("BNP Paribas", "BNP Paribas::FR::personal", true), 7L);
+
+        assertThat(account.getLogoUrl()).isEqualTo("https://cdn.example/bnp.png");
+    }
+
+    @Test
+    void update_keepsTheLogoAndSkipsTheLookupWhenTheBankIsUnchanged() {
+        // Renaming an account or correcting its balance must not cost a catalog round-trip.
+        Account account = manualBankAccount("Crédit Agricole", "https://cdn.example/ca.png");
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, bankRequest("Crédit Agricole", null, true), 7L);
+
+        assertThat(account.getLogoUrl()).isEqualTo("https://cdn.example/ca.png");
+        verify(bankLogoResolver, never()).logoUrlOrNull(any(), any(), any());
+    }
+
+    @Test
+    void update_looksTheLogoUpAgainForAnAccountThatNeverGotOne() {
+        // The account predates the picker: its bank was typed by hand and matched nothing at the
+        // time. Opening the form and saving is what gives it a second chance.
+        Account account = manualBankAccount("Crédit Agricole", null);
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(bankLogoResolver.logoUrlOrNull("FR", "Crédit Agricole::FR::personal", "Crédit Agricole"))
+            .thenReturn("https://cdn.example/ca.png");
+
+        accountService.update(1L, bankRequest("Crédit Agricole", "Crédit Agricole::FR::personal", true), 7L);
+
+        assertThat(account.getLogoUrl()).isEqualTo("https://cdn.example/ca.png");
+    }
+
+    @Test
+    void update_clearsTheLogoWhenTheBankIsCleared() {
+        Account account = manualBankAccount("Crédit Agricole", "https://cdn.example/ca.png");
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, bankRequest(null, null, true), 7L);
+
+        assertThat(account.getLogoUrl()).isNull();
+    }
+
+    @Test
+    void update_neverTouchesTheLogoOfASyncedAccount() {
+        // Enable Banking wrote this one from its requisition; a free-text provider edit -- or an
+        // MCP client that blanks provider outright -- must not be able to drop it.
+        Account synced = Account.builder().id(1L).name("BoursoBank").type(AccountType.CHECKING)
+            .currency("EUR").provider("BoursoBank").logoUrl("https://cdn.example/bourso.png")
+            .isManual(false).build();
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(synced));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        accountService.update(1L, bankRequest(null, null, false), 7L);
+
+        assertThat(synced.getLogoUrl()).isEqualTo("https://cdn.example/bourso.png");
+        verify(bankLogoResolver, never()).logoUrlOrNull(any(), any(), any());
+    }
+
+    private static AccountRequest bankRequest(String provider, String institutionId, boolean isManual) {
+        return new AccountRequest("Compte", AccountType.CHECKING, provider, "EUR",
+            null, isManual, "#6366f1", null, null, institutionId);
+    }
+
+    private static Account manualBankAccount(String provider, String logoUrl) {
+        return Account.builder().id(1L).name("Compte").type(AccountType.CHECKING)
+            .currency("EUR").provider(provider).logoUrl(logoUrl).isManual(true).build();
+    }
+
     private static AccountRequest logoRequest(String logoKey) {
         return new AccountRequest("BITCOIN Wallet", AccountType.CRYPTO, "BTC", "EUR",
-            null, false, "#f59e0b", null, logoKey);
+            null, false, "#f59e0b", null, logoKey, null);
     }
 
     @Test

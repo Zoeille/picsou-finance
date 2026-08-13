@@ -2,6 +2,11 @@ package com.picsou.model;
 
 public enum AccountType {
     LEP,
+    LIVRET_A,
+    LDDS,
+    LIVRET_JEUNE,
+    PEL,
+    CEL,
     PEA,
     COMPTE_TITRES,
     CRYPTO,

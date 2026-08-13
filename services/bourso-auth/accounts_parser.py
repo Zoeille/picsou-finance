@@ -186,6 +186,22 @@ def _deaccent(value: str) -> str:
 # ─── Dashboard ──────────────────────────────────────────────────────────────
 
 
+# The French regulated passbooks, matched on the label BoursoBank prints, in the
+# order they are tested. Each pattern runs against the deaccented, uppercased label,
+# so the word boundaries are what keep "Livret Leplus" from reading as an LEP and
+# "Livret Avenir" from reading as a Livret A. Anything in the savings section that
+# matches none of them stays the generic SAVINGS — a bank's house passbook
+# (Livret Bourso+, Livret d'épargne) is not a regulated product.
+_SAVINGS_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("LEP", r"\bLEP\b|EPARGNE POPULAIRE"),
+    ("LIVRET_A", r"\bLIVRET A\b"),
+    ("LDDS", r"\bLDDS?\b|DEVELOPPEMENT DURABLE"),
+    ("LIVRET_JEUNE", r"\bLIVRET JEUNE\b"),
+    ("PEL", r"\bPEL\b|PLAN\b.{0,3}EPARGNE LOGEMENT"),
+    ("CEL", r"\bCEL\b|COMPTE\b.{0,3}EPARGNE LOGEMENT"),
+)
+
+
 def account_type(section: str, name: str) -> str:
     """Map a BoursoBank account onto a Picsou AccountType.
 
@@ -196,8 +212,9 @@ def account_type(section: str, name: str) -> str:
     if section == "trading":
         return "PEA" if re.search(r"\bPEA\b|\bPEA-?PME\b", label) else "COMPTE_TITRES"
     if section == "savings":
-        if re.search(r"\bLEP\b", label) or "EPARGNE POPULAIRE" in label:
-            return "LEP"
+        for account_kind, pattern in _SAVINGS_PATTERNS:
+            if re.search(pattern, label):
+                return account_kind
         return "SAVINGS"
     return "CHECKING"
 

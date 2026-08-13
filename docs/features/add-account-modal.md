@@ -1,6 +1,6 @@
 # Feature: Add Account Modal
 
-> Last updated: 2026-07-07
+> Last updated: 2026-08-13
 
 ## Context
 
@@ -73,6 +73,25 @@ Validation is layered:
 
 This closed issue #9: a free-text code like `AMAT` used to throw a `RangeError` from
 `Intl.NumberFormat`, bubble to the root `ErrorBoundary`, and make the account unreachable/undeletable.
+
+### Bank field (manual form)
+
+The manual `AccountForm`'s provider field is a `BankPicker`: free text that also searches the
+institution catalog as you type. Picking a bank sets the field to the institution's name and
+sends its catalog id alongside, which is what lets the backend resolve a logo for an account no
+connector syncs — see [bank-logos.md](./bank-logos.md#the-bank-a-manual-account-names). A loan's
+lender field is the same control on the same form value: a loan's provider *is* its bank.
+
+It never blocks on the search. An unconfigured or failing catalog simply shows no suggestions,
+and the typed name is saved as before.
+
+### Account type list
+
+The type dropdowns — the manual form's and the Finary mapping step's — both render
+`ACCOUNT_TYPES` from `frontend/src/lib/constants.ts`. The Finary step used to hold its own copy
+and derive each label key from the type name (`type.toLowerCase()`, with special cases for
+`COMPTE_TITRES` and `REAL_ESTATE`); that only held while every key was the lowercased value and
+broke as soon as a type needed its own (`livretA`, `employeeSavings`). One list, one label map.
 
 ### SyncPage integration
 

@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { accountTypeLabelKey } from '@/lib/constants'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { formatApiError } from '@/lib/errors'
 import { HoldingDetailModal } from '@/components/shared/HoldingDetailModal'
@@ -34,18 +35,9 @@ const FILTER_TABS: { value: FilterType; labelKey: string; match: (type: Account[
   { value: 'PEA', labelKey: 'accountTypes.pea', match: (t) => t === 'PEA' },
   { value: 'COMPTE_TITRES', labelKey: 'accountTypes.compteTitres', match: (t) => t === 'COMPTE_TITRES' },
   { value: 'CRYPTO', labelKey: 'accountTypes.crypto', match: (t) => t === 'CRYPTO' },
-  { value: 'cash', labelKey: 'portfolio.cash', match: (t) => ['CHECKING', 'SAVINGS', 'LEP', 'OTHER'].includes(t) },
+  { value: 'cash', labelKey: 'portfolio.cash', match: (t) => ['CHECKING', 'SAVINGS', 'LEP', 'LIVRET_A', 'LDDS', 'LIVRET_JEUNE', 'PEL', 'CEL', 'OTHER']
+      .includes(t) },
 ]
-
-const ACCOUNT_TYPE_BADGE: Record<string, string> = {
-  PEA: 'accountTypes.pea',
-  COMPTE_TITRES: 'accountTypes.compteTitres',
-  CRYPTO: 'accountTypes.crypto',
-  CHECKING: 'accountTypes.checking',
-  SAVINGS: 'accountTypes.savings',
-  LEP: 'accountTypes.lep',
-  OTHER: 'accountTypes.other',
-}
 
 function HoldingsItem({ line, onClick }: { line: PortfolioLine; onClick: () => void }) {
   const { t } = useTranslation()
@@ -67,7 +59,7 @@ function HoldingsItem({ line, onClick }: { line: PortfolioLine; onClick: () => v
       </ItemContent>
       <div className="flex shrink-0 items-center gap-6">
         <Badge variant="outline">
-          {t(ACCOUNT_TYPE_BADGE[line.accountType] ?? line.accountType)}
+          {t(accountTypeLabelKey(line.accountType))}
         </Badge>
         <div className="flex flex-col items-end gap-0.5">
           <span className="text-sm text-muted-foreground">

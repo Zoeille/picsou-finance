@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,6 +31,7 @@ public class SyncService {
     private final FamilyMemberRepository familyMemberRepository;
     private final AccountService accountService;
     private final RequisitionLifecycleWriter requisitionLifecycleWriter;
+    private final BankLogoResolver bankLogoResolver;
 
     public SyncService(
         BankConnectorPort bankConnector,
@@ -39,7 +39,8 @@ public class SyncService {
         RequisitionRepository requisitionRepository,
         FamilyMemberRepository familyMemberRepository,
         AccountService accountService,
-        RequisitionLifecycleWriter requisitionLifecycleWriter
+        RequisitionLifecycleWriter requisitionLifecycleWriter,
+        BankLogoResolver bankLogoResolver
     ) {
         this.bankConnector = bankConnector;
         this.accountRepository = accountRepository;
@@ -47,6 +48,7 @@ public class SyncService {
         this.familyMemberRepository = familyMemberRepository;
         this.accountService = accountService;
         this.requisitionLifecycleWriter = requisitionLifecycleWriter;
+        this.bankLogoResolver = bankLogoResolver;
     }
 
     /** Step 1: Initiate Enable Banking bank connection for a given institution. */
@@ -62,7 +64,8 @@ public class SyncService {
             .requisitionId(result.requisitionId())
             .institutionId(institutionId)
             .institutionName(institutionName)
-            .logoUrl(resolveLogoUrl(institutionId, institutionName))
+            .logoUrl(bankLogoResolver.logoUrlOrNull(
+                BankLogoResolver.countryOf(institutionId), institutionId, institutionName))
             .status(RequisitionStatus.CREATED)
             .authLink(result.authLink())
             .oauthState(state)
@@ -375,83 +378,18 @@ public class SyncService {
     private void ensureLogoUrl(Requisition req) {
         if (req.getLogoUrl() != null || req.getLogoBackfillAttemptedAt() != null) return;
         try {
-            String country = parseCountry(req.getInstitutionId());
-            List<BankConnectorPort.InstitutionData> matches = bankConnector.searchInstitutions(req.getInstitutionName(), country);
+            // The throwing variant, not logoUrlOrNull: only a search that actually completed
+            // may set the marker below, or a provider outage would burn the single attempt.
+            Optional<String> logoUrl = bankLogoResolver.logoUrl(
+                BankLogoResolver.countryOf(req.getInstitutionId()),
+                req.getInstitutionId(),
+                req.getInstitutionName()
+            );
             req.setLogoBackfillAttemptedAt(Instant.now());
-            findInstitution(matches, req.getInstitutionId(), req.getInstitutionName())
-                .map(BankConnectorPort.InstitutionData::logoUrl)
-                .ifPresent(req::setLogoUrl);
+            logoUrl.ifPresent(req::setLogoUrl);
         } catch (Exception ex) {
             log.warn("Could not backfill logo for requisition {} ({}): {}", req.getId(), req.getInstitutionName(), ex.getMessage());
         }
-    }
-
-    /**
-     * Resolves a bank's logo at connection-initiation time from the server's own
-     * institution catalog — the client-supplied logoUrl is never trusted/persisted,
-     * since nothing between an arbitrary client-supplied URL and the Accounts page
-     * `<img src>` would validate its scheme or host.
-     */
-    private String resolveLogoUrl(String institutionId, String institutionName) {
-        try {
-            List<BankConnectorPort.InstitutionData> matches =
-                bankConnector.searchInstitutions(institutionName, parseCountry(institutionId));
-            return findInstitution(matches, institutionId, institutionName)
-                .map(BankConnectorPort.InstitutionData::logoUrl)
-                .orElse(null);
-        } catch (Exception ex) {
-            log.warn("Could not resolve logo for institution {} ({}): {}", institutionId, institutionName, ex.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Matches by exact institution id, then on name+country alone, and only then by
-     * name. The middle tier exists for requisitions stored before PSU types were
-     * modelled: they hold the two-segment {@code "BoursoBank::FR"} while the catalog
-     * now returns {@code "BoursoBank::FR::personal"}, and dropping straight to the
-     * name tier would lose the country preference — and pick arbitrarily for a bank
-     * listed under both PSU types.
-     */
-    private static Optional<BankConnectorPort.InstitutionData> findInstitution(
-        List<BankConnectorPort.InstitutionData> candidates, String institutionId, String institutionName
-    ) {
-        return candidates.stream()
-            .filter(i -> i.id().equals(institutionId))
-            .findFirst()
-            .or(() -> candidates.stream()
-                .filter(i -> institutionKey(i.id()).equals(institutionKey(institutionId)))
-                .findFirst())
-            .or(() -> candidates.stream()
-                .filter(i -> i.name().equalsIgnoreCase(institutionName))
-                .findFirst());
-    }
-
-    /**
-     * Drops the PSU-type segment so old and new institution ids compare equal, and
-     * normalizes what is left: a stored id was written from the catalog name of the
-     * day, so a later casing change on the provider side would otherwise miss this
-     * tier and fall through to the name-only one, losing the country preference.
-     */
-    private static String institutionKey(String institutionId) {
-        if (institutionId == null) return "";
-        String[] parts = institutionId.split("::");
-        return parts.length > 1
-            ? parts[0].trim().toLowerCase(Locale.ROOT) + "::" + parts[1].trim().toUpperCase(Locale.ROOT)
-            : institutionId.trim().toLowerCase(Locale.ROOT);
-    }
-
-    /**
-     * institutionId format: "BankName::FR::personal" (name::country::psuType) — see
-     * {@link BankConnectorPort#parseInstitutionId}. Blank/absent country returns {@code null}
-     * (not {@link BankConnectorPort#DEFAULT_COUNTRY}) so the logo-backfill search below stays
-     * unfiltered across all countries when the country truly isn't known, rather than narrowing
-     * to France and possibly missing the real (non-French) institution.
-     */
-    private static String parseCountry(String institutionId) {
-        if (institutionId == null) return null;
-        String country = BankConnectorPort.parseInstitutionId(institutionId).country();
-        return country.isBlank() ? null : country;
     }
 
     /**

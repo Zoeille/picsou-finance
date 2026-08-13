@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The French regulated passbooks each get their own account type.** Livret A,
+  LDDS, Livret Jeune, PEL and CEL sit alongside the existing LEP instead of all
+  collapsing into the generic "Livret d'épargne", so a household holding several
+  can tell them apart on the Accounts page — they still total together under the
+  Savings filter. The BoursoBank sidecar recognises each of them from the label
+  the bank prints, so synced livrets arrive typed rather than lumped; a bank's
+  own house passbook (Livret Bourso+) stays the generic type, since it is not a
+  regulated product. A new check runs every `AccountType` against the real
+  PostgreSQL enum, so a type added without its migration can no longer pass a
+  green build and fail on first save.
+- **Manual accounts can show their bank's logo.** The bank field of the
+  hand-entered account form now searches the institution catalog as you type:
+  pick your bank and its real logo lands on the account card, the same one a
+  connected account gets. The account still stores only the bank's name — the
+  server re-resolves the logo itself from the institution's id, so no
+  client-supplied image URL is ever persisted or fetched by a family member's
+  browser. Loans get it too, from their lender. The field stays free text
+  throughout: a bank the catalog doesn't list, or an Enable Banking install
+  that was never configured, simply means no suggestions and the color circle it
+  showed before. See [feature notes](docs/features/bank-logos.md).
 - **BoursoBank sync — current accounts, livrets and, above all, the PEA.**
   Enable Banking cannot reach a securities account (PSD2 covers payment accounts
   only), so the envelope that often holds the largest balance was invisible.

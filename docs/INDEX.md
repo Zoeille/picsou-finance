@@ -87,10 +87,10 @@
 | CSV transaction import (investment accounts) | 2026-07-11 | [csv-transaction-import.md](./features/csv-transaction-import.md) |
 | Realized P&L on closed positions | 2026-07-11 | [realized-pnl.md](./features/realized-pnl.md) |
 | Manual transactions + holdings derivation | 2026-04-21 | [manual-transactions.md](./features/manual-transactions.md) |
-| BoursoBank sync | 2026-08-11 | [bourso-bank.md](./features/bourso-bank.md) |
-| Accounts overview (PnL chart + summary card + filters + card anatomy) | 2026-08-11 | [accounts-overview.md](./features/accounts-overview.md) |
-| Logos on account cards (connector-supplied, bundled, wallet picker, property kind) | 2026-08-10 | [bank-logos.md](./features/bank-logos.md) |
-| Add Account modal (unified sync + manual) | 2026-07-07 | [add-account-modal.md](./features/add-account-modal.md) |
+| BoursoBank sync | 2026-08-13 | [bourso-bank.md](./features/bourso-bank.md) |
+| Accounts overview (PnL chart + summary card + filters + card anatomy) | 2026-08-13 | [accounts-overview.md](./features/accounts-overview.md) |
+| Logos on account cards (catalog-resolved, bundled, wallet picker, property kind) | 2026-08-13 | [bank-logos.md](./features/bank-logos.md) |
+| Add Account modal (unified sync + manual) | 2026-08-13 | [add-account-modal.md](./features/add-account-modal.md) |
 | Docker deployment | 2026-07-19 | [docker-deployment.md](./features/docker-deployment.md) |
 | Navigation (sidebar + mobile bottom nav) | 2026-07-12 | [sidebar-navigation.md](./features/sidebar-navigation.md) |
 | UI control shape (shadcn theme radius) | 2026-08-10 | [ui-control-shape-system.md](./features/ui-control-shape-system.md) |

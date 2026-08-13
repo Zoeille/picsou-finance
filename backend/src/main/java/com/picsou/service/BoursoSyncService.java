@@ -63,6 +63,11 @@ public class BoursoSyncService {
         AccountType.CHECKING,
         AccountType.SAVINGS,
         AccountType.LEP,
+        AccountType.LIVRET_A,
+        AccountType.LDDS,
+        AccountType.LIVRET_JEUNE,
+        AccountType.PEL,
+        AccountType.CEL,
         AccountType.PEA,
         AccountType.COMPTE_TITRES
     );
@@ -559,7 +564,7 @@ public class BoursoSyncService {
         return switch (type) {
             case PEA -> "#10b981";
             case COMPTE_TITRES -> "#3b82f6";
-            case SAVINGS, LEP -> "#f59e0b";
+            case SAVINGS, LEP, LIVRET_A, LDDS, LIVRET_JEUNE, PEL, CEL -> "#f59e0b";
             default -> "#ec4899";
         };
     }

@@ -74,12 +74,12 @@ public class AccountTools {
     @RequiresScope(Scopes.ACCOUNTS_WRITE)
     public AccountResponse createManualAccount(
         @ToolParam(description = "Account name") String name,
-        @ToolParam(description = "Account type: LEP, PEA, COMPTE_TITRES, CRYPTO, CHECKING, SAVINGS, REAL_ESTATE, LOAN or OTHER") AccountType type,
+        @ToolParam(description = "Account type: CHECKING, SAVINGS, LEP, LIVRET_A, LDDS, LIVRET_JEUNE, PEL, CEL, PEA, COMPTE_TITRES, CRYPTO, REAL_ESTATE, LOAN, EMPLOYEE_SAVINGS or OTHER") AccountType type,
         @ToolParam(description = "ISO currency code, e.g. EUR, USD") String currency,
         @ToolParam(description = "Opening balance; defaults to 0 when omitted", required = false) BigDecimal currentBalance,
         @ToolParam(description = "Optional hex colour like #1a2b3c", required = false) String color,
         @ToolParam(description = "Optional ticker for single-asset accounts", required = false) String ticker) {
-        AccountRequest req = new AccountRequest(name, type, null, currency, currentBalance, true, color, ticker, null);
+        AccountRequest req = new AccountRequest(name, type, null, currency, currentBalance, true, color, ticker, null, null);
         return accountService.create(req, userContext.currentMember());
     }
 
@@ -89,12 +89,12 @@ public class AccountTools {
     public AccountResponse updateAccount(
         @ToolParam(description = "The account id") Long accountId,
         @ToolParam(description = "Account name") String name,
-        @ToolParam(description = "Account type: LEP, PEA, COMPTE_TITRES, CRYPTO, CHECKING, SAVINGS, REAL_ESTATE, LOAN or OTHER") AccountType type,
+        @ToolParam(description = "Account type: CHECKING, SAVINGS, LEP, LIVRET_A, LDDS, LIVRET_JEUNE, PEL, CEL, PEA, COMPTE_TITRES, CRYPTO, REAL_ESTATE, LOAN, EMPLOYEE_SAVINGS or OTHER") AccountType type,
         @ToolParam(description = "ISO currency code, e.g. EUR, USD") String currency,
         @ToolParam(description = "Balance; omit to leave the service default", required = false) BigDecimal currentBalance,
         @ToolParam(description = "Optional hex colour like #1a2b3c", required = false) String color,
         @ToolParam(description = "Optional ticker for single-asset accounts", required = false) String ticker) {
-        AccountRequest req = new AccountRequest(name, type, null, currency, currentBalance, true, color, ticker, null);
+        AccountRequest req = new AccountRequest(name, type, null, currency, currentBalance, true, color, ticker, null, null);
         return accountService.update(accountId, req, userContext.currentMemberId());
     }
 

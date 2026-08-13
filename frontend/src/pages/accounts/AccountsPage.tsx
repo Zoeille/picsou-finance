@@ -27,7 +27,7 @@ const ASSET_FILTER_MAP: Record<AssetFilter, AccountType[] | null> = {
   ALL: null,
   STOCKS: ['PEA', 'COMPTE_TITRES', 'EMPLOYEE_SAVINGS'],
   METALS: ['OTHER'],
-  SAVINGS: ['LEP', 'SAVINGS'],
+  SAVINGS: ['LEP', 'LIVRET_A', 'LDDS', 'LIVRET_JEUNE', 'PEL', 'CEL', 'SAVINGS'],
   CHECKING: ['CHECKING'],
   CRYPTO: ['CRYPTO'],
   REAL_ESTATE: ['REAL_ESTATE'],
@@ -50,6 +50,11 @@ const TYPE_TO_GROUP: Record<AccountType, string> = {
   EMPLOYEE_SAVINGS: 'STOCKS',
   OTHER: 'METALS',
   LEP: 'SAVINGS',
+  LIVRET_A: 'SAVINGS',
+  LDDS: 'SAVINGS',
+  LIVRET_JEUNE: 'SAVINGS',
+  PEL: 'SAVINGS',
+  CEL: 'SAVINGS',
   SAVINGS: 'SAVINGS',
   CHECKING: 'CHECKING',
   CRYPTO: 'CRYPTO',
@@ -69,6 +74,7 @@ type AccountFormData = {
   color: string
   ticker?: string
   logoKey?: string
+  institutionId?: string
   borrowedAmount?: number
   interestRatePct?: number
   monthlyPayment?: number
@@ -246,6 +252,8 @@ export function AccountsPage() {
       // Empty rather than absent for every account without a logo choice; the backend keeps
       // whatever it already stores when this is undefined.
       logoKey: data.logoKey || undefined,
+      // Set only when a bank was picked from the catalog; the backend resolves its logo from it.
+      institutionId: data.institutionId,
     }
     await updateAccount.mutateAsync({ id: editingAccount.id, data: request })
     if (data.type === 'LOAN' && data.borrowedAmount && data.borrowedAmount > 0) {

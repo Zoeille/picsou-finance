@@ -21,6 +21,7 @@ import com.picsou.model.FamilyMember;
 import com.picsou.model.PropertyValuation;
 import com.picsou.model.RealEstateMetadata;
 import com.picsou.model.ValuationMode;
+import com.picsou.port.BankConnectorPort;
 import com.picsou.repository.AccountHoldingRepository;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.BalanceSnapshotRepository;
@@ -73,6 +74,7 @@ public class AccountService {
     private final PriceService priceService;
     private final LoanAmortizationService loanAmortizationService;
     private final AccountAccessResolver accessResolver;
+    private final BankLogoResolver bankLogoResolver;
 
     public AccountService(
         AccountRepository accountRepository,
@@ -84,7 +86,8 @@ public class AccountService {
         DebtRepository debtRepository,
         PriceService priceService,
         LoanAmortizationService loanAmortizationService,
-        AccountAccessResolver accessResolver
+        AccountAccessResolver accessResolver,
+        BankLogoResolver bankLogoResolver
     ) {
         this.accountRepository = accountRepository;
         this.snapshotRepository = snapshotRepository;
@@ -96,6 +99,7 @@ public class AccountService {
         this.priceService = priceService;
         this.loanAmortizationService = loanAmortizationService;
         this.accessResolver = accessResolver;
+        this.bankLogoResolver = bankLogoResolver;
     }
 
     /**
@@ -134,6 +138,9 @@ public class AccountService {
             // Nothing stored yet, so nothing survives normalization: a logo key is only ever
             // seeded by WalletSyncService, which builds the wallet's row itself.
             .logoKey(normalizeLogoKey(req.logoKey(), null, req.type()))
+            // A hand-entered account has no connector to ask, so the bank it names is looked up
+            // in the institution catalog instead — the only logo source open to it.
+            .logoUrl(req.isManual() ? bankLogoUrl(req.provider(), req.institutionId()) : null)
             .build();
 
         account = accountRepository.save(account);
@@ -151,10 +158,13 @@ public class AccountService {
     public AccountResponse update(Long id, AccountRequest req, Long memberId) {
         Account account = getOrThrow(id, memberId);
 
+        String previousProvider = account.getProvider();
+
         account.setName(req.name());
         account.setType(req.type());
         account.setProvider(req.provider());
         account.setCurrency(req.currency());
+        refreshBankLogo(account, previousProvider, req.institutionId());
         account.setColor(req.color() != null ? req.color() : account.getColor());
         account.setTicker(req.ticker());
         // Kept when absent, like color rather than like ticker: the logo picker only offers
@@ -174,6 +184,45 @@ public class AccountService {
         }
 
         return toResponse(accountRepository.save(account));
+    }
+
+    /**
+     * Re-resolves a manual account's bank logo when there is a reason to: the bank it names
+     * changed, or it never had one. An account whose provider and logo both already hold is
+     * left alone, so renaming an account or editing its balance costs no catalog call.
+     *
+     * <p>Manual accounts only. Every other account's logo belongs to whatever synced it — an
+     * Enable Banking account gets its own from the requisition it was created under, and a
+     * connector-named one (Trade Republic, BoursoBank...) resolves a bundled asset from
+     * {@code provider} client-side. Letting a free-text field overwrite either would bury a
+     * brand mark under whatever the catalog happened to match.
+     */
+    private void refreshBankLogo(Account account, String previousProvider, String institutionId) {
+        if (!account.isManual()) return;
+        String provider = account.getProvider();
+        if (provider == null || provider.isBlank()) {
+            account.setLogoUrl(null);
+            return;
+        }
+        boolean providerChanged = !provider.equals(previousProvider);
+        if (!providerChanged && account.getLogoUrl() != null) return;
+        account.setLogoUrl(bankLogoUrl(provider, institutionId));
+    }
+
+    /**
+     * The catalog logo for the bank a manual account names, or null when there is nothing to
+     * look up, no match, or no connector configured to ask.
+     *
+     * <p>Falls back to {@link BankConnectorPort#DEFAULT_COUNTRY} when the request carries no
+     * institution id to read a country off — a hand-typed name, or the MCP tools. An unfiltered
+     * search would be a multi-megabyte fetch on a path that runs on every account edit, so the
+     * cost of missing a hand-typed foreign bank is preferred to paying that every time.
+     */
+    private String bankLogoUrl(String provider, String institutionId) {
+        if (provider == null || provider.isBlank()) return null;
+        String country = BankLogoResolver.countryOf(institutionId);
+        return bankLogoResolver.logoUrlOrNull(
+            country != null ? country : BankConnectorPort.DEFAULT_COUNTRY, institutionId, provider);
     }
 
     @Transactional

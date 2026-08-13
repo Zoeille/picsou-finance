@@ -11,6 +11,7 @@ import { DateInput } from '@/components/shared/DateInput'
 import { Label } from '@/components/ui/label'
 import { ColorPicker } from '@/components/shared/ColorPicker'
 import { LogoPicker } from '@/components/shared/LogoPicker'
+import { BankPicker } from '@/components/shared/BankPicker'
 import { parseAmount, getLocale } from '@/lib/utils'
 import { ACCOUNT_TYPES, SUPPORTED_CURRENCIES } from '@/lib/constants'
 
@@ -29,7 +30,8 @@ import {
 const accountSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum([
-    'LEP', 'PEA', 'COMPTE_TITRES', 'CRYPTO', 'CHECKING', 'SAVINGS',
+    'LEP', 'LIVRET_A', 'LDDS', 'LIVRET_JEUNE', 'PEL', 'CEL',
+    'PEA', 'COMPTE_TITRES', 'CRYPTO', 'CHECKING', 'SAVINGS',
     'REAL_ESTATE', 'LOAN', 'EMPLOYEE_SAVINGS', 'OTHER',
   ]),
   provider: z.string().max(100).optional(),
@@ -39,6 +41,9 @@ const accountSchema = z.object({
   color: z.string(),
   ticker: z.string().max(20).optional(),
   logoKey: z.string().optional(),
+  // Not an account field: the id of the bank picked in BankPicker, forwarded to the backend
+  // once so it can resolve that bank's logo server-side. Undefined for a hand-typed name.
+  institutionId: z.string().optional(),
   // Loan-only fields (validated as numbers but optional at the form level — required-ness is enforced at submit when type=LOAN)
   borrowedAmount: z.number().min(0).optional(),
   interestRatePct: z.number().min(0).max(100).optional(),
@@ -66,7 +71,9 @@ interface AccountFormProps {
    *
    * Passed in rather than fetched here: this form is also rendered by AddAccountModal, and a
    * shared presentational component that issues its own query forces every consumer (and
-   * every test) to provide a QueryClient.
+   * every test) to provide a QueryClient. The bank field is the one exception — searching a
+   * catalog as the user types cannot be answered by a prop — and it keeps its query inside
+   * BankPicker rather than lifting it here, so only the field that needs it pays for it.
    */
   accounts?: Account[]
 }
@@ -81,6 +88,7 @@ const EMPTY_DEFAULTS: AccountFormData = {
   color: '#6366f1',
   ticker: '',
   logoKey: '',
+  institutionId: undefined,
   borrowedAmount: undefined,
   interestRatePct: undefined,
   monthlyPayment: undefined,
@@ -106,6 +114,7 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
   // another, so an account that has none never grows one here.
   const selectedLogoKey = useWatch({ control, name: 'logoKey' })
   const selectedType = useWatch({ control, name: 'type' })
+  const selectedProvider = useWatch({ control, name: 'provider' })
   const selectedCurrency = useWatch({ control, name: 'currency' })
 
   // Build the currency dropdown options. Labels are resolved live via Intl.DisplayNames
@@ -138,6 +147,13 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
       reset({ ...EMPTY_DEFAULTS, ...defaultValues })
     }
   }, [open, defaultValues, reset])
+
+  // The lender field and the provider field are the same form value: a loan's provider IS its
+  // bank, and it gets a logo on the same terms as any other account.
+  function handleBankChange(bankName: string, institutionId?: string) {
+    setValue('provider', bankName)
+    setValue('institutionId', institutionId)
+  }
 
   function handleFormSubmit(data: AccountFormData) {
     onSubmit(data)
@@ -198,7 +214,12 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="provider">{t('accounts.provider')}</Label>
-                <Input id="provider" {...register('provider')} placeholder="Boursorama" />
+                <BankPicker
+                  id="provider"
+                  value={selectedProvider ?? ''}
+                  placeholder="Boursorama"
+                  onChange={handleBankChange}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ticker">{t('accounts.ticker')}</Label>
@@ -211,7 +232,12 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
             <>
               <div className="space-y-2">
                 <Label htmlFor="provider">{t('debt.lenderName')}</Label>
-                <Input id="provider" {...register('provider')} placeholder={t('debt.lenderName')} />
+                <BankPicker
+                  id="provider"
+                  value={selectedProvider ?? ''}
+                  placeholder={t('debt.lenderName')}
+                  onChange={handleBankChange}
+                />
               </div>
               {propertyAccounts.length > 0 && (
                 <div className="space-y-2">

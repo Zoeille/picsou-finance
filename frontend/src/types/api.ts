@@ -1,5 +1,6 @@
 export type AccountType =
-  | 'LEP' | 'PEA' | 'COMPTE_TITRES' | 'CRYPTO' | 'CHECKING' | 'SAVINGS'
+  | 'LEP' | 'LIVRET_A' | 'LDDS' | 'LIVRET_JEUNE' | 'PEL' | 'CEL'
+  | 'PEA' | 'COMPTE_TITRES' | 'CRYPTO' | 'CHECKING' | 'SAVINGS'
   | 'REAL_ESTATE' | 'LOAN' | 'EMPLOYEE_SAVINGS' | 'OTHER'
 
 export type PropertyKind = 'HOUSE' | 'APARTMENT' | 'BUILDING' | 'LAND' | 'PARKING' | 'COMMERCIAL'
@@ -229,6 +230,11 @@ export interface AccountRequest {
   ticker?: string
   /** Omitted leaves the stored key untouched — the backend only overwrites it when set. */
   logoKey?: string
+  /**
+   * The bank picked in the account form, as the catalog's own id. Consumed server-side to
+   * resolve the logo (never sent as a URL — see `docs/features/bank-logos.md`) and not stored.
+   */
+  institutionId?: string
 }
 
 export interface RealEstateMetadataRequest {

@@ -23,6 +23,7 @@ import { DegiroPanel } from '@/components/sync/DegiroPanel'
 import { AmundiPanel } from '@/components/sync/AmundiPanel'
 import {
   ACCOUNT_COLORS,
+  ACCOUNT_TYPES,
   EXCHANGE_API_KEY_MAX_LENGTH,
   EXCHANGE_API_SECRET_MAX_LENGTH,
   TR_VERIFICATION_CODE_LENGTH,
@@ -176,6 +177,7 @@ export function AddAccountModal({ open, onOpenChange }: AddAccountModalProps) {
     isManual: boolean
     color: string
     ticker?: string
+    institutionId?: string
     borrowedAmount?: number
     interestRatePct?: number
     monthlyPayment?: number
@@ -193,6 +195,8 @@ export function AddAccountModal({ open, onOpenChange }: AddAccountModalProps) {
       isManual: true,
       color: data.color,
       ticker: data.ticker || undefined,
+      // Set only when a bank was picked from the catalog; the backend resolves its logo from it.
+      institutionId: data.institutionId,
     }
     const created = await createAccount.mutateAsync(request)
 
@@ -1270,8 +1274,11 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                         value={mappings[index].newAccount!.type}
                         onChange={(e) => updateNewAccountField(index, 'type', e.target.value)}
                       >
-                        {(['CHECKING', 'SAVINGS', 'LEP', 'PEA', 'COMPTE_TITRES', 'CRYPTO', 'REAL_ESTATE', 'LOAN', 'OTHER'] as const).map((type) => (
-                          <option key={type} value={type}>{t(`accountTypes.${type === 'COMPTE_TITRES' ? 'compteTitres' : type === 'REAL_ESTATE' ? 'realEstate' : type.toLowerCase()}`)}</option>
+                        {/* The shared list, not a local copy: deriving a label key from the
+                            type name only held while every key was the lowercased value, and
+                            broke the moment a type needed its own (livretA, employeeSavings). */}
+                        {ACCOUNT_TYPES.map((at) => (
+                          <option key={at.value} value={at.value}>{t(at.labelKey)}</option>
                         ))}
                       </select>
                     </div>

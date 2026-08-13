@@ -105,10 +105,25 @@ class AccountTypeTest(unittest.TestCase):
     def test_maps_savings_accounts(self):
         self.assertEqual(account_type("savings", "LEP"), "LEP")
         self.assertEqual(account_type("savings", "Livret d'Épargne Populaire"), "LEP")
-        self.assertEqual(account_type("savings", "LIVRET DEVELOPPEMENT DURABLE"), "SAVINGS")
+
+    def test_maps_each_regulated_passbook_onto_its_own_type(self):
+        self.assertEqual(account_type("savings", "Livret A"), "LIVRET_A")
+        self.assertEqual(account_type("savings", "LIVRET DEVELOPPEMENT DURABLE"), "LDDS")
+        self.assertEqual(account_type("savings", "LDD"), "LDDS")
+        self.assertEqual(account_type("savings", "LDDS"), "LDDS")
+        self.assertEqual(account_type("savings", "Livret Jeune"), "LIVRET_JEUNE")
+        self.assertEqual(account_type("savings", "Plan d'Épargne Logement"), "PEL")
+        self.assertEqual(account_type("savings", "PLAN EPARGNE LOGEMENT"), "PEL")
+        self.assertEqual(account_type("savings", "Compte d'Épargne Logement"), "CEL")
+
+    def test_a_house_passbook_stays_the_generic_savings_type(self):
+        self.assertEqual(account_type("savings", "Livret Bourso+"), "SAVINGS")
 
     def test_a_savings_label_merely_containing_lep_is_not_an_lep(self):
         self.assertEqual(account_type("savings", "Livret Leplus"), "SAVINGS")
+
+    def test_a_livret_whose_name_merely_starts_with_a_is_not_a_livret_a(self):
+        self.assertEqual(account_type("savings", "Livret Avenir"), "SAVINGS")
 
     def test_banking_is_the_default(self):
         self.assertEqual(account_type("banking", "BoursoBank"), "CHECKING")
@@ -133,7 +148,7 @@ class DashboardTest(unittest.TestCase):
             [(account["type"], account["name"]) for account in accounts],
             [
                 ("CHECKING", "BoursoBank"),
-                ("SAVINGS", "LIVRET DEVELOPPEMENT DURABLE SOLIDAIRE"),
+                ("LDDS", "LIVRET DEVELOPPEMENT DURABLE SOLIDAIRE"),
                 ("PEA", "PEA DOE"),
             ],
         )
