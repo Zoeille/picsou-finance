@@ -212,7 +212,9 @@ class CollectAccountsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(checking.cashBalance)
         self.assertEqual(checking.positions, [])
 
-        self.assertEqual(by_type["SAVINGS"].balanceEur, Decimal("11010.00"))
+        # The fixture's passbook is a real LDDS, so it must arrive typed as one
+        # rather than as the generic SAVINGS the sidecar used to send.
+        self.assertEqual(by_type["LDDS"].balanceEur, Decimal("11010.00"))
 
         pea = by_type["PEA"]
         self.assertEqual(pea.externalId, f"bourso_{PEA_ID}")

@@ -7,12 +7,15 @@ which is markup BoursoBank actually served.
 
 import unittest
 from decimal import Decimal
+from typing import get_args
 
 from accounts_parser import (
     FORMAT_CHANGED,
     INCOMPLETE,
     INVALID_DATA,
+    AccountKind,
     AccountsFormatError,
+    _SAVINGS_PATTERNS,
     account_type,
     guard_symbol_collisions,
     describe_payload,
@@ -127,6 +130,17 @@ class AccountTypeTest(unittest.TestCase):
 
     def test_banking_is_the_default(self):
         self.assertEqual(account_type("banking", "BoursoBank"), "CHECKING")
+
+    def test_every_kind_the_parser_emits_is_in_the_sidecar_contract(self):
+        """AccountPayload.type is AccountKind, so a kind missing from it is not a
+        type quibble: pydantic rejects the account and the whole sync fails.
+        That is exactly how the regulated passbooks shipped -- the parser learned
+        to emit LDDS while the contract still allowed five kinds. CI runs no type
+        checker, so the annotation alone would not have caught it; this does.
+        """
+        emitted = {kind for kind, _ in _SAVINGS_PATTERNS}
+        emitted.update({"CHECKING", "SAVINGS", "PEA", "COMPTE_TITRES"})
+        self.assertEqual(emitted, set(get_args(AccountKind)))
 
 
 class OwnAccountTest(unittest.TestCase):

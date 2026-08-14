@@ -43,6 +43,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from accounts_parser import (
+    AccountKind,
     AccountsFormatError,
     guard_symbol_collisions,
     parse_dashboard,
@@ -194,7 +195,7 @@ class AccountPayload(BaseModel):
 
     externalId: str = Field(min_length=1, max_length=100)
     name: str = Field(min_length=1, max_length=200)
-    type: Literal["CHECKING", "SAVINGS", "LEP", "PEA", "COMPTE_TITRES"]
+    type: AccountKind
     balanceEur: Decimal
     cashBalance: Decimal | None = None
     positions: list[PositionPayload]

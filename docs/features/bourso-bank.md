@@ -302,6 +302,14 @@ See [the ADR](../decisions/2026-08-11-boursobank-httpx-sidecar.md).
   shipped enabled. The migration header says so.
 - **The error-code CHECK constraint must track `BoursoErrorCode`.** A code
   missing from it turns a diagnosable failure into a 500 at write time.
+- **`AccountPayload.type` is `accounts_parser.AccountKind`, not its own list.**
+  A kind the parser emits but the contract omits is not a type quibble: pydantic
+  rejects that account and `_collect_accounts` fails the *entire* sync, so one
+  unrecognised passbook loses the whole portfolio. That is how the regulated
+  passbooks first shipped — `_SAVINGS_PATTERNS` learned `LDDS` while the model
+  still allowed five kinds. The alias is single-sourced in the parser and
+  `test_every_kind_the_parser_emits_is_in_the_sidecar_contract` asserts the two
+  agree, because CI runs the tests but no type checker.
 
 ## Verification boundaries
 
