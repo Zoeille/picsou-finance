@@ -126,12 +126,12 @@ export function EBStep2Credentials({ onNext, onBack }: Props) {
             prior substep displays it for the user to register in EB. */}
         <input type="hidden" {...register('redirectUri')} />
 
-        <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left cursor-pointer">
+        <label className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/30 p-3 text-left cursor-pointer">
           <input
             type="checkbox"
             checked={prodAcknowledged}
             onChange={(e) => setProdAcknowledged(e.target.checked)}
-            className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-border accent-primary"
+            className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer rounded-sm border-border accent-primary"
             aria-describedby="eb-prod-ack-desc"
           />
           <span id="eb-prod-ack-desc" className="text-xs sm:text-sm">
@@ -157,7 +157,7 @@ export function EBStep2Credentials({ onNext, onBack }: Props) {
           <Button
             type="submit"
             disabled={writeConfig.isPending || !formState.isValid || !prodAcknowledged}
-            className="w-full rounded-full sm:w-auto"
+            className="w-full sm:w-auto"
           >
             {t('setup.enablebanking.continue')}
           </Button>

@@ -57,7 +57,7 @@ export function AddressAutocomplete({
       </div>
 
       {open && suggestions.length > 0 && (
-        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-popover p-1 shadow-md">
+        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border bg-popover p-1 shadow-md">
           {suggestions.map(suggestion => (
             <li key={`${suggestion.label}-${suggestion.inseeCode}`}>
               <button

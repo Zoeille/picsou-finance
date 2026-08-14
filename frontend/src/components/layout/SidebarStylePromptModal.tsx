@@ -104,7 +104,7 @@ export function SidebarStylePromptModal({ open, onOpenChange }: SidebarStyleProm
               role="radio"
               aria-checked={sidebarStyle === option.value}
               onClick={() => choose(option.value)}
-              className="flex flex-col gap-2 rounded-lg border border-border p-2 text-left transition-colors hover:border-primary/60 hover:bg-muted/40"
+              className="flex flex-col gap-2 rounded-2xl border border-border p-2 text-left transition-colors hover:border-primary/60 hover:bg-muted/40"
             >
               <SidebarPreview variant={option.value} />
               <span className="text-sm font-medium">{t(option.labelKey)}</span>

@@ -34,7 +34,7 @@ export function EBStep4Redirect({ onNext, onBack }: Props) {
     <EBSubstepShell current={2} total={5}>
       <div className="space-y-6">
         <div className="flex justify-center">
-          <span className="rounded-xl bg-primary/10 p-3 text-primary">
+          <span className="rounded-lg bg-primary/10 p-3 text-primary">
             <ExternalLink className="h-6 w-6" />
           </span>
         </div>
@@ -85,7 +85,7 @@ export function EBStep4Redirect({ onNext, onBack }: Props) {
           </Button>
           <Button
             onClick={onNext}
-            className="w-full rounded-full sm:w-auto"
+            className="w-full sm:w-auto"
           >
             {t('setup.enablebanking.redirect.addedCta')}
           </Button>

@@ -142,7 +142,7 @@ export function AccountCard({ account, onClick }: AccountCardProps) {
             <AccountTypeBadge type={account.type} />
             {/* Present only below 100%, so the balance above is knowingly a shared figure. */}
             {account.sharePercent != null && (
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                 {Number(account.sharePercent).toFixed(0)} %
               </span>
             )}

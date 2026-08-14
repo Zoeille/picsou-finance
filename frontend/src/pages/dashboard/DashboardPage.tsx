@@ -276,7 +276,7 @@ export function DashboardPage() {
                 <Item
                   key={goal.id}
                   variant="muted"
-                  className="flex-col items-stretch rounded-4xl px-4 py-3 gap-4 cursor-pointer"
+                  className="flex-col items-stretch rounded-2xl px-4 py-3 gap-4 cursor-pointer"
                   onClick={() => setDetailGoalId(goal.id)}
                 >
                   <ItemContent className="gap-3">

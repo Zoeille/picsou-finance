@@ -117,7 +117,7 @@ export function ExportDataDialog({
             </div>
           )}
 
-          <div className="flex items-start gap-3 rounded-md border p-3">
+          <div className="flex items-start gap-3 rounded-2xl border p-3">
             <Switch
               id="export-snapshots"
               checked={includeBalanceSnapshots}

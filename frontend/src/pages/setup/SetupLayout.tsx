@@ -69,7 +69,7 @@ export function SetupLayout() {
         <div
           role="radiogroup"
           aria-label={t('setup.intro.language')}
-          className="inline-flex min-h-12 shrink-0 items-center rounded-2xl border border-border/60 bg-background/80 p-1 backdrop-blur-md"
+          className="inline-flex min-h-12 shrink-0 items-center rounded-xl border border-border/60 bg-background/80 p-1 backdrop-blur-md"
         >
           {SUPPORTED_LOCALES.map((locale) => (
             <button
@@ -79,7 +79,7 @@ export function SetupLayout() {
               aria-checked={activeLanguage === locale.code}
               onClick={() => switchLang(locale.code)}
               className={cn(
-                'inline-flex h-10 min-w-12 items-center justify-center rounded-xl px-4 text-sm font-medium transition-[background-color,color] sm:min-w-14 sm:px-5',
+                'inline-flex h-10 min-w-12 items-center justify-center rounded-lg px-4 text-sm font-medium transition-[background-color,color] sm:min-w-14 sm:px-5',
                 activeLanguage === locale.code
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -92,7 +92,7 @@ export function SetupLayout() {
 
         <span
           className={cn(
-            'inline-flex h-10 min-w-0 items-center rounded-full border border-border/60',
+            'inline-flex h-10 min-w-0 items-center rounded-lg border border-border/60',
             'bg-background/80 px-4 text-xs font-medium text-muted-foreground',
             'backdrop-blur-md'
           )}
@@ -110,7 +110,7 @@ export function SetupLayout() {
       >
         <a
           href="#setup-main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[60] focus:inline-flex focus:h-10 focus:items-center focus:rounded-full focus:bg-primary focus:px-6 focus:text-sm focus:font-medium focus:text-primary-foreground"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-20 focus:z-[60] focus:inline-flex focus:h-10 focus:items-center focus:rounded-lg focus:bg-primary focus:px-6 focus:text-sm focus:font-medium focus:text-primary-foreground"
         >
           {t('setup.a11y.skipToContent')}
         </a>

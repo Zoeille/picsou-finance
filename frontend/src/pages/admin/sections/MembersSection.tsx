@@ -117,7 +117,7 @@ export function MembersSection() {
         ) : !members || members.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('admin.members.noMembers')}</p>
         ) : (
-          <ul className="divide-y rounded-lg border">
+          <ul className="divide-y rounded-xl border">
             {members.map((m) => {
               const isSelf = m.id === currentUser?.memberId
               const isAdminMember = !m.managed
@@ -238,10 +238,10 @@ export function MembersSection() {
         )}
 
         {link && (
-          <div className="rounded-lg border bg-muted p-3 space-y-2">
+          <div className="rounded-2xl border bg-muted p-3 space-y-2">
             <p className="text-sm font-medium">{t('admin.members.linkLabel')}</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="flex-1 break-all rounded-xl bg-background px-3 py-2 text-sm">
+              <code className="flex-1 break-all rounded-lg bg-background px-3 py-2 text-sm">
                 {link.url}
               </code>
               <Button size="sm" variant="outline" onClick={handleCopy}>

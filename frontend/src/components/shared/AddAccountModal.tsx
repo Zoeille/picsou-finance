@@ -98,7 +98,7 @@ function MaskedOTPSlot({ index }: { index: number }) {
   return (
     <div
       data-active={isActive}
-      className="relative flex size-10 items-center justify-center border-y border-r border-input bg-input/20 text-sm transition-[border-color,box-shadow,background-color] outline-none first:rounded-l-xl first:border-l last:rounded-r-xl aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-2 data-[active=true]:ring-ring/30 dark:bg-input/30"
+      className="relative flex size-10 items-center justify-center border-y border-r border-input bg-input/20 text-sm transition-[border-color,box-shadow,background-color] outline-none first:rounded-l-lg first:border-l last:rounded-r-lg aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-2 data-[active=true]:ring-ring/30 dark:bg-input/30"
     >
       {hasChar ? '•' : null}
       {hasFakeCaret && (
@@ -376,7 +376,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
       <BackButton onClick={onBack} />
       <div className="space-y-4">
         {error && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <span className="flex-1">{error}</span>
             <Button variant="ghost" size="sm" onClick={() => setError(null)}>x</Button>
           </div>
@@ -403,7 +403,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
         )}
 
         {searchEnabled && searchFailed && !searchLoading && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <span className="flex-1">
               {extractErrorMessage(searchError, t('sync.banks.searchError'))}
             </span>
@@ -415,7 +415,7 @@ function BankWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
             {institutions.map((inst) => (
               <div
                 key={inst.id}
-                className="grid grid-cols-[minmax(0,1fr)_2.5rem_auto] items-center gap-4 rounded-lg border px-3 py-2"
+                className="grid grid-cols-[minmax(0,1fr)_2.5rem_auto] items-center gap-4 rounded-xl border px-3 py-2"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <InstitutionLogo logoUrl={inst.logoUrl} />
@@ -503,7 +503,7 @@ function ExchangeWizard({ onBack }: { onDone: () => void; onBack: () => void }) 
     <>
       <BackButton onClick={onBack} />
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span className="flex-1">{error}</span>
           <Button variant="ghost" size="sm" onClick={() => setError(null)}>x</Button>
         </div>
@@ -619,7 +619,7 @@ function WalletWizard({ onBack }: { onDone: () => void; onBack: () => void }) {
     <>
       <BackButton onClick={onBack} />
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span className="flex-1">{error}</span>
           <Button variant="ghost" size="sm" onClick={() => setError(null)}>x</Button>
         </div>
@@ -760,7 +760,7 @@ function TradeRepublicWizard({ onBack }: { onDone: () => void; onBack: () => voi
       <BackButton onClick={onBack} />
       <div className="space-y-4">
         {errorMsg && (
-          <div className="flex flex-col gap-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div className="flex flex-col gap-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <span className="leading-6">{errorMsg}</span>
             <Button
               variant="ghost"
@@ -1089,7 +1089,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive mb-4">
+        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive mb-4">
           <span className="flex-1">{error}</span>
           <Button variant="ghost" size="sm" onClick={() => setError(null)}>x</Button>
         </div>
@@ -1178,7 +1178,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
           {/* File upload zone */}
           <div
-            className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+            className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
               dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-muted-foreground/50'
             }`}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -1215,7 +1215,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
           <div className="space-y-3 max-h-80 overflow-y-auto">
             {previewData.accounts.map((account, index) => (
-              <div key={account.finaryCategory + account.finaryId} className="rounded-lg border p-3 space-y-2">
+              <div key={account.finaryCategory + account.finaryId} className="rounded-2xl border p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{account.finaryName}</p>
@@ -1242,7 +1242,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
                 {mappings[index]?.action === 'MAP_EXISTING' && (
                   <select
-                    className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+                    className="h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
                     value={mappings[index].targetAccountId ?? ''}
                     onChange={(e) => {
                       const val = e.target.value
@@ -1270,7 +1270,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                     <div className="space-y-1">
                       <Label>{t('sync.exchanges.type')}</Label>
                       <select
-                        className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+                        className="h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
                         value={mappings[index].newAccount!.type}
                         onChange={(e) => updateNewAccountField(index, 'type', e.target.value)}
                       >
@@ -1336,7 +1336,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
           {importResult.importedAccounts.length > 0 && (
             <div className="space-y-2">
               {importResult.importedAccounts.map((account) => (
-                <div key={account.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                <div key={account.id} className="flex items-center gap-3 rounded-xl border px-3 py-2">
                   <div className="size-3 shrink-0 rounded-full" style={{ backgroundColor: account.color }} />
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium">{account.name}</p>
@@ -1360,7 +1360,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
 function ResultStat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
-    <div className="rounded-xl bg-muted/50 p-3 text-center">
+    <div className="rounded-2xl bg-muted/50 p-3 text-center">
       <p className={`text-xl font-semibold ${color ?? ''}`}>{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>

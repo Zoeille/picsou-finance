@@ -81,7 +81,7 @@ export function LoginPage() {
                   autoComplete="username"
                   required
                   placeholder="admin"
-                  className="h-12 rounded-xl px-4 text-base md:text-base"
+                  className="h-12 px-4 text-base md:text-base"
                 />
               </div>
 
@@ -98,12 +98,12 @@ export function LoginPage() {
                     autoComplete="current-password"
                     required
                     placeholder="••••••••"
-                    className="h-12 rounded-xl px-4 pr-14 text-base md:text-base"
+                    className="h-12 px-4 pr-14 text-base md:text-base"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPw(v => !v)}
-                    className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
                     aria-pressed={showPw}
                   >
@@ -116,13 +116,13 @@ export function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl py-1">
+              <div className="flex items-start gap-3 py-1">
                 <input
                   id="rememberMe"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={e => setRememberMe(e.target.checked)}
-                  className="mt-1 h-5 w-5 shrink-0 rounded-md accent-primary"
+                  className="mt-1 h-5 w-5 shrink-0 rounded-sm accent-primary"
                 />
                 <div className="flex flex-col">
                   <Label htmlFor="rememberMe" className="cursor-pointer text-base font-semibold">
@@ -141,7 +141,7 @@ export function LoginPage() {
               <Button
                 type="submit"
                 disabled={loginMutation.isPending}
-                className="mt-2 h-12 w-full rounded-full px-8 text-base transition-transform active:scale-[0.96]"
+                className="mt-2 h-12 w-full px-8 text-base transition-transform active:scale-[0.96]"
               >
                 {loginMutation.isPending && (
                   <Loader2 className="size-5 animate-spin" />

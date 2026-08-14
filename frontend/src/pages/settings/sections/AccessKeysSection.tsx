@@ -48,14 +48,14 @@ function ScopeToggle({
       aria-checked={checked}
       onClick={onToggle}
       className={cn(
-        'flex w-full flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition-colors',
+        'flex w-full flex-col items-start gap-0.5 rounded-2xl border p-3 text-left transition-colors',
         checked ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted',
       )}
     >
       <span className="flex items-center gap-2 text-sm font-medium">
         <span
           className={cn(
-            'flex size-4 shrink-0 items-center justify-center rounded border',
+            'flex size-4 shrink-0 items-center justify-center rounded-sm border',
             checked ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40',
           )}
           aria-hidden
@@ -173,7 +173,7 @@ export function AccessKeysSection() {
       ) : !keys || keys.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('accessKeys.empty')}</p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="divide-y rounded-xl border">
           {keys.map((k) => {
             const status = keyStatus(k)
             const badge = STATUS_BADGE[status]
@@ -233,7 +233,7 @@ export function AccessKeysSection() {
         <div className="space-y-2">
           <Label className="text-muted-foreground">{t('accessKeys.connectEndpointLabel')}</Label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <code className="flex min-h-10 flex-1 items-center break-all rounded-xl bg-background px-4 py-2 font-mono text-sm">
+            <code className="flex min-h-10 flex-1 items-center break-all rounded-lg bg-background px-4 py-2 font-mono text-sm">
               {endpoint}
             </code>
             <Button
@@ -250,7 +250,7 @@ export function AccessKeysSection() {
         <div className="space-y-2">
           <Label className="text-muted-foreground">{t('accessKeys.connectSnippetLabel')}</Label>
           <div className="relative space-y-2 sm:space-y-0">
-            <pre className="min-h-10 overflow-x-auto rounded-xl bg-background p-4 font-mono text-sm leading-relaxed sm:pr-40">
+            <pre className="min-h-10 overflow-x-auto rounded-2xl bg-background p-4 font-mono text-sm leading-relaxed sm:pr-40">
               {snippet}
             </pre>
             <Button
@@ -280,9 +280,9 @@ export function AccessKeysSection() {
                 <DialogDescription>{t('accessKeys.secretWarning')}</DialogDescription>
               </DialogHeader>
               <div className="min-h-0 overflow-y-auto px-5 py-4">
-                <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-50 p-3 dark:bg-amber-950/30">
+                <div className="space-y-2 rounded-2xl border border-amber-500/40 bg-amber-50 p-3 dark:bg-amber-950/30">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <code className="flex min-h-10 flex-1 items-center break-all rounded-xl bg-background px-4 py-2 font-mono text-sm">
+                    <code className="flex min-h-10 flex-1 items-center break-all rounded-lg bg-background px-4 py-2 font-mono text-sm">
                       {created.secret}
                     </code>
                     <Button
@@ -365,7 +365,7 @@ export function AccessKeysSection() {
                   {createKey.isError && (
                     <p
                       role="alert"
-                      className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                      className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
                     >
                       {formatApiError(createKey.error, t, 'accessKeys.error')}
                     </p>

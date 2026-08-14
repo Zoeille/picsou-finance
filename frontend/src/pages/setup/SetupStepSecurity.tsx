@@ -89,7 +89,7 @@ export function SetupStepSecurity() {
                         size="icon"
                         onClick={() => remove(idx)}
                         aria-label={t('setup.security.originRemove')}
-                        className="h-10 w-10 rounded-xl"
+                        className="h-10 w-10"
                       >
                         <X className="size-4" />
                       </Button>
@@ -114,7 +114,7 @@ export function SetupStepSecurity() {
               type="button"
               variant="outline"
               onClick={() => append('')}
-              className="rounded-xl px-4"
+              className="px-4"
             >
               <PlusCircle className="mr-2 size-4" />
               {t('setup.security.originAdd')}
@@ -122,7 +122,7 @@ export function SetupStepSecurity() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-5">
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 p-5">
           <div className="space-y-1">
             <Label htmlFor="setup-secure-cookies" className="text-sm font-semibold">
               {t('setup.security.secureCookiesLabel')}
@@ -155,7 +155,7 @@ export function SetupStepSecurity() {
           <Button
             type="submit"
             disabled={submit.isPending}
-            className="w-full rounded-full"
+            className="w-full"
           >
             {submit.isPending ? t('setup.security.saving') : t('setup.security.cta')}
           </Button>

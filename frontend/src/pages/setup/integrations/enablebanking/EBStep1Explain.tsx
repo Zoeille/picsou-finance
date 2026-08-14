@@ -24,11 +24,11 @@ export function EBStep1Explain({ onNext }: Props) {
     <EBSubstepShell current={1} total={5}>
       <div className="space-y-6">
         <div className="flex items-center justify-center gap-3 text-primary">
-          <span className="rounded-xl bg-primary/10 p-3">
+          <span className="rounded-lg bg-primary/10 p-3">
             <Landmark className="h-6 w-6" />
           </span>
           <span className="text-muted-foreground" aria-hidden="true">+</span>
-          <span className="rounded-xl bg-primary/10 p-3">
+          <span className="rounded-lg bg-primary/10 p-3">
             <Lock className="h-6 w-6" />
           </span>
         </div>
@@ -55,12 +55,12 @@ export function EBStep1Explain({ onNext }: Props) {
         </div>
 
         {psd2Open && (
-          <div className="rounded-xl border border-border/60 bg-muted/40 p-4 text-xs text-muted-foreground">
+          <div className="rounded-2xl border border-border/60 bg-muted/40 p-4 text-xs text-muted-foreground">
             {t('setup.enablebanking.explain.psd2Body')}
           </div>
         )}
 
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-left">
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-left">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="space-y-1 text-xs sm:text-sm">
             <p className="font-medium text-amber-900 dark:text-amber-100">
@@ -72,7 +72,7 @@ export function EBStep1Explain({ onNext }: Props) {
           </div>
         </div>
 
-        <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/40 p-4 text-left">
+        <div className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/40 p-4 text-left">
           <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
           <p className="text-xs sm:text-sm text-muted-foreground">
             {t('setup.enablebanking.explain.psd2ScopeNote')}
@@ -84,25 +84,25 @@ export function EBStep1Explain({ onNext }: Props) {
             <Button
               variant="outline"
               onClick={handleCreateAccount}
-              className="w-full rounded-full"
+              className="w-full"
             >
               {t('setup.enablebanking.explain.needAccount')}
             </Button>
             <Button
               onClick={handleHaveAccount}
-              className="w-full rounded-full"
+              className="w-full"
             >
               {t('setup.enablebanking.explain.haveAccount')}
             </Button>
           </div>
         ) : (
-          <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4 text-center">
+          <div className="space-y-3 rounded-2xl border border-border/60 bg-card p-4 text-center">
             <p className="text-sm text-muted-foreground">
               {t('setup.enablebanking.explain.signupOpened')}
             </p>
             <Button
               onClick={onNext}
-              className="w-full rounded-full"
+              className="w-full"
             >
               {t('setup.enablebanking.explain.continueAfterSignup')}
             </Button>

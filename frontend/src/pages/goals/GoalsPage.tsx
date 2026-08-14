@@ -213,7 +213,7 @@ export function GoalsPage() {
                       type="checkbox"
                       checked={form.accountIds.includes(a.id)}
                       onChange={() => toggleAccount(a.id)}
-                      className="rounded accent-primary"
+                      className="rounded-sm accent-primary"
                     />
                     <span
                       className="w-2.5 h-2.5 rounded-full shrink-0"

@@ -33,7 +33,7 @@ export function SessionsList() {
 
   return (
     <div className="space-y-3">
-      <ul className="divide-y rounded-lg border">
+      <ul className="divide-y rounded-xl border">
         {sessions.map(s => (
           <SessionRow
             key={s.id}

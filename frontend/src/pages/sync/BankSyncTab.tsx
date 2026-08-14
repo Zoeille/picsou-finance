@@ -241,7 +241,7 @@ export function BankSyncTab() {
         {searchLoading && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
 
         {searchEnabled && searchFailed && !searchLoading && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <span className="flex-1">{formatApiError(searchError, t, 'sync.banks.searchError')}</span>
           </div>
         )}

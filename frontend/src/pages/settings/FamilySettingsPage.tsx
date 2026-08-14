@@ -72,7 +72,7 @@ function MemberManagement() {
             const isIndependent = member.managed && member.hasLogin && member.activated
 
             return (
-              <div key={member.id} className="flex items-center justify-between rounded-lg border p-3">
+              <div key={member.id} className="flex items-center justify-between rounded-xl border p-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{member.displayName}</p>
@@ -142,7 +142,7 @@ function MemberManagement() {
 
         {/* Activation link display */}
         {activationLink && (
-          <div className="rounded-lg border bg-muted p-3">
+          <div className="rounded-2xl border bg-muted p-3">
             <p className="text-sm font-medium mb-1">{t('family.settings.activationLink')}</p>
             <code className="text-xs break-all">{window.location.origin}{activationLink}</code>
           </div>

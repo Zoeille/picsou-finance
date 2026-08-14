@@ -69,7 +69,7 @@ export function EnableBankingSection({ settings }: { settings: AdminEnableBankin
   if (!settings.privateKeyPresent) missing.push(t('admin.enableBanking.privateKey'))
 
   return (
-    <Card className="rounded-4xl bg-card">
+    <Card className="bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Landmark className="size-5 text-muted-foreground" />
@@ -220,13 +220,13 @@ function KeypairPanel({ privateKeyPresent }: { privateKeyPresent: boolean }) {
       </div>
 
       {/* Mode toggle */}
-      <div className="flex gap-1 rounded-2xl bg-muted p-1">
+      <div className="flex gap-1 rounded-xl bg-muted p-1">
         {(['generate', 'import'] as Mode[]).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => switchMode(m)}
-            className={`flex-1 rounded-xl px-6 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-6 py-2 text-sm font-medium transition-colors ${
               mode === m
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -280,7 +280,7 @@ function KeypairPanel({ privateKeyPresent }: { privateKeyPresent: boolean }) {
             value={privatePem}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrivatePem(e.target.value)}
             placeholder={'-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'}
-            className="min-h-[140px] w-full resize-none rounded-xl border border-input bg-input/20 p-3 font-mono text-sm leading-snug placeholder:text-muted-foreground/80 dark:bg-input/30"
+            className="min-h-[140px] w-full resize-none rounded-lg border border-input bg-input/20 p-3 font-mono text-sm leading-snug placeholder:text-muted-foreground/80 dark:bg-input/30"
           />
           {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
           <Button
@@ -301,7 +301,7 @@ function KeypairPanel({ privateKeyPresent }: { privateKeyPresent: boolean }) {
       {publicPem && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">{t('admin.enableBanking.keypair.uploadInstruction')}</p>
-          <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-muted/40 p-4 font-mono text-[11px] leading-snug whitespace-pre-wrap break-all">
+          <pre className="max-h-64 overflow-auto rounded-2xl border border-border/60 bg-muted/40 p-4 font-mono text-[11px] leading-snug whitespace-pre-wrap break-all">
             {publicPem}
           </pre>
           <div className="flex flex-col gap-2 sm:flex-row">

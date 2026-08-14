@@ -98,7 +98,7 @@ const EMPTY_DEFAULTS: AccountFormData = {
   endDate: '',
 }
 
-const selectControlClassName = "flex h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+const selectControlClassName = "flex h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
 
 export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title, loading, accounts = [] }: AccountFormProps) {
   const { t } = useTranslation()
@@ -348,7 +348,7 @@ export function AccountForm({ open, onOpenChange, onSubmit, defaultValues, title
 
           {selectedType !== 'REAL_ESTATE' && selectedType !== 'LOAN' && (
             <div className="flex min-h-10 items-center gap-2">
-              <input id="isManual" type="checkbox" {...register('isManual')} className="h-5 w-5 rounded accent-primary" />
+              <input id="isManual" type="checkbox" {...register('isManual')} className="h-5 w-5 rounded-sm accent-primary" />
               <Label htmlFor="isManual">{t('accounts.manual')}</Label>
             </div>
           )}

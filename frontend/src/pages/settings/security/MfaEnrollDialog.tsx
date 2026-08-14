@@ -137,12 +137,12 @@ export function MfaEnrollDialog({
               <img
                 src={qrUri}
                 alt="2FA QR code"
-                className="size-48 sm:size-56 border rounded-lg bg-white p-2"
+                className="size-48 sm:size-56 border rounded-2xl bg-white p-2"
               />
             </div>
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">{t('settings.mfaEnrollSecretManual')}</p>
-              <code className="block w-full font-mono text-xs sm:text-sm break-all rounded border bg-muted/40 p-2 text-center">
+              <code className="block w-full font-mono text-xs sm:text-sm break-all rounded-lg border bg-muted/40 p-2 text-center">
                 {secret}
               </code>
             </div>

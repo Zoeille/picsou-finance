@@ -84,7 +84,7 @@ function NavItem({
       asChild
       variant={isActive ? 'muted' : 'default'}
       className={cn(
-        'min-h-[72px] rounded-xl px-4 py-3',
+        'min-h-[72px] px-4 py-3',
         isActive && 'bg-muted ring-1 ring-border',
       )}
     >
@@ -150,7 +150,7 @@ export function AppSidebar() {
   return (
     <nav
       className={cn(
-        'hidden shrink-0 flex-col rounded-xl bg-background px-3 py-4 md:flex',
+        'hidden shrink-0 flex-col rounded-4xl bg-background px-3 py-4 md:flex',
         isClassic ? 'h-fit max-h-[calc(100vh-2rem)] w-60' : 'h-[calc(100vh-2rem)] w-72',
       )}
     >
@@ -191,7 +191,7 @@ export function AppSidebar() {
             <Item
               asChild
               variant="default"
-              className="mt-3 min-h-[72px] rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+              className="mt-3 min-h-[72px] px-4 py-3 text-left transition-colors hover:bg-muted"
             >
               <button
                 type="button"
@@ -270,7 +270,7 @@ export function AppSidebar() {
               <Item
                 asChild
                 variant="default"
-                className="min-h-[72px] flex-1 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+                className="min-h-[72px] flex-1 px-4 py-3 text-left transition-colors hover:bg-muted"
               >
                 <button type="button" aria-label={t('nav.account')}>
                   <Avatar className="size-10 shrink-0 rounded-lg">

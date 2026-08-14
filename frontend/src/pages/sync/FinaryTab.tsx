@@ -383,7 +383,7 @@ export function FinaryTab() {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <X className="size-4 shrink-0" />
           <span className="flex-1">{error}</span>
           <Button variant="ghost" size="icon-xs" onClick={() => setError(null)}>
@@ -580,7 +580,7 @@ export function FinaryTab() {
             <Card size="sm">
               <CardContent className="space-y-2 pt-0">
                 {importResult.importedAccounts.map((account) => (
-                  <div key={account.id} className="flex items-center gap-3 rounded-lg px-3 py-2">
+                  <div key={account.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
                     <div className="size-3 shrink-0 rounded-full" style={{ backgroundColor: account.color }} />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium">{account.name}</p>
@@ -667,7 +667,7 @@ function MappingCard({
 
         {mapping.action === 'MAP_EXISTING' && (
           <select
-            className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+            className="h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
             value={mapping.targetAccountId ?? ''}
             onChange={(e) => {
               const val = e.target.value
@@ -698,7 +698,7 @@ function MappingCard({
             <div className="space-y-1">
               <Label>{t('sync.exchanges.type')}</Label>
               <select
-                className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+                className="h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
                 value={mapping.newAccount.type}
                 onChange={(e) => onNewAccountField('type', e.target.value)}
               >
@@ -751,7 +751,7 @@ function MappingCard({
 
 function ResultStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="rounded-xl bg-muted/50 p-4 text-center">
+    <div className="rounded-2xl bg-muted/50 p-4 text-center">
       <p className={`text-2xl font-semibold ${color}`}>{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{label}</p>
     </div>

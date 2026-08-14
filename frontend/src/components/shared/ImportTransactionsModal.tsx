@@ -34,7 +34,7 @@ const MAPPING_FIELDS: { key: MappingField; optional: boolean }[] = [
 ]
 
 const SELECT_CLASS =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring'
+  'flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring'
 
 export function ImportTransactionsModal({ open, onOpenChange, accountId }: ImportTransactionsModalProps) {
   const { t } = useTranslation()
@@ -111,7 +111,7 @@ function ImportWizard({ accountId, onOpenChange }: { accountId: number; onOpenCh
               <AlertCircle className="size-5" />
               <span className="font-medium">{t('import.rowsSkipped', { count: result.skipped })}</span>
             </div>
-            <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-muted/40 p-2 text-sm">
+            <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border bg-muted/40 p-2 text-sm">
               {result.errors.map((e, i) => (
                 <li key={i} className="text-muted-foreground">
                   {t('import.rowLabel', { row: e.rowNumber })}: {e.message}
@@ -133,7 +133,7 @@ function ImportWizard({ accountId, onOpenChange }: { accountId: number; onOpenCh
       <div className="space-y-4">
         <div
           className={cn(
-            'flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors',
+            'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center transition-colors',
             dragOver ? 'border-primary bg-primary/5' : 'border-border',
           )}
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
@@ -255,7 +255,7 @@ function ImportWizard({ accountId, onOpenChange }: { accountId: number; onOpenCh
       {/* Preview table */}
       <div>
         <p className="mb-2 text-sm font-medium">{t('import.preview')} ({t('import.rowsTotal', { count: preview.totalRows })})</p>
-        <div className="max-h-48 overflow-auto rounded-md border border-border">
+        <div className="max-h-48 overflow-auto rounded-xl border border-border">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-muted">
               <tr>{columns.map((c, i) => <th key={i} className="px-2 py-1 text-left font-medium">{c}</th>)}</tr>

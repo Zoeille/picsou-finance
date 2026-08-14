@@ -56,7 +56,7 @@ export function PropertyFinancingCard({ line }: PropertyFinancingCardProps) {
               <button
                 type="button"
                 onClick={() => navigate(`/accounts/${loan.accountId}`)}
-                className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-muted/40"
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-muted/40"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{loan.name}</span>

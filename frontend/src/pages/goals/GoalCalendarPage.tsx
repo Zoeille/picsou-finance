@@ -163,7 +163,7 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
                     disabled={isAddingMonth}
                     title={t('goals.addPreviousMonth')}
                     aria-label={t('goals.addPreviousMonth')}
-                    className="flex flex-col items-center justify-center gap-[9px] rounded-xl border border-dashed border-border px-2 py-3 transition-colors cursor-pointer min-w-[90px] text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex flex-col items-center justify-center gap-[9px] rounded-2xl border border-dashed border-border px-2 py-3 transition-colors cursor-pointer min-w-[90px] text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isAddingMonth
                       ? <Loader2 className="size-5 animate-spin" />
@@ -187,7 +187,7 @@ function YearGridView({ months, selectedYm, onSelect, onAddPreviousMonth, isAddi
                     <button
                       key={entry.yearMonth}
                       onClick={() => onSelect(entry.yearMonth)}
-                      className={`flex flex-col items-center gap-[9px] rounded-xl border px-2 py-3 transition-colors cursor-pointer min-w-[90px] ${
+                      className={`flex flex-col items-center gap-[9px] rounded-2xl border px-2 py-3 transition-colors cursor-pointer min-w-[90px] ${
                         isSelected ? 'border-primary bg-accent' : 'border-border hover:bg-accent/50'
                       }`}
                     >
@@ -262,7 +262,7 @@ function TimelineView({ months, selectedYm, onSelect }: {
             <button
               key={entry.yearMonth}
               onClick={() => onSelect(entry.yearMonth)}
-              className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${isSelected ? 'bg-accent' : 'hover:bg-accent/50'}`}
+              className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${isSelected ? 'bg-accent' : 'hover:bg-accent/50'}`}
             >
               <span className="w-28 shrink-0 text-sm font-medium">{fullMonthName(entry.yearMonth, locale)}</span>
               <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
@@ -317,7 +317,7 @@ function CalendarGridView({ months, selectedYm, onSelect }: {
                   <button
                     key={entry.yearMonth}
                     onClick={() => onSelect(entry.yearMonth)}
-                    className={`rounded-lg border p-3 text-left transition-colors ${isSelected ? 'border-primary bg-accent' : 'border-border hover:bg-accent/50'}`}
+                    className={`rounded-2xl border p-3 text-left transition-colors ${isSelected ? 'border-primary bg-accent' : 'border-border hover:bg-accent/50'}`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{monthAbbr(entry.yearMonth, locale)}</span>
@@ -544,7 +544,7 @@ export function GoalCalendarPage() {
             <div className="overflow-x-auto">
               <div className="flex gap-3 min-w-max">
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="flex flex-col items-center gap-[9px] rounded-xl border border-border px-2 py-3 min-w-[90px]">
+                  <div key={i} className="flex flex-col items-center gap-[9px] rounded-2xl border border-border px-2 py-3 min-w-[90px]">
                     <Skeleton className="h-2.5 w-8" />
                     <Skeleton className="size-[80px] rounded-full" />
                     <Skeleton className="h-2.5 w-14" />
@@ -669,7 +669,7 @@ export function GoalCalendarPage() {
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          className="max-h-[85vh] overflow-y-auto rounded-t-2xl p-4"
+          className="max-h-[85vh] overflow-y-auto rounded-t-4xl p-4"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{selectedEntry ? fullMonthName(selectedEntry.yearMonth, locale) : ''}</SheetTitle>

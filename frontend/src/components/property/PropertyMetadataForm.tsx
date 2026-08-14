@@ -55,7 +55,7 @@ const propertySchema = z.object({
 type PropertyFormData = z.infer<typeof propertySchema>
 
 const selectControlClassName =
-  'flex h-10 w-full rounded-md border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30'
+  'flex h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30'
 
 const PROPERTY_KINDS = ['HOUSE', 'APARTMENT', 'BUILDING', 'LAND', 'PARKING', 'COMMERCIAL'] as const
 const CATEGORIES = ['PRIMARY_RESIDENCE', 'SECONDARY_RESIDENCE', 'RENTAL', 'LAND', 'OTHER'] as const
@@ -159,7 +159,7 @@ export function PropertyMetadataForm({ accountId, metadata, onSaved }: PropertyM
           <textarea
             id="description"
             rows={2}
-            className="flex w-full rounded-md border border-input bg-input/20 px-4 py-2 text-sm outline-none dark:bg-input/30"
+            className="flex w-full rounded-lg border border-input bg-input/20 px-4 py-2 text-sm outline-none dark:bg-input/30"
             {...register('description')}
           />
         </Field>
@@ -282,7 +282,7 @@ export function PropertyMetadataForm({ accountId, metadata, onSaved }: PropertyM
       </Section>
 
       <Section title={t('property.form.valuationMode')}>
-        <div className="col-span-full flex items-center justify-between gap-4 rounded-lg border p-3">
+        <div className="col-span-full flex items-center justify-between gap-4 rounded-2xl border p-3">
           <div>
             <p className="text-sm font-medium">{t('property.form.autoValuation')}</p>
             <p className="text-xs text-muted-foreground">{t('property.form.autoValuationHint')}</p>
@@ -334,7 +334,7 @@ function Toggle({ label, checked, onChange }: {
   label: string; checked: boolean; onChange: (v: boolean) => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2">
       <span className="text-sm">{label}</span>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </div>

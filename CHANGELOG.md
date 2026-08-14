@@ -179,6 +179,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **UI controls realigned to the shadcn theme radius.** Pill-shape overrides on
   buttons, chips, and tabs were reverted to the theme tokens; Mira
   design-system pass completed with a sidebar style toggle (#46).
+- **Every corner in the UI now follows one radius ladder.** The same kind of
+  element was rendering at three or four different radii — inline alerts at
+  8/10/14px, segmented controls at 10 or 18px, selects at 8 or 14px, checkboxes
+  at 4/6/8px — and 29 buttons across the setup wizard and login pages still
+  carried a `rounded-full` override. Each element now takes a fixed rung keyed on
+  what it is: surface 26px (cards, modals, sidebar), panel 18px, row 14px,
+  control 10px, micro 8px, hairline 6px. Controls moved one rung up so a button
+  sits nearer the cards it lives beside, and modals now match the cards behind
+  them instead of being visibly less round.
 - **PnL no longer counts outstanding debt as an investment loss (#18).** Loans
   contribute 0 to `pnl` in every aggregation path (history points, live PnL,
   MCP `get_profit_and_loss`); `rangePnl` compares only holdings priced on both

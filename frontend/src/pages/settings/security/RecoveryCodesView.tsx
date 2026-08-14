@@ -43,11 +43,11 @@ export function RecoveryCodesView({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border bg-muted/30 p-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-2xl border bg-muted/30 p-3">
         {codes.map(code => (
           <code
             key={code}
-            className="font-mono text-sm tracking-wider text-center py-1.5 px-2 rounded bg-background border"
+            className="font-mono text-sm tracking-wider text-center py-1.5 px-2 rounded-md bg-background border"
           >
             {code}
           </code>
@@ -70,7 +70,7 @@ export function RecoveryCodesView({
           type="checkbox"
           checked={acknowledged}
           onChange={e => setAcknowledged(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded"
+          className="mt-0.5 h-4 w-4 rounded-sm"
         />
         <span className="text-sm">{t('settings.mfaEnrollStep4Confirm')}</span>
       </label>

@@ -92,7 +92,7 @@ export function MfaChallengePage() {
                   autoFocus
                   required
                   placeholder={isRecoveryCode ? '12345678' : '123456'}
-                  className="h-12 rounded-xl px-4 text-center font-mono text-lg md:text-lg"
+                  className="h-12 px-4 text-center font-mono text-lg md:text-lg"
                 />
               </div>
 
@@ -108,13 +108,13 @@ export function MfaChallengePage() {
                 {isRecoveryCode ? t('auth.mfaUseTotp') : t('auth.mfaUseRecovery')}
               </button>
 
-              <div className="flex items-start gap-3 rounded-xl py-1">
+              <div className="flex items-start gap-3 py-1">
                 <input
                   id="trustDevice"
                   type="checkbox"
                   checked={trustDevice}
                   onChange={e => setTrustDevice(e.target.checked)}
-                  className="mt-1 h-5 w-5 shrink-0 rounded-md accent-primary"
+                  className="mt-1 h-5 w-5 shrink-0 rounded-sm accent-primary"
                 />
                 <div className="flex flex-col">
                   <Label htmlFor="trustDevice" className="cursor-pointer text-base font-semibold">
@@ -133,7 +133,7 @@ export function MfaChallengePage() {
               <Button
                 type="submit"
                 disabled={verify.isPending || code.length === 0}
-                className="mt-2 h-12 w-full rounded-full px-8 text-base transition-transform active:scale-[0.96]"
+                className="mt-2 h-12 w-full px-8 text-base transition-transform active:scale-[0.96]"
               >
                 {verify.isPending && <Loader2 className="size-5 animate-spin" />}
                 {verify.isPending ? t('auth.mfaVerifying') : t('auth.mfaVerifyButton')}

@@ -116,17 +116,17 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
     <EBSubstepShell current={4} total={5}>
       <div className="space-y-6">
         <div className="flex justify-center">
-          <span className="rounded-xl bg-primary/10 p-3 text-primary">
+          <span className="rounded-lg bg-primary/10 p-3 text-primary">
             <KeyRound className="h-6 w-6" />
           </span>
         </div>
 
         {/* Mode toggle */}
-        <div className="flex rounded-lg border border-border/60 p-1 gap-1">
+        <div className="flex rounded-xl border border-border/60 p-1 gap-1">
           <button
             type="button"
             onClick={() => handleSwitchMode('generate')}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               mode === 'generate'
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -137,7 +137,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
           <button
             type="button"
             onClick={() => handleSwitchMode('import')}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               mode === 'import'
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -167,7 +167,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
             )}
 
             {generate.isError && !pem && (
-              <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-center">
+              <div className="space-y-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-center">
                 <p className="text-sm text-destructive">
                   {t('setup.enablebanking.keypair.error')}
                 </p>
@@ -181,7 +181,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
               <>
                 <pre
                   id="eb-public-pem"
-                  className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-muted/40 p-4 text-[11px] leading-snug font-mono whitespace-pre-wrap break-all"
+                  className="max-h-64 overflow-auto rounded-2xl border border-border/60 bg-muted/40 p-4 text-[11px] leading-snug font-mono whitespace-pre-wrap break-all"
                 >
                   {pem}
                 </pre>
@@ -246,7 +246,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
                   value={privatePem}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrivatePem(e.target.value)}
                   placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
-                  className="w-full rounded-xl border border-border/60 bg-muted/40 p-3 font-mono text-[11px] leading-snug min-h-[140px] resize-none"
+                  className="w-full rounded-lg border border-border/60 bg-muted/40 p-3 font-mono text-[11px] leading-snug min-h-[140px] resize-none"
                 />
 
                 {importError && (
@@ -254,7 +254,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
                 )}
 
                 <Button
-                  className="w-full rounded-full"
+                  className="w-full"
                   disabled={!privatePem.trim() || importKey.isPending}
                   onClick={handleImport}
                 >
@@ -274,7 +274,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
                 </p>
                 <pre
                   id="eb-public-pem"
-                  className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-muted/40 p-4 text-[11px] leading-snug font-mono whitespace-pre-wrap break-all"
+                  className="max-h-64 overflow-auto rounded-2xl border border-border/60 bg-muted/40 p-4 text-[11px] leading-snug font-mono whitespace-pre-wrap break-all"
                 >
                   {pem}
                 </pre>
@@ -291,7 +291,7 @@ export function EBStep3Keypair({ onNext, onBack }: Props) {
           <Button
             onClick={onNext}
             disabled={!pem}
-            className="w-full rounded-full sm:w-auto"
+            className="w-full sm:w-auto"
           >
             {t('setup.enablebanking.keypair.uploadedCta')}
           </Button>

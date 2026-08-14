@@ -72,7 +72,7 @@ export function ActivationPage() {
         </CardHeader>
         <CardContent>
           {/* Warning */}
-          <div className="mb-6 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-200">
+          <div className="mb-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-200">
             <p className="font-semibold mb-1">Data access notice</p>
             <p>
               The administrator of this Picsou instance has technical access to all data stored

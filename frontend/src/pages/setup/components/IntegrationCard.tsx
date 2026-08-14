@@ -46,7 +46,7 @@ export function IntegrationCard({
     >
       <span
         className={cn(
-          'shrink-0 rounded-xl p-2 transition-colors',
+          'shrink-0 rounded-lg p-2 transition-colors',
           checked ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
         )}
         aria-hidden="true"
@@ -59,7 +59,7 @@ export function IntegrationCard({
       </div>
       <span
         className={cn(
-          'mt-0.5 h-5 w-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors',
+          'mt-0.5 h-5 w-5 shrink-0 rounded-sm border-2 flex items-center justify-center transition-colors',
           checked
             ? 'bg-primary border-primary text-primary-foreground'
             : 'border-muted-foreground/40'

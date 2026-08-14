@@ -111,7 +111,7 @@ export function SetupStepComplete() {
       <div className="relative space-y-8">
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <span className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-500">
+            <span className="rounded-lg bg-emerald-500/10 p-3 text-emerald-500">
               <CheckCircle2 className="h-8 w-8" />
             </span>
           </div>
@@ -163,14 +163,14 @@ export function SetupStepComplete() {
           {autoLogin === 'success' ? (
             <Button
               onClick={goToDashboard}
-              className="w-full rounded-full"
+              className="w-full"
             >
               {t('setup.complete.cta')}
             </Button>
           ) : autoLogin === 'failed' ? (
             <Button
               onClick={goToLogin}
-              className="w-full rounded-full"
+              className="w-full"
             >
               {t('setup.complete.loginFallback')}
             </Button>

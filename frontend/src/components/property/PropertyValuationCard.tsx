@@ -58,7 +58,7 @@ export function PropertyValuationCard({ accountId, metadata, currentValue }: Pro
         )}
 
         {result && result.status !== 'OK' && (
-          <div role="alert" className="flex gap-2 rounded-md bg-muted/50 p-3 text-sm">
+          <div role="alert" className="flex gap-2 rounded-xl bg-muted/50 p-3 text-sm">
             <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <div>
               <p>{t(`property.valuation.status.${result.status}`)}</p>
@@ -77,7 +77,7 @@ export function PropertyValuationCard({ accountId, metadata, currentValue }: Pro
               <span className="text-sm text-muted-foreground">{t('property.valuation.estimate')}</span>
               <CurrencyDisplay value={result.estimatedValue ?? 0} className="text-lg font-semibold tabular-nums" />
               {result.confidence && (
-                <span className={`rounded px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLES[result.confidence]}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLES[result.confidence]}`}>
                   {t(`property.valuation.confidence.${result.confidence}`)}
                 </span>
               )}
@@ -129,7 +129,7 @@ export function PropertyValuationCard({ accountId, metadata, currentValue }: Pro
                 </button>
 
                 {showMethod && (
-                  <div className="mt-2 space-y-2 rounded-md border p-3">
+                  <div className="mt-2 space-y-2 rounded-2xl border p-3">
                     {/* Stated plainly: these coefficients encode market intuition, not a
                         model fitted on the open data, which records none of these features. */}
                     <p className="text-xs text-muted-foreground">

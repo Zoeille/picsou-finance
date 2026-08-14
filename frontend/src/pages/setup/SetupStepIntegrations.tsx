@@ -98,14 +98,14 @@ export function SetupStepIntegrations() {
         {count === 0 ? (
           <Button
             onClick={handleContinue}
-            className="w-full rounded-full"
+            className="w-full"
           >
             {t('setup.integrations.skipAll')}
           </Button>
         ) : (
           <Button
             onClick={handleContinue}
-            className="w-full rounded-full"
+            className="w-full"
           >
             {t('setup.integrations.continue')}
           </Button>

@@ -32,7 +32,7 @@ const CATEGORIES: PropertyCategory[] = [
 ]
 
 const selectControlClassName =
-  'flex h-10 w-full rounded-md border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30'
+  'flex h-10 w-full rounded-lg border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30'
 
 const num = (v: string): number | undefined => (v.trim() === '' ? undefined : parseAmount(v))
 
@@ -203,7 +203,7 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
                       type="button"
                       onClick={() => setKind(value)}
                       aria-pressed={kind === value}
-                      className={`flex items-center gap-2 rounded-md border p-3 text-left text-sm transition-colors
+                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-colors
                         ${kind === value ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}
                     >
                       <Icon className="size-4 shrink-0" />
@@ -307,7 +307,7 @@ export function AddPropertyModal({ open, onOpenChange }: AddPropertyModalProps) 
             </div>
 
             {isApartment && (
-              <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2">
+              <div className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2">
                 <span className="text-sm">{t('property.form.hasElevator')}</span>
                 <Switch checked={hasElevator} onCheckedChange={setHasElevator}
                   aria-label={t('property.form.hasElevator')} />

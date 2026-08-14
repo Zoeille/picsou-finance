@@ -57,13 +57,13 @@ function ToggleGroup({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="inline-flex items-center rounded-2xl bg-muted p-1">
+    <div className="inline-flex items-center rounded-xl bg-muted p-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`inline-flex h-10 min-w-24 items-center justify-center rounded-xl px-8 text-sm font-medium transition-[background-color,color] ${
+          className={`inline-flex h-10 min-w-24 items-center justify-center rounded-lg px-8 text-sm font-medium transition-[background-color,color] ${
             value === opt.value
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:text-foreground'
@@ -92,7 +92,7 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <Card className="rounded-4xl bg-card">
+    <Card className="bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           {React.createElement(icon, { className: "size-5 text-muted-foreground" })}
@@ -377,7 +377,7 @@ export function SettingsPage() {
               href="https://github.com/zoeille/picsou-finance"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-xl font-medium text-foreground transition-colors hover:text-muted-foreground"
+              className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg font-medium text-foreground transition-colors hover:text-muted-foreground"
             >
               <span className="truncate">github.com/zoeille/picsou-finance</span>
               <ExternalLink className="size-4 text-muted-foreground" />

@@ -70,7 +70,7 @@ export function EBStep5Test({ onBack }: Props) {
     <EBSubstepShell current={5} total={5}>
       <div className="space-y-6">
         <div className="flex justify-center">
-          <span className="rounded-xl bg-primary/10 p-3 text-primary">
+          <span className="rounded-lg bg-primary/10 p-3 text-primary">
             <Zap className="h-6 w-6" />
           </span>
         </div>
@@ -95,7 +95,7 @@ export function EBStep5Test({ onBack }: Props) {
             <div className="flex justify-center">
               <Button
                 onClick={run}
-                className="w-full rounded-full"
+                className="w-full"
               >
                 {t('setup.enablebanking.test.run')}
               </Button>
@@ -116,7 +116,7 @@ export function EBStep5Test({ onBack }: Props) {
             <p className="text-lg font-medium">{t('setup.enablebanking.test.success')}</p>
             <Button
               onClick={proceed}
-              className="w-full rounded-full"
+              className="w-full"
             >
               {t('setup.enablebanking.continue')}
             </Button>
@@ -144,7 +144,7 @@ export function EBStep5Test({ onBack }: Props) {
               <Button
                 type="button"
                 onClick={run}
-                className="w-full rounded-full sm:w-auto"
+                className="w-full sm:w-auto"
               >
                 {t('setup.enablebanking.test.retry')}
               </Button>

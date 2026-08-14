@@ -53,7 +53,7 @@ export function LoanCostSummaryTable({ summary }: LoanCostSummaryTableProps) {
 
 function Column({ title, total, children }: { title: string; total: number; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-lg border bg-card/50">
+    <div className="flex flex-col gap-2 p-3 rounded-2xl border bg-card/50">
       <div className="flex items-center justify-between border-b pb-2 mb-1">
         <span className="text-xs text-muted-foreground">{title}</span>
         <CurrencyDisplay value={total} className="text-base font-semibold" />

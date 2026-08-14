@@ -20,7 +20,7 @@ export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
           key={range}
           onClick={() => onChange(range)}
           className={cn(
-            'inline-flex h-10 min-w-12 items-center justify-center rounded-md px-4 text-sm font-medium transition-[background-color,color]',
+            'inline-flex h-10 min-w-12 items-center justify-center rounded-lg px-4 text-sm font-medium transition-[background-color,color]',
             value === range
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'

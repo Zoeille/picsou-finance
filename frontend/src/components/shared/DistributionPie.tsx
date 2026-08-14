@@ -122,10 +122,10 @@ function TooltipAnchor({ rect }: { rect: Rect }) {
       className="absolute z-30 flex flex-col items-center pointer-events-none"
       style={style}
     >
-      <span className="text-white font-semibold text-sm bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded">
+      <span className="text-white font-semibold text-sm bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-md">
         {rect.item.name}
       </span>
-      <span className="text-white/80 text-xs bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded mt-0.5">
+      <span className="text-white/80 text-xs bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-md mt-0.5">
         {rect.item.percentage}%
       </span>
     </div>

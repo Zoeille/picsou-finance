@@ -10,7 +10,7 @@ export function EmptyChartState({ title, description }: EmptyChartStateProps) {
   const { t } = useTranslation()
 
   return (
-    <div className="flex h-[250px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/50 bg-muted/20">
+    <div className="flex h-[250px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/50 bg-muted/20">
       <div className="flex size-12 items-center justify-center rounded-full bg-muted">
         <Moon className="size-5 text-muted-foreground" strokeWidth={1.5} />
       </div>

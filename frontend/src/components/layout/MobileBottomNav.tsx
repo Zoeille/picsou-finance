@@ -53,7 +53,7 @@ export function MobileBottomNav() {
 
   return (
     <nav className="fixed bottom-4 inset-x-4 z-50 md:hidden">
-      <div className="flex items-center justify-between rounded-xl bg-background px-3 py-3 ring-1 ring-border">
+      <div className="flex items-center justify-between rounded-2xl bg-background px-3 py-3 ring-1 ring-border">
         {/* Left items */}
         <div className="flex gap-2">
           {NAV_ITEMS.slice(0, 2).map((item) => (

@@ -48,7 +48,7 @@ export function SecuritySection({ settings }: { settings: AdminSecuritySettings 
   })
 
   return (
-    <Card className="rounded-4xl bg-card">
+    <Card className="bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <ShieldCheck className="size-5 text-muted-foreground" />

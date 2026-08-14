@@ -145,7 +145,7 @@ export function SetupStepAdmin() {
               onClick={() => setShowPassword((value) => !value)}
               className={cn(
                 'absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2',
-                'items-center justify-center rounded-full text-muted-foreground',
+                'items-center justify-center rounded-lg text-muted-foreground',
                 'transition-colors hover:bg-muted hover:text-foreground'
               )}
             >
@@ -225,7 +225,7 @@ export function SetupStepAdmin() {
           <Button
             type="submit"
             disabled={submitAdmin.isPending || !formState.isValid}
-            className="w-full rounded-full"
+            className="w-full"
           >
             {submitAdmin.isPending ? t('setup.admin.creating') : t('setup.admin.cta')}
           </Button>

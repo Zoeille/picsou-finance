@@ -22,7 +22,7 @@ export function LoadingSkeleton() {
             <Skeleton className="h-5 w-32" />
           </CardHeader>
           <CardContent>
-            <Skeleton className="h-[250px] w-full rounded-xl" />
+            <Skeleton className="h-[250px] w-full rounded-2xl" />
           </CardContent>
         </Card>
         <Card>
@@ -30,7 +30,7 @@ export function LoadingSkeleton() {
             <Skeleton className="h-5 w-32" />
           </CardHeader>
           <CardContent>
-            <Skeleton className="h-[250px] w-full rounded-xl" />
+            <Skeleton className="h-[250px] w-full rounded-2xl" />
           </CardContent>
         </Card>
       </div>

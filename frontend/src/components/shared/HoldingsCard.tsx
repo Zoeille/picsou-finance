@@ -176,7 +176,7 @@ export function HoldingsCard() {
                 key={tab.value}
                 onClick={() => setFilter(tab.value)}
                 className={cn(
-                  'inline-flex h-10 min-w-32 items-center justify-center whitespace-nowrap rounded-md border px-6 text-sm font-medium transition-[background-color,color,border-color]',
+                  'inline-flex h-10 min-w-32 items-center justify-center whitespace-nowrap rounded-lg border px-6 text-sm font-medium transition-[background-color,color,border-color]',
                   filter === tab.value
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background hover:bg-muted',

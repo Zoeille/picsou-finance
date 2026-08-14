@@ -66,7 +66,7 @@ export function SetupStepBoursoBank() {
     <div className="space-y-8">
       <div className="text-center space-y-2">
         <div className="flex justify-center">
-          <span className="rounded-xl bg-primary/10 p-3 text-primary">
+          <span className="rounded-lg bg-primary/10 p-3 text-primary">
             <Boxes className="h-6 w-6" />
           </span>
         </div>
@@ -122,7 +122,7 @@ export function SetupStepBoursoBank() {
           <Button
             onClick={run}
             disabled={health.isPending}
-            className="w-full rounded-full"
+            className="w-full"
           >
             {t('setup.bourso.retry')}
           </Button>
@@ -130,7 +130,7 @@ export function SetupStepBoursoBank() {
           <Button
             onClick={proceed}
             disabled={phase === 'checking'}
-            className="w-full rounded-full"
+            className="w-full"
           >
             {t('setup.bourso.continue')}
           </Button>

@@ -29,7 +29,7 @@ export function SetupStepBourseDirect() {
     <div className="space-y-8">
       <div className="text-center space-y-2">
         <div className="flex justify-center">
-          <span className="rounded-xl bg-primary/10 p-3 text-primary">
+          <span className="rounded-lg bg-primary/10 p-3 text-primary">
             <BriefcaseBusiness className="h-6 w-6" />
           </span>
         </div>
@@ -48,14 +48,14 @@ export function SetupStepBourseDirect() {
           type="button"
           variant="outline"
           onClick={skip}
-          className="w-full rounded-full"
+          className="w-full"
         >
           {t('setup.bourseDirect.skip')}
         </Button>
         <Button
           onClick={proceed}
           disabled={ack.isPending}
-          className="w-full rounded-full"
+          className="w-full"
         >
           {t('setup.bourseDirect.cta')}
         </Button>

@@ -26,7 +26,7 @@ export function SetupStepIntro() {
               type="button"
               onClick={() => setPhase('content')}
               aria-label={t('setup.intro.skipAria')}
-              className="rounded-full px-3 py-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              className="rounded-lg px-3 py-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               {t('setup.intro.skip')}
             </button>

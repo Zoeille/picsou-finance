@@ -105,7 +105,7 @@ function CompositionViewToggle({ view, onChange, t }: CompositionViewToggleProps
     { value: 'line' as const, label: t('holdings.insight.viewLine'), Icon: AlignJustify },
   ]
   return (
-    <div className="inline-flex items-center rounded-2xl bg-muted p-1">
+    <div className="inline-flex items-center rounded-xl bg-muted p-1">
       {options.map(({ value, label, Icon }) => (
         <button
           key={value}
@@ -114,7 +114,7 @@ function CompositionViewToggle({ view, onChange, t }: CompositionViewToggleProps
           aria-pressed={view === value}
           title={label}
           className={cn(
-            'inline-flex h-10 min-w-32 items-center justify-center gap-2 rounded-xl px-6 text-sm font-medium transition-[background-color,color]',
+            'inline-flex h-10 min-w-32 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium transition-[background-color,color]',
             view === value
               ? 'bg-background text-foreground'
               : 'text-muted-foreground hover:text-foreground'
@@ -206,7 +206,7 @@ function LineView({ slices, others, labelOf, t }: ViewProps) {
           <PartitionBarSegment
             key={`${item.label}-${i}`}
             num={item.percent}
-            className={cn('min-h-2.5 rounded-sm px-0 py-0', item.color)}
+            className={cn('min-h-2.5 rounded-[2px] px-0 py-0', item.color)}
           />
         ))}
       </PartitionBar>
