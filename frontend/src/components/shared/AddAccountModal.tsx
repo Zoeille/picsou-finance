@@ -1242,7 +1242,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
 
                 {mappings[index]?.action === 'MAP_EXISTING' && (
                   <select
-                    className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+                    className="h-10 w-full rounded-xl border border-input bg-background text-foreground px-4 text-sm outline-none [color-scheme:light] dark:[color-scheme:dark]"
                     value={mappings[index].targetAccountId ?? ''}
                     onChange={(e) => {
                       const val = e.target.value
@@ -1270,7 +1270,7 @@ function FinaryWizard({ onDone, onBack }: { onDone: () => void; onBack: () => vo
                     <div className="space-y-1">
                       <Label>{t('sync.exchanges.type')}</Label>
                       <select
-                        className="h-10 w-full rounded-xl border border-input bg-input/20 px-4 text-sm outline-none dark:bg-input/30"
+                        className="h-10 w-full rounded-xl border border-input bg-background text-foreground px-4 text-sm outline-none [color-scheme:light] dark:[color-scheme:dark]"
                         value={mappings[index].newAccount!.type}
                         onChange={(e) => updateNewAccountField(index, 'type', e.target.value)}
                       >
