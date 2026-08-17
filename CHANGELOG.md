@@ -191,6 +191,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dropdown options were unreadable in dark mode.** Native `<select>` popups
+  (account type, currency, bank country, CSV import mapping, property type…)
+  don't honour a translucent background — the browser falls back to an opaque
+  white popup while the option text stayed the light color meant for a dark
+  background, making the list nearly invisible. Every select now uses an
+  opaque background/text pair plus a `color-scheme` hint so the native popup
+  renders legibly in both themes.
 - **A PEA held through ETFs could display 0 €, graph included.** Picsou asked OpenFIGI
   which listings an ISIN maps to and picked one by exchange priority — but OpenFIGI
   returns every listing of an instrument and knows nothing about which one Yahoo quotes,
