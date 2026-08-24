@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An Amundi account holding two share classes of the same fund now syncs.**
+  Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
+  the AMF code — so the holding was keyed on a slug of the fund label, capped at
+  30 characters. Two share classes of one fund differ only in their last word, so
+  both truncated to the same key, the collision guard correctly refused to merge
+  two different funds, and the entire sync failed with `INVALID_DATA` on a
+  payload that was perfectly valid. The line's own `codeFonds` is now used
+  between the ISIN and the label, and the guard stays behind it.
+
 ### Added
 
 - **The French regulated passbooks each get their own account type.** Livret A,
