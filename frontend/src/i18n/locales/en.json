@@ -180,6 +180,8 @@
     "transactionDate": "Date",
     "buy": "Buy",
     "sell": "Sell",
+    "dividend": "Dividend",
+    "fee": "Fee",
     "deposit": "Deposit",
     "withdrawal": "Withdrawal",
     "description": "Description",

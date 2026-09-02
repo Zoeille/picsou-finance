@@ -141,6 +141,10 @@ public class TransactionImportService {
             throw new IllegalArgumentException(
                 "CSV transaction import is only available for investment accounts (PEA, CTO, crypto)");
         }
+        if (!account.isManual()) {
+            throw new IllegalArgumentException(
+                "CSV transaction import is only available for manual investment accounts");
+        }
         return account;
     }
 

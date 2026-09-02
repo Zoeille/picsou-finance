@@ -186,7 +186,7 @@ export const mockAccounts: Account[] = [
   {
     // Demo property. Values are invented -- the DGFiP reuse conditions forbid shipping real
     // DVF records, and a demo build is public by definition.
-    id: 8,
+    id: 11,
     name: 'Résidence principale',
     type: 'REAL_ESTATE',
     provider: null,

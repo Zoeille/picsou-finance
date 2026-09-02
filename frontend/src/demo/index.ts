@@ -388,14 +388,14 @@ handlers.set(key('GET', '/accounts/8/history'), () => generateHistory(
   [3000, 3050, 3100, 3200, 3150, 3100, 3200, 3300, 3250, 3200, 3240, 3240.5]))
 
 // Property: slow appreciation, revalued monthly rather than daily.
-handlers.set(key('GET', '/accounts/8/history'), () => generateHistory(
+handlers.set(key('GET', '/accounts/11/history'), () => generateHistory(
   [392000, 393500, 395000, 397000, 399500, 401000, 403000, 405500, 407000, 409000, 410500, 412000]))
 
 // ─── Real estate ─────────────────────────────────────────────────────────────
 // Every route the property UI touches needs a handler: the demo adapter answers `{}` for
 // anything unmatched, and the pages would then read fields off an empty object.
 
-const demoProperty = mockAccounts.find((a) => a.id === 8)!
+const demoProperty = mockAccounts.find((a) => a.id === 11)!
 
 handlers.set(key('GET', '/real-estate/summary'), () => ({
   grossValue: 412000,
@@ -407,7 +407,7 @@ handlers.set(key('GET', '/real-estate/summary'), () => ({
   loanToValue: 40.87,
   monthlyRentalIncome: 0,
   properties: [{
-    accountId: 8,
+    accountId: 11,
     name: demoProperty.name,
     color: demoProperty.color,
     propertyType: 'HOUSE',
@@ -436,7 +436,7 @@ handlers.set(key('GET', '/real-estate/summary'), () => ({
   }],
 }))
 
-handlers.set(key('GET', '/real-estate/8/valuations'), () => {
+handlers.set(key('GET', '/real-estate/11/valuations'), () => {
   const points = [395000, 398000, 401500, 404000, 407500, 409000, 412000]
   return points.map((value, i) => ({
     valuedAt: `2026-0${i + 1}-01`,
@@ -451,7 +451,7 @@ handlers.set(key('GET', '/real-estate/8/valuations'), () => {
   })).reverse()
 })
 
-handlers.set(key('POST', '/accounts/8/valuation/refresh'), () => ({
+handlers.set(key('POST', '/accounts/11/valuation/refresh'), () => ({
   status: 'OK',
   mode: 'ESTIMATED',
   appliedToBalance: true,
@@ -473,12 +473,12 @@ handlers.set(key('POST', '/accounts/8/valuation/refresh'), () => ({
   ],
 }))
 
-handlers.set(key('GET', '/accounts/8/ownership'), () => ({
+handlers.set(key('GET', '/accounts/11/ownership'), () => ({
   shares: [{ memberId: 1, displayName: 'Demo', avatarColor: '#6366f1', sharePercent: 100, isOwner: true }],
   totalAssigned: 100,
   unassigned: 0,
 }))
-handlers.set(key('PUT', '/accounts/8/ownership'), (config) => {
+handlers.set(key('PUT', '/accounts/11/ownership'), (config) => {
   const body = JSON.parse(config.data || '{}')
   const shares = (body.shares ?? []) as { memberId: number; sharePercent: number }[]
   const total = shares.reduce((sum, s) => sum + s.sharePercent, 0)

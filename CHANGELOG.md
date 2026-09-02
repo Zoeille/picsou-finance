@@ -232,6 +232,22 @@ information architecture.
 
 ### Fixed
 
+- **Dividend and fee transactions no longer look like purchases.** When a manual
+  transaction has a ticker but no supplied or resolved name, the frontend now derives
+  its translated fallback label from `txType`. The backend persists only the canonical
+  ticker or instrument name, so descriptions no longer embed French UI text (#108).
+- **Manual transaction annotations can no longer overwrite synced account state (2026-08-31).**
+  Adding, editing, or deleting a manual transaction on a synced account now leaves provider-owned
+  holdings, balance, and snapshots untouched. Transaction-derived state is reserved for manual
+  accounts. CSV transaction import now accepts only manual investment accounts and rejects synced
+  investment accounts before caching a preview or saving rows (#107).
+- **Dropdown options were unreadable in dark mode.** Native `<select>` popups
+  (account type, currency, bank country, CSV import mapping, property type…)
+  don't honour a translucent background — the browser falls back to an opaque
+  white popup while the option text stayed the light color meant for a dark
+  background, making the list nearly invisible. Every select now uses an
+  opaque background/text pair plus a `color-scheme` hint so the native popup
+  renders legibly in both themes.
 - **A PEA held through ETFs could display 0 €, graph included.** Picsou asked OpenFIGI
   which listings an ISIN maps to and picked one by exchange priority — but OpenFIGI
   returns every listing of an instrument and knows nothing about which one Yahoo quotes,

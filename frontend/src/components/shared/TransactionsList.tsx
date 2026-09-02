@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { localeFromLanguage } from '@/lib/utils'
+import { transactionDescription } from '@/lib/transactions'
 
 interface TransactionsListProps {
   transactions: Transaction[]
@@ -32,13 +33,16 @@ export function TransactionsList({
 
   const filtered = search
     ? transactions.filter(tr => {
-        const q = search.toLowerCase()
+        const normalizedSearch = search.toLocaleLowerCase(locale)
+        const displayedDescription = transactionDescription(tr, t).toLocaleLowerCase(locale)
         return (
-          tr.description.toLowerCase().includes(q) ||
-          (tr.merchantLabel ?? '').toLowerCase().includes(q)
+          displayedDescription.includes(normalizedSearch) ||
+          tr.description.toLocaleLowerCase(locale).includes(normalizedSearch) ||
+          (tr.merchantLabel ?? '').toLocaleLowerCase(locale).includes(normalizedSearch)
         )
       })
     : transactions
+  const showYear = new Set(filtered.map(tr => tr.date.slice(0, 4))).size > 1
 
   const grouped = filtered.reduce<Record<string, Transaction[]>>((acc, tr) => {
     if (!acc[tr.date]) acc[tr.date] = []
@@ -67,7 +71,7 @@ export function TransactionsList({
             <div key={date}>
               {dateIdx > 0 && <Separator className="my-3" />}
               <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {formatTransactionDate(date, locale)}
+                {formatTransactionDate(date, locale, showYear)}
               </p>
               <div className="space-y-0.5">
                 {grouped[date].map((tr, rowIdx) => (
@@ -99,11 +103,13 @@ export function TransactionsList({
   )
 }
 
-function formatTransactionDate(date: string, locale: string): string {
+function formatTransactionDate(date: string, locale: string, showYear: boolean): string {
+  const transactionDate = new Date(`${date}T00:00:00`)
   const label = new Intl.DateTimeFormat(locale, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
-  }).format(new Date(date))
+    ...(showYear ? { year: 'numeric' } : {}),
+  }).format(transactionDate)
   return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1)
 }

@@ -65,6 +65,9 @@ public class EnableBankingBankConnector implements BankConnectorPort {
             .defaultHeader("Accept", "application/json")
             .defaultHeader("Content-Type", "application/json")
             .filter(buildLoggingFilter(callLogger))
+            // WebClient's default in-memory buffer limit is 256 KB — too small for
+            // searchInstitutions() on a large single-country result (e.g. Germany alone is
+            // ~1.4 MB across ~1100 institutions), a latent bug independent of this change.
             .exchangeStrategies(ExchangeStrategies.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
                 .build())

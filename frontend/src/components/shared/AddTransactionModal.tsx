@@ -132,16 +132,18 @@ function TransactionForm({ onOpenChange, accountId, accountType, onSubmit, isLoa
       const qty = parseAmount(quantity)
       const price = parseAmount(pricePerUnit)
       const feeVal = parseAmount(fees) || 0
+      const normalizedTicker = ticker.trim().toUpperCase()
+      const normalizedName = name.trim()
       // Sign convention mirrors the backend TransactionAmountCalculator: fees add to a BUY's
       // cash outflow and reduce a SELL's proceeds, and fold into the PMP cost basis.
       const amount = investType === 'BUY' ? -(qty * price + feeVal) : (qty * price - feeVal)
       data = {
         date,
-        description: name || (investType === 'BUY' ? `Achat ${ticker}` : `Vente ${ticker}`),
+        description: normalizedName || normalizedTicker,
         amount,
         txType: investType,
-        ticker: ticker.toUpperCase(),
-        name: name.trim() || undefined,
+        ticker: normalizedTicker,
+        name: normalizedName || undefined,
         quantity: qty,
         pricePerUnit: price,
         fees: feeVal || undefined,

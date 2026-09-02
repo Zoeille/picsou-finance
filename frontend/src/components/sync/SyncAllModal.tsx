@@ -412,11 +412,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
         // dedicated tab; SyncAll routes there rather than blind-importing everything.
         navigate('/sync?tab=revolut')
         onOpenChange(false)
-        setSyncingIds(prev => {
-          const next = new Set(prev)
-          next.delete(connection.id)
-          return next
-        })
+        clearSyncing()
         break
       case 'finary':
         navigate('/sync?tab=finary')

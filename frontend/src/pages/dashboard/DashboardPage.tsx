@@ -268,6 +268,10 @@ export function DashboardPage() {
           when the member owns no property. */}
       <RealEstateSummaryCard />
 
+      {/* Property wealth: gross, mortgage debt and the equity between them. Renders nothing
+          when the member owns no property. */}
+      <RealEstateSummaryCard />
+
       {/* Goals section */}
       <Card>
         <CardHeader>

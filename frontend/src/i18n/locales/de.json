@@ -167,6 +167,8 @@
     "transactionDate": "Datum",
     "buy": "Kauf",
     "sell": "Verkauf",
+    "dividend": "Dividende",
+    "fee": "Gebühr",
     "deposit": "Einzahlung",
     "withdrawal": "Auszahlung",
     "description": "Beschreibung",

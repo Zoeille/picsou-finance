@@ -389,6 +389,10 @@ export function useSyncDegiro() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
+    // A sync that meets an expired session flips the stored status to
+    // REAUTH_REQUIRED server-side. Without invalidating on failure too, the
+    // cached status stays "active" until it goes stale and the UI keeps
+    // offering a Sync button that can only fail again.
     onError: () => {
       queryClient.invalidateQueries({ queryKey: syncKeys.degiro() })
     },
