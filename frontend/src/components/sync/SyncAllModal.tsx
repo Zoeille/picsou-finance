@@ -51,6 +51,8 @@ import {
   useReconnectBankSync,
   useAmundiStatus,
   useSyncAmundi,
+  useFortuneoStatus,
+  useSyncFortuneo,
   useBourseDirectStatus,
   useSyncBourseDirect,
   useDegiroSessionStatus,
@@ -67,7 +69,7 @@ import { TR_VERIFICATION_CODE_LENGTH } from '@/lib/constants'
 type SyncConnection = {
   id: string
   providerType: 'bank' | 'exchange' | 'wallet' | 'tr' | 'finary' | 'bourso'
-    | 'amundi' | 'bourse-direct' | 'degiro' | 'ibkr'
+    | 'amundi' | 'fortuneo' | 'bourse-direct' | 'degiro' | 'ibkr'
   name: string
   status: string
   lastSyncedAt: string | null
@@ -85,6 +87,7 @@ const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{
   finary: LineChart,
   bourso: Building2,
   amundi: PiggyBank,
+  fortuneo: PiggyBank,
   'bourse-direct': LineChart,
   degiro: LineChart,
   ibkr: LineChart,
@@ -93,6 +96,7 @@ const ProviderIcon: Record<SyncConnection['providerType'], React.ComponentType<{
 /** Which Sync-page tab each provider re-authenticates on. */
 const REAUTH_TAB: Partial<Record<SyncConnection['providerType'], string>> = {
   amundi: 'amundi',
+  fortuneo: 'fortuneo',
   bourso: 'bourso',
   'bourse-direct': 'bourse-direct',
   degiro: 'degiro',
@@ -137,6 +141,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const { data: boursoStatus } = useBoursoSessionStatus()
   const { data: finaryStatus } = useFinaryConnectionStatus()
   const { data: amundiStatus } = useAmundiStatus()
+  const { data: fortuneoStatus } = useFortuneoStatus()
   const { data: bourseDirectStatus } = useBourseDirectStatus()
   const { data: degiroStatus } = useDegiroSessionStatus()
   const { data: ibkrStatus } = useIbkrStatus()
@@ -158,6 +163,11 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       type: 'amundi' as const, name: 'Amundi', provider: 'Amundi Épargne Salariale',
       active: amundiStatus?.isActive ?? false, lastSyncedAt: amundiStatus?.lastSyncCompletedAt ?? null,
       failed: amundiStatus?.syncStatus === 'FAILED',
+    },
+    {
+      type: 'fortuneo' as const, name: 'Fortuneo', provider: 'Fortuneo',
+      active: fortuneoStatus?.isActive ?? false, lastSyncedAt: fortuneoStatus?.lastSyncCompletedAt ?? null,
+      failed: fortuneoStatus?.syncStatus === 'FAILED',
     },
     {
       type: 'bourso' as const, name: 'BoursoBank', provider: 'BoursoBank',
@@ -183,7 +193,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       active: ibkrStatus?.connected ?? false, lastSyncedAt: ibkrStatus?.lastSyncedAt ?? null,
       failed: ibkrStatus?.status === 'ERROR',
     },
-  ], [amundiStatus, boursoStatus, bourseDirectStatus, degiroStatus, ibkrStatus])
+  ], [amundiStatus, fortuneoStatus, boursoStatus, bourseDirectStatus, degiroStatus, ibkrStatus])
 
   const retryBankMutation    = useRetryBankSync()
   const syncExchangeMutation = useSyncCryptoExchange()
@@ -194,6 +204,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
   const syncBoursoMutation   = useSyncBourso()
   const reconnectBankMutation = useReconnectBankSync()
   const syncAmundiMutation       = useSyncAmundi()
+  const syncFortuneoMutation     = useSyncFortuneo()
   const syncBourseDirectMutation = useSyncBourseDirect()
   const syncDegiroMutation       = useSyncDegiro()
   const syncIbkrMutation         = useSyncIbkr()
@@ -367,6 +378,9 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
       case 'amundi':
         syncAmundiMutation.mutate(undefined, rowCallbacks(formatGeneric))
         break
+      case 'fortuneo':
+        syncFortuneoMutation.mutate(undefined, rowCallbacks(formatGeneric))
+        break
       case 'bourse-direct':
         syncBourseDirectMutation.mutate(undefined, rowCallbacks(formatGeneric))
         break
@@ -390,6 +404,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
     syncTrMutation,
     syncBoursoMutation,
     syncAmundiMutation,
+    syncFortuneoMutation,
     syncBourseDirectMutation,
     syncDegiroMutation,
     syncIbkrMutation,
@@ -693,6 +708,7 @@ export function SyncAllModal({ open, onOpenChange }: SyncAllModalProps) {
                         )}
                       </div>
                     )}
+
                   </CardContent>
                 </Card>
               )

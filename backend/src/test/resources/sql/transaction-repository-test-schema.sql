@@ -44,6 +44,7 @@ CREATE TABLE transaction (
     native_currency VARCHAR(10)     NOT NULL,
     created_at      TIMESTAMP       NOT NULL,
     is_manual       BOOLEAN         NOT NULL,
+    external_id     VARCHAR(100),
     tx_type         VARCHAR(20),
     ticker          VARCHAR(30),
     name            VARCHAR(100),
@@ -51,3 +52,9 @@ CREATE TABLE transaction (
     price_per_unit  DECIMAL(20, 8),
     fees            DECIMAL(20, 8)
 );
+
+-- H2 permits multiple NULL values in a regular unique index, which gives this
+-- focused repository fixture the same identified-row behavior as PostgreSQL's
+-- partial production index without introducing a Testcontainers exception.
+CREATE UNIQUE INDEX ux_transaction_account_external_id
+    ON transaction (account_id, external_id);

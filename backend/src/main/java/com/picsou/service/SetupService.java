@@ -35,7 +35,7 @@ public class SetupService {
     public static final String KEY_ENABLEBANKING_REDIRECT_URI = "enablebanking.redirect-uri";
     public static final String KEY_BOURSO_AUTH_URL = "bourso-auth.url";
     public static final List<String> INTEGRATIONS = List.of(
-        "enablebanking", "boursobank", "boursedirect", "traderepublic", "finary", "crypto"
+        "enablebanking", "boursobank", "boursedirect", "fortuneo", "traderepublic", "finary", "crypto"
     );
 
     private final AppSettingRepository settingRepository;
