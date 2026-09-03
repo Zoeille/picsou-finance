@@ -435,6 +435,7 @@
       "bourso": "Girokonten, Sparkonten, PEA und Wertpapierdepots bei BoursoBank",
       "bourseDirect": "PEA- und Wertpapierkonten synchronisieren",
       "degiro": "DEGIRO-Wertpapierkonto synchronisieren",
+      "ibkr": "Synchronisieren Sie Ihr Interactive-Brokers-Konto per Flex Query",
       "finary": "Aus Finary importieren",
       "manual": "Konto manuell erstellen",
       "amundi": "PEE, PEG, PERCO, PER bei Amundi",
