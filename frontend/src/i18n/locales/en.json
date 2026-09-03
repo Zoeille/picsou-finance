@@ -435,6 +435,7 @@
       "bourso": "Current accounts, savings, PEA and securities accounts held at BoursoBank",
       "bourseDirect": "Sync your PEA and securities accounts",
       "degiro": "Sync your DEGIRO securities account",
+      "ibkr": "Sync your Interactive Brokers account via Flex Query",
       "finary": "Import from Finary",
       "manual": "Create an account manually",
       "amundi": "PEE, PEG, PERCO, PER held at Amundi",
