@@ -1,6 +1,6 @@
 # Feature: Docker deployment
 
-> Last updated: 2026-08-17
+> Last updated: 2026-09-04
 
 ## Context
 
@@ -166,6 +166,14 @@ docker compose -f docker/docker-compose.yml up
 
 `/mcp` is the embedded MCP HTTP+SSE transport (access-key auth). It must be proxied like
 `/api`; if nginx only has SPA `try_files`, MCP clients get HTML instead of the protocol.
+
+### Moving the stack to another machine
+
+Git has the images’ source, not the live install. Postgres lives in the `pgdata` volume;
+JWT / encryption / DB password live in `picsou_data` (`/data/.secrets/`). Copy **both**
+or Finary and bank secrets in the database will not decrypt. Commands, volume names, and
+the “build this branch, do not `compose pull` GHCR `:latest`” warning are in the root
+[README — Another machine](../../README.md#another-machine).
 
 ### Building a release archive
 
