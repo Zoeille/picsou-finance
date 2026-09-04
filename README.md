@@ -378,7 +378,21 @@ bun install        # Install dependencies
 bun run dev        # HTTPS dev server on https://localhost:5173 (proxies /api/* → localhost:8080)
 bun run build      # TypeScript check + Vite build
 bunx vitest run    # Unit tests
+bun run test:e2e   # Playwright E2E (demo mode; starts Vite itself)
 ```
+
+### CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every
+push to `main` or a version tag:
+
+- backend `mvn test` (Docker required for Flyway migration tests)
+- frontend lint, typecheck, Vitest
+- Playwright e2e in demo mode
+- Bourse Direct sidecar unit tests
+
+Docker images are published to GHCR **only after that suite is green**, and only
+on a push to `main` or a version tag — not on pull requests.
 
 #### 🔒 HTTPS in Development (Hybrid Mode)
 
