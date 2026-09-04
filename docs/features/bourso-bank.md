@@ -31,7 +31,7 @@ why.
 
 | Imported | Not imported |
 |---|---|
-| Current accounts → `CHECKING` | Loans (`data-summary-loan`) |
+| Current accounts → `CHECKING` | Loans (`data-summary-loan`), assurance-vie and insurance, `Bourso Protect` (`data-summary-insurance` / `data-summary-assurance`) |
 | Livrets → `LIVRET_A`, `LDDS`, `LEP`, `LIVRET_JEUNE`, `PEL`, `CEL`, else `SAVINGS` | Accounts BoursoBank aggregates from **other banks** |
 | PEA, PEA-PME → `PEA` | Transactions |
 | Compte-titres → `COMPTE_TITRES`, with positions | Orders, statements |
@@ -130,8 +130,11 @@ than falling back to DOM order, which is shuffled.
 
 `GET /dashboard/liste-comptes?rumroute=dashboard.new_accounts&_hinclude=1`
 returns HTML grouped into `data-summary-bank` / `-savings` / `-trading` /
-`-loan`. Balances come out of each card's `aria-label` (`Solde : 11 010,00 €`),
-negatives use U+2212 rather than an ASCII hyphen.
+`-loan` / `-insurance` / `-assurance`. Balances come out of each card's `aria-label` (`Solde : 11 010,00 €`),
+negatives use U+2212 rather than an ASCII hyphen. Insurance sections are
+recognized so their cards can be skipped explicitly, the same way loans are:
+an unparsed card inside a known section still fails the sync, while a card in
+an unknown section keeps failing it too.
 
 Securities accounts then get:
 
