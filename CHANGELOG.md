@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Trade Republic portfolio answer that errors no longer wipes the account.** An
+  error frame, or a payload the adapter could not parse, was counted as an
+  authoritative empty portfolio: every holding was deleted and the day's snapshot
+  recorded the securities at zero, with a PEA reduced to its cash pocket. Such an
+  answer now leaves the account untouched for that sync, with a warning naming it;
+  a genuinely emptied portfolio still persists.
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at
