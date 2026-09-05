@@ -15,7 +15,7 @@ Picsou stores sensitive credentials in PostgreSQL: crypto exchange API keys/secr
 - **Algorithm**: `AES/GCM/NoPadding` -- authenticated encryption (confidentiality + integrity)
 - **IV**: 12-byte random IV generated per encryption call
 - **Tag**: 128-bit GCM authentication tag (tamper detection)
-- **Storage format**: `Base64(IV || ciphertext || tag)` -- single string stored in VARCHAR columns
+- **Storage format**: `Base64(IV || ciphertext || tag)` -- single string, stored in a `TEXT` column when a third party controls the plaintext length and in a sized `VARCHAR` when a known format bounds it (see *Column widths* below)
 - **Key**: 256-bit symmetric key from `CRYPTO_ENCRYPTION_KEY` env var (Base64-encoded)
 - **Startup behavior**: The application **refuses to start** if the key is not set. No plaintext fallback.
 
@@ -25,8 +25,9 @@ Picsou stores sensitive credentials in PostgreSQL: crypto exchange API keys/secr
 |------|--------|--------|-----------------|
 | Crypto exchange API key | `CryptoExchangeSession` | `api_key` | V15 (2026-04-08) |
 | Crypto exchange API secret | `CryptoExchangeSession` | `api_secret` | V9 (initial) |
-| Trade Republic session token | `TradeRepublicSession` | `session_token` | V15 (2026-04-08) |
-| Trade Republic refresh token | `TradeRepublicSession` | `refresh_token` | V15 (2026-04-08) |
+| Trade Republic session token | `TradeRepublicSession` | `session_token` | V15 (2026-04-08), `TEXT` since V86 |
+| Trade Republic refresh token | `TradeRepublicSession` | `refresh_token` | V15 (2026-04-08), `TEXT` since V86 |
+| DEGIRO session blob | `DegiroSession` | `session_blob` | V71 (2026-08-10), `TEXT` since V86 |
 
 ### What is NOT encrypted (and why)
 
@@ -55,10 +56,10 @@ Store credential:
                 AES-GCM encrypt with IV + key --> ciphertext + tag
                   |
                   v
-                Base64(IV || ciphertext || tag) --> VARCHAR column
+                Base64(IV || ciphertext || tag) --> TEXT or VARCHAR column
 
 Read credential:
-  VARCHAR column --> CryptoEncryption.decrypt()
+  TEXT or VARCHAR column --> CryptoEncryption.decrypt()
                        |
                        v
                      Base64 decode --> IV || ciphertext || tag

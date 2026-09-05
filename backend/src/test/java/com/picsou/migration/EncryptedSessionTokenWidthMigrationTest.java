@@ -34,9 +34,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * on all three columns, the {@code NOT NULL} that the type change must not drop, and a
  * round trip of values far wider than any bound this migration removes.
  *
- * <p>Runs against real PostgreSQL via Testcontainers, like the other migration tests: the
+ * <p>Runs against real PostgreSQL via Testcontainers, like the other migration tests in this
+ * package (the documented exception to the H2 rule, see {@code backend/CLAUDE.md}): the
  * refusal under test is a PostgreSQL length check, and {@code information_schema} is where
- * the resulting type is read back from.
+ * the resulting type is read back from. Neither is something H2 reproduces faithfully.
  */
 @Testcontainers
 @EnabledIf("dockerAvailable")
@@ -87,6 +88,7 @@ class EncryptedSessionTokenWidthMigrationTest {
         }
     }
 
+    /** Reproduces #115 on the V79 schema: the first ciphertext that outgrows VARCHAR(2000) is refused. */
     @Test
     @Order(1)
     void beforeV86_aCurrentTradeRepublicTokenIsRefusedAfterASuccessfulTwoFactorLogin() throws SQLException {
@@ -97,6 +99,7 @@ class EncryptedSessionTokenWidthMigrationTest {
         }
     }
 
+    /** After V86 the three columns read back as {@code text}, and the NOT NULL they carried survives the type change. */
     @Test
     @Order(2)
     void v86_makesTheThreeThirdPartyControlledColumnsUnboundedAndKeepsNotNull() throws SQLException {
@@ -112,6 +115,7 @@ class EncryptedSessionTokenWidthMigrationTest {
         assertThat(isNullable("degiro_session", "session_blob")).isEqualTo("NO");
     }
 
+    /** Values wider than any bound the migration removed round-trip intact on both tables. */
     @Test
     @Order(3)
     void afterV86_valuesWiderThanAnyFormerBoundRoundTripIntact() throws SQLException {
@@ -139,6 +143,10 @@ class EncryptedSessionTokenWidthMigrationTest {
 
     // --- helpers ---------------------------------------------------------------------------
 
+    /**
+     * Inserts a Trade Republic session row for the seeded member. The tokens go in as bound
+     * parameters, so a 12 000-character value never becomes an SQL literal.
+     */
     private static long insertTradeRepublicSession(Connection conn, String sessionToken, String refreshToken)
         throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
@@ -154,14 +162,17 @@ class EncryptedSessionTokenWidthMigrationTest {
         }
     }
 
+    /** {@code information_schema.columns.data_type} of one column, e.g. {@code text}. */
     private static String columnType(String table, String column) throws SQLException {
         return informationSchema("data_type", table, column);
     }
 
+    /** {@code information_schema.columns.is_nullable} of one column: {@code YES} or {@code NO}. */
     private static String isNullable(String table, String column) throws SQLException {
         return informationSchema("is_nullable", table, column);
     }
 
+    /** One field of {@code information_schema.columns} for a column of the public schema. */
     private static String informationSchema(String field, String table, String column) throws SQLException {
         try (Connection conn = connect();
              PreparedStatement ps = conn.prepareStatement(
@@ -176,6 +187,7 @@ class EncryptedSessionTokenWidthMigrationTest {
         }
     }
 
+    /** Applies the migration chain up to {@code version} inclusive, the way application.yml does. */
     private static void migrateTo(String version) {
         Flyway.configure()
             .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
@@ -186,11 +198,13 @@ class EncryptedSessionTokenWidthMigrationTest {
             .migrate();
     }
 
+    /** A fresh JDBC connection to the container; callers close it. */
     private static Connection connect() throws SQLException {
         return DriverManager.getConnection(
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     }
 
+    /** Runs an {@code INSERT ... RETURNING id} and returns that id. */
     private static long insertReturningId(Connection conn, String sql) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             rs.next();
@@ -198,6 +212,7 @@ class EncryptedSessionTokenWidthMigrationTest {
         }
     }
 
+    /** First column of the first row of {@code sql}, which must return one. */
     private static String queryString(Connection conn, String sql) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             assertThat(rs.next()).as("query returned no row: %s", sql).isTrue();
