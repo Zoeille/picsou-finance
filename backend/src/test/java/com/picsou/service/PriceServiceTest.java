@@ -351,6 +351,42 @@ class PriceServiceTest {
         verify(yahoo, times(1)).getPricesEur(Set.of("AAPL"));
     }
 
+    /**
+     * The scenario that engraved a partial exchange total: a dashboard render remembers a miss
+     * for ETH, then the exchange sync asks for the same ticker within the miss TTL. The network is
+     * skipped, but the miss must not come back as a null-priced Quote that hides the last recorded
+     * price from refreshCryptoQuotes.
+     */
+    @Test
+    void refreshCryptoQuotes_aRememberedMissStillValuesFromTheRecordedPrice() {
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        when(coinGecko.supports("ETH")).thenReturn(true);
+        when(coinGecko.getPricesEur(Set.of("ETH"))).thenReturn(Map.of());
+        when(priceSnapshotRepository.findRecentByTickers(eq(Set.of("ETH")), any(), any()))
+            .thenReturn(List.of(snapshot("ETH", yesterday, "3000")));
+
+        priceService.getCryptoQuote("ETH"); // the render that remembers the miss
+
+        Map<String, PriceService.Quote> quotes = priceService.refreshCryptoQuotes(Set.of("ETH"));
+
+        assertThat(quotes.get("ETH")).isNotNull();
+        assertThat(quotes.get("ETH").price()).isEqualByComparingTo("3000");
+        assertThat(quotes.get("ETH").live()).isFalse();
+        verify(coinGecko, times(1)).getPricesEur(Set.of("ETH"));
+    }
+
+    @Test
+    void backfill_cryptoOnly_leavesAnUnmappedCoinWithoutHistory_ratherThanAskingYahoo() {
+        LocalDate from = LocalDate.of(2026, 1, 1);
+        when(coinGecko.supports("STX")).thenReturn(false);
+
+        assertThat(priceService.backfillHistoricalPrices(Set.of("STX"), from, true)).isZero();
+
+        verify(yahoo, times(0)).getHistoricalPricesEur(any(), any(), any());
+        assertThat(eventsAt(Level.WARN)).anySatisfy(e ->
+            assertThat(e.getFormattedMessage()).contains("STX").contains("No CoinGecko mapping"));
+    }
+
     /** Runs the backfill and fails loudly if it throws — the ApplicationRunner contract. */
     private int assertThatNoStartupFailure(java.util.function.Supplier<Integer> backfill) {
         var result = new int[1];
