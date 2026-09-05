@@ -380,8 +380,22 @@ public class PriceService {
             return balance;
         }
 
-        // Use ticker if available (more specific), else use currency
-        String symbol = (ticker != null && !ticker.isBlank()) ? ticker : currency;
+        // No ticker: the balance is plain cash in `currency`, and cash converts with an FX
+        // rate, never with a chart symbol. Yahoo resolves a bare currency code as whatever
+        // instrument trades under it (chart/USD is the ProShares Ultra Semiconductors ETF,
+        // ~89 USD a share), so sending "USD" down the price path multiplied every USD cash
+        // balance by an ETF price and reported it, and its daily snapshots, at ~76x.
+        if (ticker == null || ticker.isBlank()) {
+            BigDecimal rate = yahoo.getFxRateToEur(currency);
+            if (rate == null) {
+                log.error("No EUR rate for {} -- returning the balance UNCONVERTED, so any total "
+                    + "including it is wrong until the rate is available", currency);
+                return balance;
+            }
+            return balance.multiply(rate);
+        }
+
+        String symbol = ticker;
         BigDecimal price = getPriceEur(symbol);
 
         if (price == null) {

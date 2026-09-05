@@ -5,10 +5,12 @@ import com.picsou.dto.AccountResponse;
 import com.picsou.dto.DebtRequest;
 import com.picsou.dto.HoldingResponse;
 import com.picsou.dto.RealEstateMetadataResponse;
+import com.picsou.dto.SnapshotRequest;
 import com.picsou.exception.ResourceNotFoundException;
 import com.picsou.model.Account;
 import com.picsou.model.AccountHolding;
 import com.picsou.model.AccountType;
+import com.picsou.model.BalanceSnapshot;
 import com.picsou.model.Debt;
 import com.picsou.model.FamilyMember;
 import com.picsou.model.PropertyKind;
@@ -23,6 +25,7 @@ import com.picsou.repository.RealEstateMetadataRepository;
 import com.picsou.repository.TransactionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -293,6 +296,53 @@ class AccountServiceTest {
             null, false, "#f59e0b", null, logoKey, null);
     }
 
+    private static AccountRequest usdBalanceRequest(String balance) {
+        return new AccountRequest("US checking", AccountType.CHECKING, null, "USD",
+            new BigDecimal(balance), true, "#6366f1", null, null, null);
+    }
+
+    private static Account usdManualAccount(String balance) {
+        return Account.builder().id(1L).name("US checking").type(AccountType.CHECKING)
+            .currency("USD").currentBalance(new BigDecimal(balance)).isManual(true).build();
+    }
+
+    // ─── snapshots are stored in EUR ──────────────────────────────────────────
+
+    @Test
+    void update_storesTheTypedBalanceInEur_andKeepsTheNativeFigureOnTheAccount() {
+        Account account = usdManualAccount("100");
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(snapshotRepository.findByAccountIdAndDate(eq(1L), any())).thenReturn(Optional.empty());
+        when(snapshotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(priceService.toEur(new BigDecimal("150"), "USD", null)).thenReturn(new BigDecimal("135"));
+
+        accountService.update(1L, usdBalanceRequest("150"), 7L);
+
+        ArgumentCaptor<BalanceSnapshot> snapshot = ArgumentCaptor.forClass(BalanceSnapshot.class);
+        verify(snapshotRepository).save(snapshot.capture());
+        // The history reads balance_snapshot.balance as EUR: 150 USD must land as 135, not 150.
+        assertThat(snapshot.getValue().getBalance()).isEqualByComparingTo("135");
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("150");
+    }
+
+    @Test
+    void addManualSnapshot_storesTheBalanceInEur_andKeepsTheNativeFigureOnTheAccount() {
+        Account account = usdManualAccount("100");
+        when(accountRepository.findByIdAndMemberId(1L, 7L)).thenReturn(Optional.of(account));
+        when(snapshotRepository.findLatestByAccountId(1L)).thenReturn(Optional.empty());
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(snapshotRepository.findByAccountIdAndDate(eq(1L), any())).thenReturn(Optional.empty());
+        when(snapshotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(priceService.toEur(new BigDecimal("200"), "USD", null)).thenReturn(new BigDecimal("180"));
+
+        BalanceSnapshot saved = accountService.addManualSnapshot(
+            1L, 7L, new SnapshotRequest(new BigDecimal("200"), LocalDate.now()));
+
+        assertThat(saved.getBalance()).isEqualByComparingTo("180");
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("200");
+    }
+
     @Test
     void pruneHoldings_deletesOnlyTickersNotKept() {
         accountService.pruneHoldings(ownedAccount(), Set.of("BTC", "ETH"));
@@ -512,6 +562,28 @@ class AccountServiceTest {
         BigDecimal result = accountService.liveBalanceEur(cash);
 
         assertThat(result).isEqualByComparingTo("2300");
+    }
+
+    /**
+     * Cash costs what it is worth: pairing the converted value with the unconverted stored
+     * balance reported a 2 500 USD account as a 200 EUR loss, purely the FX rate.
+     */
+    @Test
+    void valuation_cashAccount_costsWhatItIsWorthInEur() {
+        Account cash = Account.builder()
+            .id(2L)
+            .name("USD Cash")
+            .type(AccountType.CHECKING)
+            .currency("USD")
+            .currentBalance(new BigDecimal("2500"))
+            .build();
+        when(holdingRepository.findByAccount_Id(2L)).thenReturn(List.of());
+        when(priceService.toEur(new BigDecimal("2500"), "USD", null)).thenReturn(new BigDecimal("2300"));
+
+        AccountService.Valuation valuation = accountService.valuation(cash);
+
+        assertThat(valuation.liveEur()).isEqualByComparingTo("2300");
+        assertThat(valuation.investedEur()).isEqualByComparingTo("2300");
     }
 
     @Test
