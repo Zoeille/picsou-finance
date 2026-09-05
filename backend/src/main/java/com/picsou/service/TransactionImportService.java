@@ -48,6 +48,7 @@ public class TransactionImportService {
     private static final Logger log = LoggerFactory.getLogger(TransactionImportService.class);
 
     private static final int SAMPLE_ROWS = 15;
+    private static final String PREVIEW_EXPIRED = "Preview expired or invalid -- please re-upload the file";
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
@@ -97,13 +98,33 @@ public class TransactionImportService {
 
         CachedCsv cached = cache.get(req.fileToken());
         if (cached == null) {
-            throw new IllegalArgumentException("Preview expired or invalid -- please re-upload the file");
+            throw new IllegalArgumentException(PREVIEW_EXPIRED);
         }
         // Bind the token to its account so a preview cannot be replayed against another account.
         if (!cached.accountId().equals(accountId)) {
             throw new IllegalArgumentException("Preview does not belong to this account");
         }
+        // Consume the token BEFORE writing anything. Removing it after saveAll left a window the
+        // width of the whole import in which a second execute on the same preview (a double click,
+        // a request the client retried after a timeout) passed the checks above too and saved every
+        // row a second time: duplicated transactions, a cost basis and a realized P&L off by exactly
+        // one import, and nothing to flag it. remove(key, value) is atomic, so of two callers racing
+        // on one token exactly one gets past this line.
+        if (!cache.remove(req.fileToken(), cached)) {
+            throw new IllegalArgumentException(PREVIEW_EXPIRED);
+        }
 
+        try {
+            return importRows(account, cached, req);
+        } catch (RuntimeException ex) {
+            // The transaction rolls back on the way out, so nothing of this attempt is in the
+            // database: hand the preview back rather than make the user upload the file again.
+            cache.putIfAbsent(req.fileToken(), cached);
+            throw ex;
+        }
+    }
+
+    private TransactionImportResultResponse importRows(Account account, CachedCsv cached, TransactionImportRequest req) {
         CsvDialect dialect = toDialect(req.dialect());
         List<List<String>> rows = CsvReader.parse(cached.content(), dialect.delimiter());
         List<List<String>> dataRows = req.hasHeaderRow() && !rows.isEmpty() ? rows.subList(1, rows.size()) : rows;
@@ -126,9 +147,8 @@ public class TransactionImportService {
             transactionRepository.saveAll(toSave);
             holdingComputeService.recomputeHoldings(account);
         }
-        cache.remove(req.fileToken());
 
-        log.info("CSV import for account {}: {} imported, {} skipped", accountId, toSave.size(), errors.size());
+        log.info("CSV import for account {}: {} imported, {} skipped", account.getId(), toSave.size(), errors.size());
         return new TransactionImportResultResponse(toSave.size(), errors.size(), errors);
     }
 
