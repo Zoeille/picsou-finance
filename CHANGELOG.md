@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The 24H chart no longer leaves out the cash pocket of an investment account.**
+  The hourly points valued a PEA or a compte-titres from its positions alone, so
+  switching from a daily range to 24H made the total drop by the cash held in the
+  envelope, a drop that never happened. The cash pocket now counts in the hourly
+  value and in the invested amount, as the daily chart's today point already did,
+  so the gain is unchanged and the two charts agree.
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at
