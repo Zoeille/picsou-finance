@@ -10,6 +10,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -38,9 +40,12 @@ public class PriceBackfillRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Set<String> cryptoTickers = new TreeSet<>(
+        // Upper-cased before the subtraction: account_holding.ticker carries no case constraint
+        // and backfillHistoricalPrices upper-cases what it routes, so a "stx" held in a wallet
+        // and an "STX" held elsewhere must meet here, or the coin takes the generic (Yahoo) route.
+        Set<String> cryptoTickers = upperCased(
             holdingRepository.findDistinctTickersByAccountType(AccountType.CRYPTO));
-        Set<String> otherTickers = new TreeSet<>(holdingRepository.findDistinctTickers());
+        Set<String> otherTickers = upperCased(holdingRepository.findDistinctTickers());
         otherTickers.removeAll(cryptoTickers);
 
         if (cryptoTickers.isEmpty() && otherTickers.isEmpty()) {
@@ -58,5 +63,15 @@ public class PriceBackfillRunner implements ApplicationRunner {
         }
         log.info("Price backfill complete: {} snapshots saved for {} tickers ({} crypto)",
             saved, cryptoTickers.size() + otherTickers.size(), cryptoTickers.size());
+    }
+
+    private static Set<String> upperCased(Collection<String> tickers) {
+        Set<String> out = new TreeSet<>();
+        for (String ticker : tickers) {
+            if (ticker != null && !ticker.isBlank()) {
+                out.add(ticker.toUpperCase(Locale.ROOT));
+            }
+        }
+        return out;
     }
 }

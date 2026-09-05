@@ -26,6 +26,9 @@ public class PriceService {
      * A remembered miss expires sooner than a hit: a miss is more likely to be transient (a
      * rate limit) than a hit is to be stale, so recovery stays fast while a storm of retries
      * still collapses to one call per ticker per minute (docs/features/price-service.md).
+     * Retries, that is: the cache is a plain map with no in-flight de-duplication, so threads
+     * asking for the same uncached ticker at the same instant each reach the provider once
+     * before the first answer lands.
      */
     private static final long MISS_CACHE_TTL_SECONDS = 60;
 

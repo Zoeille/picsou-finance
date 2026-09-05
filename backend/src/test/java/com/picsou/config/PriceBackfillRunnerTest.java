@@ -42,6 +42,19 @@ class PriceBackfillRunnerTest {
     }
 
     @Test
+    void run_matchesCryptoAndOtherTickersCaseInsensitively() {
+        // account_holding.ticker has no case constraint: a wallet's "stx" and a broker's "STX"
+        // are the same symbol to the routing, so the subtraction must see them as one.
+        when(holdingRepository.findDistinctTickersByAccountType(AccountType.CRYPTO)).thenReturn(Set.of("stx"));
+        when(holdingRepository.findDistinctTickers()).thenReturn(Set.of("STX", "aapl"));
+
+        runner.run(null);
+
+        verify(priceService).backfillHistoricalPrices(eq(Set.of("STX")), any(), eq(true));
+        verify(priceService).backfillHistoricalPrices(eq(Set.of("AAPL")), any(), eq(false));
+    }
+
+    @Test
     void run_doesNothingWithoutHoldings() {
         when(holdingRepository.findDistinctTickersByAccountType(AccountType.CRYPTO)).thenReturn(Set.of());
         when(holdingRepository.findDistinctTickers()).thenReturn(Set.of());
