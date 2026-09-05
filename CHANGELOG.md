@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A cash account in USD, GBP or any other currency is worth its FX-converted
+  balance again.** `toEur` used the currency code as a Yahoo chart symbol when the
+  account had no ticker, and Yahoo answers `chart/USD` with the ProShares Ultra
+  Semiconductors ETF (~89 USD a share): a 1 000 USD checking account showed as
+  ~76 000 EUR on the dashboard and in every daily snapshot. Cash now converts with
+  the `{CURRENCY}EUR=X` rate, and its cost basis is that same converted figure, so
+  a foreign-currency account no longer reports the FX rate as a gain or a loss.
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at

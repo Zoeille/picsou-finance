@@ -322,7 +322,8 @@ public class AccountService {
     /**
      * Calculate the invested amount (cost basis) for an account.
      * For accounts with holdings: SUM(quantity × averageBuyIn), excluding assets that could
-     * not be valued at all. For cash accounts: same as the current balance.
+     * not be valued at all. For cash accounts: the balance converted to EUR, the same figure
+     * as its value.
      */
     public BigDecimal calculateInvestedAmount(Account account) {
         return valuation(account).investedEur();
@@ -430,7 +431,10 @@ public class AccountService {
         if (holdings.isEmpty()) {
             BigDecimal cash = priceService.toEur(
                 account.getCurrentBalance(), account.getCurrency(), account.getTicker());
-            return new Valuation(cash, account.getCurrentBalance(), true, true, false);
+            // Cash costs what it is worth, in the same currency on both sides: returning the
+            // stored balance as the cost basis paired a converted value with an unconverted
+            // cost, so a USD or GBP account reported the FX rate as a gain or a loss.
+            return new Valuation(cash, cash, true, true, false);
         }
 
         Map<String, PriceService.Quote> quotes = quotesFor(account, holdings);

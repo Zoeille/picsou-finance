@@ -514,6 +514,28 @@ class AccountServiceTest {
         assertThat(result).isEqualByComparingTo("2300");
     }
 
+    /**
+     * Cash costs what it is worth: pairing the converted value with the unconverted stored
+     * balance reported a 2 500 USD account as a 200 EUR loss, purely the FX rate.
+     */
+    @Test
+    void valuation_cashAccount_costsWhatItIsWorthInEur() {
+        Account cash = Account.builder()
+            .id(2L)
+            .name("USD Cash")
+            .type(AccountType.CHECKING)
+            .currency("USD")
+            .currentBalance(new BigDecimal("2500"))
+            .build();
+        when(holdingRepository.findByAccount_Id(2L)).thenReturn(List.of());
+        when(priceService.toEur(new BigDecimal("2500"), "USD", null)).thenReturn(new BigDecimal("2300"));
+
+        AccountService.Valuation valuation = accountService.valuation(cash);
+
+        assertThat(valuation.liveEur()).isEqualByComparingTo("2300");
+        assertThat(valuation.investedEur()).isEqualByComparingTo("2300");
+    }
+
     @Test
     void liveBalanceEur_bourseDirect_addsCashWhenAllPositionsArePriced() {
         Account account = Account.builder().id(3L).name("PEA Bourse Direct")

@@ -41,7 +41,9 @@ Anything still unresolved returns nothing.
 
 `PriceService.toEur(balance, currency, ticker)` converts an account balance to EUR:
 - If currency is EUR and no ticker is set, returns the balance as-is.
-- Otherwise, uses the ticker (preferred) or currency code to fetch a price, then multiplies.
+- If a ticker is set (an account that is itself one asset), fetches that ticker's EUR price and multiplies.
+- Otherwise the balance is plain cash in `currency`: it is multiplied by the `{CURRENCY}EUR=X` rate from `YahooFinancePriceProvider.getFxRateToEur`, never by a chart symbol. Yahoo resolves a bare currency code as whatever instrument trades under it (`chart/USD` is the ProShares Ultra Semiconductors ETF), which used to value a 1 000 USD account at ~76 000 EUR.
+- `valuation()` reports that converted figure as both the value and the cost basis of a holdings-less account, so cash never shows an FX gain or loss.
 
 ### Scheduler
 
