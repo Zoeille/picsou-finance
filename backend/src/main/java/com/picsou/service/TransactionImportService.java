@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -114,12 +116,30 @@ public class TransactionImportService {
             throw new IllegalArgumentException(PREVIEW_EXPIRED);
         }
 
+        // If this attempt does not reach the database, the preview goes back into the cache so
+        // the user can retry without a new upload. saveAll may only queue the rows: the INSERTs
+        // run at flush, on commit, after this method has returned, so a failure there never
+        // passes through a catch block here. Hooking the transaction's completion covers it.
+        boolean transactional = TransactionSynchronizationManager.isSynchronizationActive();
+        if (transactional) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status == STATUS_ROLLED_BACK) {
+                        cache.putIfAbsent(req.fileToken(), cached);
+                    }
+                }
+            });
+        }
         try {
             return importRows(account, cached, req);
         } catch (RuntimeException ex) {
-            // The transaction rolls back on the way out, so nothing of this attempt is in the
-            // database: hand the preview back rather than make the user upload the file again.
-            cache.putIfAbsent(req.fileToken(), cached);
+            // No live transaction to hook (the bean called directly, as in the unit tests): hand
+            // the preview back here. With one, the synchronization above does it once the
+            // rollback has actually completed.
+            if (!transactional) {
+                cache.putIfAbsent(req.fileToken(), cached);
+            }
             throw ex;
         }
     }

@@ -29,6 +29,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -265,5 +267,55 @@ class TransactionImportServiceTest {
         // without a new upload.
         assertThat(service.executeImport(2L, 10L, req).imported()).isEqualTo(2);
         verify(transactionRepository, times(2)).saveAll(any());
+    }
+
+    @Test
+    void executeImport_rollbackAfterTheMethodReturned_handsThePreviewBack() {
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
+        when(instrumentFieldResolver.resolve(any(), any()))
+            .thenReturn(new InstrumentFieldResolver.ResolvedInstrument("AAPL", "Apple", "Apple"));
+        String token = service.preview(2L, 10L, file(CSV)).fileToken();
+        TransactionImportRequest req =
+            new TransactionImportRequest(token, mapping(), dialect(), true, false, null);
+
+        // Stand in for the @Transactional proxy: saveAll only queued the rows, the INSERT failed
+        // at flush, and Spring reports the rollback through the synchronization after the method
+        // has already returned its result.
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(service.executeImport(2L, 10L, req).imported()).isEqualTo(2);
+            List<TransactionSynchronization> hooks = TransactionSynchronizationManager.getSynchronizations();
+            assertThat(hooks).hasSize(1);
+            hooks.get(0).afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        // Nothing was committed, so the same preview must import again on the retry.
+        assertThat(service.executeImport(2L, 10L, req).imported()).isEqualTo(2);
+    }
+
+    @Test
+    void executeImport_commitAfterTheMethodReturned_keepsTheTokenConsumed() {
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
+        when(instrumentFieldResolver.resolve(any(), any()))
+            .thenReturn(new InstrumentFieldResolver.ResolvedInstrument("AAPL", "Apple", "Apple"));
+        String token = service.preview(2L, 10L, file(CSV)).fileToken();
+        TransactionImportRequest req =
+            new TransactionImportRequest(token, mapping(), dialect(), true, false, null);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.executeImport(2L, 10L, req);
+            TransactionSynchronizationManager.getSynchronizations().get(0)
+                .afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        // The rows are in: the preview is spent, a replay is refused.
+        assertThatThrownBy(() -> service.executeImport(2L, 10L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expired");
     }
 }
