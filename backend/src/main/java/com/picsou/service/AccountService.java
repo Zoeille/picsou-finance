@@ -148,7 +148,7 @@ public class AccountService {
         // Create initial snapshot if balance is provided
         if (account.getCurrentBalance().compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal invested = calculateInvestedAmount(account);
-            createSnapshot(account, account.getCurrentBalance(), invested, LocalDate.now());
+            createSnapshot(account, toSnapshotEur(account, account.getCurrentBalance()), invested, LocalDate.now());
         }
 
         return toResponse(account);
@@ -179,7 +179,7 @@ public class AccountService {
             BigDecimal oldBalance = account.getCurrentBalance();
             account.setCurrentBalance(req.currentBalance());
             if (req.currentBalance().compareTo(oldBalance) != 0) {
-                upsertSnapshot(account, req.currentBalance(), LocalDate.now());
+                upsertSnapshotFromNative(account, req.currentBalance(), LocalDate.now());
             }
         }
 
@@ -244,7 +244,7 @@ public class AccountService {
             accountRepository.save(account);
         }
 
-        return upsertSnapshot(account, req.balance(), req.date());
+        return upsertSnapshotFromNative(account, req.balance(), req.date());
     }
 
     public List<BalanceSnapshot> getHistory(Long accountId, Long memberId, LocalDate from, LocalDate to) {
@@ -327,6 +327,22 @@ public class AccountService {
      */
     public BigDecimal calculateInvestedAmount(Account account) {
         return valuation(account).investedEur();
+    }
+
+    /**
+     * Records a balance expressed in the account's own currency. {@code balance_snapshot.balance}
+     * is read as EUR everywhere ({@code HistoryService} sums the rows straight into net worth,
+     * and the daily job writes {@link #valuation} figures next to these), so a hand-typed or
+     * bank-reported USD balance is converted before it is stored, the way {@link #valuation}
+     * converts it for the dashboard. A back-dated manual snapshot converts at today's rate: the
+     * provider has no historical FX, and an approximate EUR figure beats a USD one read as EUR.
+     */
+    BalanceSnapshot upsertSnapshotFromNative(Account account, BigDecimal nativeBalance, LocalDate date) {
+        return upsertSnapshot(account, toSnapshotEur(account, nativeBalance), date);
+    }
+
+    private BigDecimal toSnapshotEur(Account account, BigDecimal nativeBalance) {
+        return priceService.toEur(nativeBalance, account.getCurrency(), account.getTicker());
     }
 
     BalanceSnapshot upsertSnapshot(Account account, BigDecimal balance, LocalDate date) {
