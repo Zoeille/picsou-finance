@@ -108,7 +108,6 @@ FinaryImportService.executeImport(fileToken + mappings)
         |       +-- CREATE_NEW: create account, set externalAccountId
         |       +-- Reconstruct balance snapshots from transactions
         |       +-- Import transactions
-        +-- Remove from cache
         +-- Return result (counts + imported accounts)
 
 API Sync:
