@@ -170,6 +170,46 @@ describe('DeleteAccountDialog', () => {
     })
   })
 
+  it('uses the committed reset result when the administrator count changes after review', async () => {
+    useAuthStore.getState().logout()
+    useAuthStore.getState().login(ADMIN)
+    mutateAsync.mockResolvedValue({ mode: 'RESET_LAST_ADMIN' })
+    const { queryClient } = renderDialog()
+    queryClient.setQueryData(['dashboard', '1m'], { netWorth: 999 })
+
+    expect(screen.getByText('settings.deleteAccountDeleteDesc')).toBeInTheDocument()
+    expect(screen.getByText('settings.deleteAccountAdminRaceNote')).toBeInTheDocument()
+    enterPasswordAndConfirmation('admin')
+    fireEvent.click(screen.getByRole('button', { name: 'settings.deleteAccountSubmit' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({ reAuth: { password: 's3cret' } })
+    })
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    expect(queryClient.getQueryData(['dashboard', '1m'])).toBeUndefined()
+    expect(toastSuccess).toHaveBeenCalledWith('settings.deleteAccountResetSuccess')
+    expect(navigateFn).toHaveBeenCalledWith('/login', { replace: true })
+  })
+
+  it('keeps the confirmation controls scrollable within a short viewport', () => {
+    useAuthStore.getState().logout()
+    useAuthStore.getState().login(ADMIN)
+    deletionImpact.mockReturnValue({
+      data: { mode: 'RESET_LAST_ADMIN' },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      refetch: impactRefetch,
+    })
+    renderDialog()
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.className).toContain('max-h-[90vh]')
+    expect(dialog.className).toContain('overflow-y-auto')
+    expect(screen.getByRole('button', { name: 'settings.deleteAccountResetSubmit' }))
+      .toBeInTheDocument()
+  })
+
   it('asks for a TOTP code instead of a password when 2FA is enabled', () => {
     mfaStatus.mockReturnValue({
       data: { enabled: true },
@@ -182,6 +222,28 @@ describe('DeleteAccountDialog', () => {
 
     expect(screen.getByLabelText('auth.mfaCodeLabel')).toBeInTheDocument()
     expect(screen.queryByLabelText('settings.currentPassword')).not.toBeInTheDocument()
+  })
+
+  it('submits a TOTP re-authentication factor when 2FA is enabled', async () => {
+    mfaStatus.mockReturnValue({
+      data: { enabled: true },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      refetch: mfaRefetch,
+    })
+    renderDialog()
+    fireEvent.change(screen.getByLabelText('auth.mfaCodeLabel'), {
+      target: { value: '123456' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('bob'), {
+      target: { value: 'bob' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'settings.deleteAccountSubmit' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({ reAuth: { totpCode: '123456' } })
+    })
   })
 
   it('does not fall back to password while MFA status is loading', () => {
@@ -249,6 +311,22 @@ describe('DeleteAccountDialog', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert'))
         .toHaveTextContent('settings.deleteAccountInvalidCredentials')
+    })
+    expect(useAuthStore.getState().isAuthenticated).toBe(true)
+    expect(navigateFn).not.toHaveBeenCalled()
+  })
+
+  it('maps the account-deletion rate limit and keeps the session intact', async () => {
+    mutateAsync.mockRejectedValueOnce({
+      response: { status: 429, data: { code: 'ACCOUNT_DELETION_RATE_LIMITED' } },
+    })
+    renderDialog()
+    enterPasswordAndConfirmation('bob')
+    fireEvent.click(screen.getByRole('button', { name: 'settings.deleteAccountSubmit' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert'))
+        .toHaveTextContent('settings.deleteAccountRateLimited')
     })
     expect(useAuthStore.getState().isAuthenticated).toBe(true)
     expect(navigateFn).not.toHaveBeenCalled()

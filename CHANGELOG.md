@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The account-deletion dialog scrolls on short screens and wraps long action
+  labels without horizontal overflow.
+
 - Account deletion preserves the last active administrator even when other
   administrator logins are inactive. Committed deletion also purges pending
   Finary and CSV import data, with member binding and expiry checked on execute.

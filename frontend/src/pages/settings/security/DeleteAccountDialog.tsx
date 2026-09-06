@@ -122,7 +122,7 @@ export function DeleteAccountDialog({
   return (
     <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent
-        className="sm:max-w-md"
+        className="sm:max-w-md max-h-[90vh] overflow-y-auto"
         showCloseButton={!isPending}
         aria-busy={isPending}
         onEscapeKeyDown={event => {
@@ -208,7 +208,7 @@ export function DeleteAccountDialog({
             )}
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="delete-confirm">
+              <Label htmlFor="delete-confirm" className="break-words">
                 {t('common.confirmTypePrompt', { phrase: username })}
               </Label>
               <Input
@@ -229,7 +229,7 @@ export function DeleteAccountDialog({
               </p>
             )}
 
-            <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <DialogFooter className="flex-col-reverse sm:flex-col-reverse gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -238,7 +238,12 @@ export function DeleteAccountDialog({
               >
                 {t('settings.mfaCancel')}
               </Button>
-              <Button type="submit" variant="destructive" disabled={!canSubmit}>
+              <Button
+                type="submit"
+                variant="destructive"
+                className="h-auto min-h-10 whitespace-normal py-2"
+                disabled={!canSubmit}
+              >
                 {isPending ? (
                   <Loader2 size={14} className="mr-1.5 animate-spin" />
                 ) : (

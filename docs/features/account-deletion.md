@@ -133,6 +133,10 @@ disables its fields and blocks the close button, Cancel, Escape, and outside
 clicks. After success, the frontend clears all local auth, profile, and query
 state and opens `/login` without a second logout request.
 
+The dialog scrolls within 90% of the viewport height so its controls remain
+reachable on small screens and in landscape orientation. The action buttons are
+stacked, and long translated labels wrap within the dialog width.
+
 The dialog warns that an owned account or goal also disappears for family
 members who shared or contributed to it. Data owned by other members remains.
 
