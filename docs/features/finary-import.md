@@ -1,6 +1,6 @@
 # Feature: Finary Import
 
-> Last updated: 2026-07-07
+> Last updated: 2026-09-06
 
 ## Context
 
@@ -40,7 +40,11 @@ Type suggestions are auto-computed from the Finary category via `FinaryPersisten
 
 - `FinaryImportService` uses a `ConcurrentHashMap` with 30-minute expiry (cleaned every 60s by `@Scheduled`).
 - `FinaryApiSyncService` uses a `ConcurrentHashMap` with 10-minute expiry (cleaned every 60s by `@Scheduled`).
-- Cache tokens are UUIDs. The preview+execute must complete within the TTL or the user must re-upload.
+- Cache tokens are UUIDs bound to the originating member. Execute rejects a different
+  member or an expired entry before processing, independently of the scheduled sweep.
+- A committed member deletion or final-admin reset purges that member's cached
+  previews. Rollback preserves them. Registration checks member existence under
+  the same monitor used by the purge, preventing late previews from being retained.
 
 ### Auto-sync
 

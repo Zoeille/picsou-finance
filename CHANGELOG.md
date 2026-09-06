@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Account deletion preserves the last active administrator even when other
+  administrator logins are inactive. Committed deletion also purges pending
+  Finary and CSV import data, with member binding and expiry checked on execute.
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at

@@ -156,6 +156,33 @@ class AccountDeletionPostgresIntegrationTest {
     private Fixture activeFixture;
 
     @Test
+    void onlyActiveAdministrator_resetsWhenAnotherAdministratorIsInactive() {
+        Fixture fixture = seedFixture();
+        activeFixture = fixture;
+        jdbcTemplate.update("UPDATE app_user SET is_activated = false WHERE id = ?", fixture.secondAdminId());
+
+        assertThat(familyService.previewOwnAccountDeletion(fixture.firstAdminId()))
+            .isEqualTo(AccountDeletionMode.RESET_LAST_ADMIN);
+        assertThat(familyService.deleteOwnAccount(fixture.firstAdminId(), new ReAuthDto("test", null)))
+            .isEqualTo(AccountDeletionMode.RESET_LAST_ADMIN);
+
+        AppUser retained = userRepository.findByIdWithMember(fixture.firstAdminId()).orElseThrow();
+        assertThat(retained.getUsername()).isEqualTo("admin-a");
+        assertThat(retained.getPasswordHash()).isEqualTo("hash-a");
+        assertThat(retained.isActivated()).isTrue();
+        assertThat(retained.getTokenVersion()).isEqualTo(5L);
+        assertThat(retained.getMember().getId()).isNotEqualTo(fixture.firstOldMemberId());
+        assertThat(userMfaRepository.findByUserId(retained.getId()).orElseThrow().getTotpSecretEnc())
+            .isEqualTo("secret-a");
+        assertThat(memberRepository.existsById(fixture.firstOldMemberId())).isFalse();
+        assertThat(accountRepository.existsById(fixture.firstAccountId())).isFalse();
+        assertThat(goalRepository.existsById(fixture.firstGoalId())).isFalse();
+        assertThat(userRepository.findById(fixture.secondAdminId()).orElseThrow().isActivated()).isFalse();
+        assertThat(accountRepository.existsById(fixture.secondAccountId())).isTrue();
+        assertThat(memberRepository.existsById(fixture.controlMemberId())).isTrue();
+    }
+
+    @Test
     void concurrentAdminSelfDeletions_leaveOneResetAdminAndEraseOnlyTheirData() throws Exception {
         Fixture fixture = seedFixture();
         activeFixture = fixture;

@@ -15,7 +15,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByUsername(String username);
     boolean existsByUsername(String username);
 
-    long countByRole(UserRole role);
+    boolean existsByRoleAndActivatedTrueAndIdNot(UserRole role, Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM AppUser u WHERE u.role = :role ORDER BY u.id")

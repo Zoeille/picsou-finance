@@ -11,6 +11,7 @@ import com.picsou.model.Account;
 import com.picsou.model.AccountType;
 import com.picsou.model.Transaction;
 import com.picsou.repository.AccountRepository;
+import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,8 @@ import org.springframework.mock.web.MockMultipartFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +40,7 @@ class TransactionImportServiceTest {
 
     @Mock AccountRepository accountRepository;
     @Mock TransactionRepository transactionRepository;
+    @Mock FamilyMemberRepository familyMemberRepository;
     @Mock HoldingComputeService holdingComputeService;
     @Mock InstrumentFieldResolver instrumentFieldResolver;
 
@@ -45,7 +49,8 @@ class TransactionImportServiceTest {
     @BeforeEach
     void setUp() {
         service = new TransactionImportService(accountRepository, transactionRepository,
-            holdingComputeService, new TransactionRowMapper(instrumentFieldResolver));
+            holdingComputeService, new TransactionRowMapper(instrumentFieldResolver), familyMemberRepository);
+        lenient().when(familyMemberRepository.existsById(anyLong())).thenReturn(true);
     }
 
     private Account pea() {
@@ -165,6 +170,20 @@ class TransactionImportServiceTest {
         assertThatThrownBy(() -> service.executeImport(3L, 10L, req))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("does not belong");
+    }
+
+    @Test
+    void executeImport_tokenBoundToAnotherMember_throws() {
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
+        when(accountRepository.findByIdAndMemberId(2L, 11L)).thenReturn(Optional.of(pea()));
+
+        String token = service.preview(2L, 10L, file(CSV)).fileToken();
+        TransactionImportRequest req =
+            new TransactionImportRequest(token, mapping(), dialect(), true, false, null);
+
+        assertThatThrownBy(() -> service.executeImport(2L, 11L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expired or invalid");
     }
 
     @Test

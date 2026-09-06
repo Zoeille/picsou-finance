@@ -27,6 +27,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -59,6 +60,7 @@ class FamilyServiceTest {
     @Mock PersistentSessionService persistentSessionService;
     @Mock ReAuthService reAuthService;
     @Mock PasswordEncoder passwordEncoder;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     @InjectMocks FamilyService familyService;
 
@@ -229,7 +231,7 @@ class FamilyServiceTest {
 
         familyService.deleteMember(3L, 1L);
 
-        InOrder order = inOrder(userRepository, memberRepository);
+        InOrder order = inOrder(userRepository, memberRepository, eventPublisher);
         order.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
         order.verify(userRepository).findByIdWithMemberForUpdate(1L);
         order.verify(memberRepository).findByIdForUpdate(3L);
@@ -238,6 +240,7 @@ class FamilyServiceTest {
         order.verify(userRepository).flush();
         order.verify(memberRepository).delete(target);
         order.verify(memberRepository).flush();
+        order.verify(eventPublisher).publishEvent(new MemberDataDeletedEvent(3L));
     }
 
     @Test
@@ -298,6 +301,45 @@ class FamilyServiceTest {
         verify(accessKeyRepository).deleteAllByCreatedBy(7L);
         verify(memberRepository).delete(me);
         verifyNoInteractions(userMfaRepository);
+        InOrder deletionOrder = inOrder(memberRepository, eventPublisher);
+        deletionOrder.verify(memberRepository).delete(me);
+        deletionOrder.verify(memberRepository).flush();
+        deletionOrder.verify(eventPublisher).publishEvent(new MemberDataDeletedEvent(3L));
+    }
+
+    @Test
+    void deleteOwnAccount_otherAdminInactive_preservesTheOnlyActiveLogin() {
+        FamilyMember me = member("Active admin");
+        AppUser user = appUser(7L, UserRole.ADMIN, me);
+        AppUser inactiveAdmin = appUser(8L, UserRole.ADMIN,
+            FamilyMember.builder().id(8L).displayName("Inactive admin").build());
+        inactiveAdmin.setActivated(false);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(user, inactiveAdmin));
+        when(userRepository.findByIdWithMemberForUpdate(7L)).thenReturn(Optional.of(user));
+        when(memberRepository.saveAndFlush(any(FamilyMember.class))).thenAnswer(invocation -> {
+            FamilyMember replacement = invocation.getArgument(0);
+            replacement.setId(99L);
+            return replacement;
+        });
+
+        assertThat(familyService.deleteOwnAccount(7L, reAuth()))
+            .isEqualTo(AccountDeletionMode.RESET_LAST_ADMIN);
+        assertThat(user.isActivated()).isTrue();
+        assertThat(user.getMember().getId()).isEqualTo(99L);
+        verify(userRepository, never()).delete(any());
+        verify(eventPublisher).publishEvent(new MemberDataDeletedEvent(3L));
+    }
+
+    @Test
+    void deleteOwnAccount_inactiveCaller_rejectsBeforeReauthenticationOrMutation() {
+        AppUser user = appUser(7L, UserRole.ADMIN, member("Inactive admin"));
+        user.setActivated(false);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(user));
+        when(userRepository.findByIdWithMemberForUpdate(7L)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> familyService.deleteOwnAccount(7L, reAuth()))
+            .isInstanceOf(ResponseStatusException.class);
+        verifyNoInteractions(reAuthService, memberRepository, eventPublisher);
     }
 
     @Test
@@ -313,7 +355,7 @@ class FamilyServiceTest {
         AccountDeletionMode mode = familyService.deleteOwnAccount(7L, reAuth);
 
         assertThat(mode).isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
-        InOrder order = inOrder(userRepository, memberRepository, reAuthService);
+        InOrder order = inOrder(userRepository, memberRepository, reAuthService, eventPublisher);
         order.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
         order.verify(userRepository).findByIdWithMemberForUpdate(7L);
         order.verify(reAuthService).verify(user, reAuth);
@@ -321,6 +363,7 @@ class FamilyServiceTest {
         order.verify(userRepository).flush();
         order.verify(memberRepository).delete(me);
         order.verify(memberRepository).flush();
+        order.verify(eventPublisher).publishEvent(new MemberDataDeletedEvent(3L));
     }
 
     @Test
@@ -334,7 +377,7 @@ class FamilyServiceTest {
         AccountDeletionMode mode = familyService.deleteOwnAccount(7L, reAuth);
 
         assertThat(mode).isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
-        InOrder order = inOrder(userRepository, memberRepository, reAuthService);
+        InOrder order = inOrder(userRepository, memberRepository, reAuthService, eventPublisher);
         order.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
         order.verify(userRepository).findByIdWithMemberForUpdate(7L);
         order.verify(reAuthService).verify(user, reAuth);
@@ -342,6 +385,7 @@ class FamilyServiceTest {
         order.verify(userRepository).flush();
         order.verify(memberRepository).delete(me);
         order.verify(memberRepository).flush();
+        order.verify(eventPublisher).publishEvent(new MemberDataDeletedEvent(3L));
     }
 
     @Test
@@ -359,6 +403,7 @@ class FamilyServiceTest {
 
         verify(userRepository, never()).delete(any());
         verify(memberRepository, never()).delete(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -366,10 +411,20 @@ class FamilyServiceTest {
         FamilyMember me = member("TheAdmin");
         AppUser user = appUser(7L, UserRole.ADMIN, me);
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
-        when(userRepository.countByRole(UserRole.ADMIN)).thenReturn(1L);
+        when(userRepository.existsByRoleAndActivatedTrueAndIdNot(UserRole.ADMIN, 7L)).thenReturn(false);
 
         assertThat(familyService.previewOwnAccountDeletion(7L))
             .isEqualTo(AccountDeletionMode.RESET_LAST_ADMIN);
+    }
+
+    @Test
+    void previewOwnAccountDeletion_otherActiveAdmin_allowsFullDeletion() {
+        AppUser user = appUser(7L, UserRole.ADMIN, member("Admin"));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(userRepository.existsByRoleAndActivatedTrueAndIdNot(UserRole.ADMIN, 7L)).thenReturn(true);
+
+        assertThat(familyService.previewOwnAccountDeletion(7L))
+            .isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
     }
 
     @Test
@@ -380,7 +435,7 @@ class FamilyServiceTest {
 
         assertThat(familyService.previewOwnAccountDeletion(7L))
             .isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
-        verify(userRepository, never()).countByRole(any());
+        verify(userRepository, never()).existsByRoleAndActivatedTrueAndIdNot(any(), any());
     }
 
     // ─── manual sharing ownership ─────────────────────────────────────────

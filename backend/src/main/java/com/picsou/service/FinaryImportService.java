@@ -8,27 +8,27 @@ import com.picsou.repository.BalanceSnapshotRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.TransactionRepository;
 import com.picsou.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class FinaryImportService {
 
     private static final Logger log = LoggerFactory.getLogger(FinaryImportService.class);
@@ -40,19 +40,37 @@ public class FinaryImportService {
     private static final List<String> TRANSACTION_CATEGORIES = List.of(
         "Checkings", "Savings", "Investments", "Credits"
     );
+    private static final Duration PREVIEW_TTL = Duration.ofMinutes(30);
 
     private final AccountRepository accountRepository;
     private final BalanceSnapshotRepository balanceSnapshotRepository;
     private final TransactionRepository transactionRepository;
     private final FamilyMemberRepository familyMemberRepository;
     private final FinaryPersistenceHelper persistenceHelper;
-    private final ConcurrentHashMap<String, ParsedFinaryData> cache = new ConcurrentHashMap<>();
+    private final MemberPreviewCache<ParsedFinaryData> cache;
 
     record ParsedFinaryData(
+        Long memberId,
         List<FinaryPersistenceHelper.ParsedFinaryAccount> accounts,
         List<FinaryPersistenceHelper.ParsedFinaryTransaction> transactions,
         Instant parsedAt
     ) {}
+
+    public FinaryImportService(
+        AccountRepository accountRepository,
+        BalanceSnapshotRepository balanceSnapshotRepository,
+        TransactionRepository transactionRepository,
+        FamilyMemberRepository familyMemberRepository,
+        FinaryPersistenceHelper persistenceHelper
+    ) {
+        this.accountRepository = accountRepository;
+        this.balanceSnapshotRepository = balanceSnapshotRepository;
+        this.transactionRepository = transactionRepository;
+        this.familyMemberRepository = familyMemberRepository;
+        this.persistenceHelper = persistenceHelper;
+        this.cache = new MemberPreviewCache<>(
+            familyMemberRepository, ParsedFinaryData::memberId, ParsedFinaryData::parsedAt);
+    }
 
     /**
      * Parse xlsx file and return a preview with mapping suggestions
@@ -60,10 +78,12 @@ public class FinaryImportService {
     public FinaryPreviewResponse preview(MultipartFile file, Long memberId) {
         try {
             Workbook workbook = WorkbookFactory.create(file.getInputStream());
-            ParsedFinaryData parsed = parseXlsx(workbook);
+            ParsedFinaryData parsed = parseXlsx(workbook, memberId);
 
             String fileToken = UUID.randomUUID().toString();
-            cache.put(fileToken, parsed);
+            if (!cache.register(fileToken, parsed)) {
+                throw new ResourceNotFoundException("Family member not found");
+            }
 
             List<FinaryAccountPreview> previews = parsed.accounts.stream()
                 .map(acc -> new FinaryAccountPreview(
@@ -98,10 +118,8 @@ public class FinaryImportService {
      */
     @Transactional
     public FinaryImportResultResponse executeImport(FinaryImportRequest req, Long memberId) {
-        ParsedFinaryData parsed = cache.get(req.fileToken());
-        if (parsed == null) {
-            throw new IllegalArgumentException("Preview expired or invalid -- please re-upload the file");
-        }
+        ParsedFinaryData parsed = cache.find(req.fileToken(), memberId, PREVIEW_TTL)
+            .orElseThrow(() -> new IllegalArgumentException("Preview expired or invalid -- please re-upload the file"));
 
         FamilyMember member = familyMemberRepository.findById(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Family member not found"));
@@ -177,7 +195,7 @@ public class FinaryImportService {
             }
         }
 
-        cache.remove(req.fileToken());
+        cache.discard(req.fileToken());
 
         return new FinaryImportResultResponse(
             accountsCreated, accountsMapped, accountsSkipped,
@@ -189,7 +207,7 @@ public class FinaryImportService {
     /**
      * Parse the xlsx file into structured data
      */
-    private ParsedFinaryData parseXlsx(Workbook workbook) throws IOException {
+    private ParsedFinaryData parseXlsx(Workbook workbook, Long memberId) throws IOException {
         List<FinaryPersistenceHelper.ParsedFinaryAccount> accounts = new ArrayList<>();
         List<FinaryPersistenceHelper.ParsedFinaryTransaction> transactions = new ArrayList<>();
 
@@ -261,7 +279,7 @@ public class FinaryImportService {
         }
 
         workbook.close();
-        return new ParsedFinaryData(accounts, transactions, Instant.now());
+        return new ParsedFinaryData(memberId, accounts, transactions, Instant.now());
     }
 
     private String cellString(Row row, int col) {
@@ -299,7 +317,11 @@ public class FinaryImportService {
      */
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     void cleanupExpiredCache() {
-        Instant thirtyMinutesAgo = Instant.now().minusSeconds(1800);
-        cache.entrySet().removeIf(e -> e.getValue().parsedAt.isBefore(thirtyMinutesAgo));
+        cache.discardExpired(PREVIEW_TTL);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void discardDeletedMemberPreview(MemberDataDeletedEvent event) {
+        cache.discardForMember(event.memberId());
     }
 }

@@ -8,6 +8,7 @@ import com.picsou.dto.SharingSettingsResponse;
 import com.picsou.exception.LastAdministratorException;
 import com.picsou.model.*;
 import com.picsou.repository.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ public class FamilyService {
     private final PersistentSessionService persistentSessionService;
     private final ReAuthService reAuthService;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher eventPublisher;
 
     public FamilyService(
         FamilyMemberRepository memberRepository,
@@ -50,7 +52,8 @@ public class FamilyService {
         AccessKeyRepository accessKeyRepository,
         PersistentSessionService persistentSessionService,
         ReAuthService reAuthService,
-        PasswordEncoder passwordEncoder
+        PasswordEncoder passwordEncoder,
+        ApplicationEventPublisher eventPublisher
     ) {
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
@@ -63,6 +66,7 @@ public class FamilyService {
         this.persistentSessionService = persistentSessionService;
         this.reAuthService = reAuthService;
         this.passwordEncoder = passwordEncoder;
+        this.eventPublisher = eventPublisher;
     }
 
     public List<FamilyMemberResponse> listMembers() {
@@ -129,7 +133,7 @@ public class FamilyService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session no longer active"));
         boolean requesterIsLockedAdmin = administrators.stream()
             .anyMatch(admin -> admin.getId().equals(requester.getId()));
-        if (requester.getRole() != UserRole.ADMIN || !requesterIsLockedAdmin) {
+        if (!requester.isActivated() || requester.getRole() != UserRole.ADMIN || !requesterIsLockedAdmin) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required");
         }
         if (id.equals(requester.getMember().getId())) {
@@ -139,7 +143,8 @@ public class FamilyService {
         FamilyMember member = memberRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found"));
         AppUser user = userRepository.findByMemberIdForUpdate(id).orElse(null);
-        if (user != null && user.getRole() == UserRole.ADMIN && administrators.size() <= 1) {
+        if (user != null && user.getRole() == UserRole.ADMIN
+            && !hasOtherActiveAdministrator(administrators, user.getId())) {
             throw new LastAdministratorException();
         }
         permanentlyDelete(user, member);
@@ -151,6 +156,10 @@ public class FamilyService {
         AppUser user = userRepository.findByIdWithMemberForUpdate(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session no longer active"));
 
+        if (!user.isActivated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session no longer active");
+        }
+
         if (user.getRole() == UserRole.ADMIN) {
             boolean callerIsLockedAdmin = administrators.stream()
                 .anyMatch(admin -> admin.getId().equals(user.getId()));
@@ -160,7 +169,7 @@ public class FamilyService {
         }
 
         reAuthService.verify(user, reAuth);
-        if (user.getRole() == UserRole.ADMIN && administrators.size() == 1) {
+        if (user.getRole() == UserRole.ADMIN && !hasOtherActiveAdministrator(administrators, userId)) {
             resetLastAdministrator(user);
             return AccountDeletionMode.RESET_LAST_ADMIN;
         }
@@ -171,7 +180,8 @@ public class FamilyService {
     public AccountDeletionMode previewOwnAccountDeletion(Long userId) {
         AppUser user = userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session no longer active"));
-        if (user.getRole() == UserRole.ADMIN && userRepository.countByRole(UserRole.ADMIN) <= 1) {
+        if (user.getRole() == UserRole.ADMIN
+            && !userRepository.existsByRoleAndActivatedTrueAndIdNot(UserRole.ADMIN, userId)) {
             return AccountDeletionMode.RESET_LAST_ADMIN;
         }
         return AccountDeletionMode.DELETE_ACCOUNT;
@@ -181,6 +191,11 @@ public class FamilyService {
         return userRepository.findAllByRoleForUpdate(UserRole.ADMIN);
     }
 
+    private boolean hasOtherActiveAdministrator(List<AppUser> administrators, Long userId) {
+        return administrators.stream()
+            .anyMatch(admin -> admin.isActivated() && !admin.getId().equals(userId));
+    }
+
     private void permanentlyDelete(AppUser user, FamilyMember member) {
         if (user != null) {
             userRepository.delete(user);
@@ -188,6 +203,7 @@ public class FamilyService {
         }
         memberRepository.delete(member);
         memberRepository.flush();
+        eventPublisher.publishEvent(new MemberDataDeletedEvent(member.getId()));
     }
 
     private void resetLastAdministrator(AppUser user) {
@@ -208,6 +224,7 @@ public class FamilyService {
         accessKeyRepository.deleteAllByCreatedBy(user.getId());
         memberRepository.delete(oldMember);
         memberRepository.flush();
+        eventPublisher.publishEvent(new MemberDataDeletedEvent(oldMember.getId()));
     }
 
     @Transactional

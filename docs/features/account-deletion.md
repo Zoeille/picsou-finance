@@ -1,6 +1,6 @@
 # Feature: Self-service account deletion (GDPR Art. 17)
 
-> Last updated: 2026-09-03
+> Last updated: 2026-09-06
 
 ## Context
 
@@ -10,10 +10,13 @@ could not complete this operation without another administrator.
 
 Picsou applies two outcomes:
 
-- A member or a non-final administrator is fully deleted.
-- The final administrator keeps the only recoverable login. Picsou erases the
+- A member or an administrator with another active administrator is fully deleted.
+- The final active administrator keeps the remaining active admin login. Picsou erases the
   administrator's member-owned data, revokes every session and access key, and
   requires a new login.
+
+Inactive administrator rows do not count as an alternative login. Both the
+advisory preview and the locked write path use this rule.
 
 The final-administrator outcome preserves the `AppUser` id, username, password
 hash, `ADMIN` role, activation state, MFA secret, and unused recovery codes. It
@@ -92,8 +95,21 @@ one account. The second transaction waits. After the first commit, PostgreSQL
 returns the remaining administrator to the second transaction, which resets that
 identity instead of deleting it. No committed path can remove the final admin.
 
-Any future role promotion, demotion, or administrator deletion must use the same
-lock protocol.
+Any future role promotion, demotion, administrator activation change, or
+administrator deletion must use the same lock protocol.
+
+## Pending import data
+
+Both deletion outcomes publish `MemberDataDeletedEvent` for the removed member
+inside the database transaction. After commit, the Finary XLSX, Finary API, and
+transaction CSV caches remove every preview belonging to that member. A rollback
+keeps the previews available.
+
+Preview entries are bound to their originating member, and CSV entries also
+retain their account binding. Execute validates ownership and expiry before
+processing data. Cache registration checks that the member still exists under
+the same monitor used by the deletion listener, so a preview finishing after
+deletion cannot repopulate the cache.
 
 ## HTTP and frontend contract
 
@@ -141,8 +157,11 @@ Frontend:
 
 ## Tests
 
+- `MemberPreviewCacheTest` covers member binding, expiry, selective cleanup, and
+  preview registration after deletion. `PreviewCacheDeletionEventTest` checks
+  all three Spring listeners on commit and rollback.
 - `FamilyServiceTest` covers locked re-authentication, full deletion order, and
-  final-admin member replacement.
+  final-admin member replacement, including inactive alternative administrators.
 - `AccountDeletionPostgresIntegrationTest` creates a real PostgreSQL delete race.
   It checks the admin invariant, member cascades, MFA retention, session
   revocation, access-key deletion, and survival of unrelated member data.

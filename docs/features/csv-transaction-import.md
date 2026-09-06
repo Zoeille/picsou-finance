@@ -1,6 +1,6 @@
 # Feature: CSV transaction import (investment accounts)
 
-> Last updated: 2026-08-31
+> Last updated: 2026-09-06
 
 ## Context
 
@@ -17,12 +17,17 @@ Two phases, modelled on the Finary XLSX importer but mapping **columns** into an
 
 1. **Preview** — the raw file is uploaded, the dialect (delimiter / decimal / date format) is
    sniffed, a best-guess column mapping is built from the header names, and the raw file is cached
-   under a `fileToken` **bound to the target account** (30-min TTL). The response returns the
+   under a `fileToken` **bound to the originating member and target account** (30-min TTL). The response returns the
    detected columns, a sample of rows, and the guesses — all overridable in the wizard.
 2. **Execute** — the client echoes the `fileToken` plus the (possibly user-adjusted) mapping and
    dialect. The raw file is **re-parsed** with the confirmed dialect, each row is mapped to a
    manual BUY/SELL transaction, valid rows are bulk-inserted (`is_manual = true`), and holdings are
    recomputed **once**. Invalid rows are reported per-row rather than failing the whole file.
+
+Expired entries are rejected during execute, independently of the scheduled
+sweep. A committed member deletion or final-admin reset purges the raw previews
+for the removed member; rollback preserves them. Registration checks member
+existence under the purge monitor to prevent late previews from being retained.
 
 ### Key files
 

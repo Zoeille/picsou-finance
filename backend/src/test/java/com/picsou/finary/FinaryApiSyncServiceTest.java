@@ -9,6 +9,7 @@ import com.picsou.dto.FinaryMappingAction;
 import com.picsou.dto.FinaryPreviewResponse;
 import com.picsou.dto.NewAccountDetails;
 import com.picsou.exception.ResourceNotFoundException;
+import com.picsou.exception.SyncException;
 import com.picsou.finary.client.FinaryApiClient;
 import com.picsou.finary.dto.FinaryAccountCurrency;
 import com.picsou.finary.dto.FinaryAccountDto;
@@ -20,6 +21,7 @@ import com.picsou.model.FinarySession;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.FinarySessionRepository;
+import com.picsou.service.MemberDataDeletedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -109,6 +111,7 @@ class FinaryApiSyncServiceTest {
 
     private void stubPreviewFlow(FinaryAccountDto checking, FinaryLoanDto loan) {
         when(finarySessionRepository.findByMemberId(1L)).thenReturn(Optional.of(connectedSession()));
+        when(familyMemberRepository.existsById(1L)).thenReturn(true);
         when(encryption.decrypt("enc-email")).thenReturn("user@example.com");
         when(encryption.decrypt("enc-pass")).thenReturn("secret");
         when(finaryApiClient.authenticate("user@example.com", "secret", null)).thenReturn("jwt");
@@ -185,6 +188,24 @@ class FinaryApiSyncServiceTest {
         assertThat(saved.getType()).isEqualTo(AccountType.LOAN);
         assertThat(saved.getExternalAccountId()).isEqualTo("finary_loans_loan-1");
         assertThat(saved.getCurrentBalance()).isEqualByComparingTo("12345.67");
+    }
+
+    @Test
+    void execute_rejectsPreviewPurgedAfterMemberDeletion() {
+        FinaryAccountDto checking = new FinaryAccountDto(
+            "chk-1", "Checking", null, 1000.0, 1000.0, null,
+            new FinaryAccountCurrency("EUR", "€"), false);
+        FinaryLoanDto loan = new FinaryLoanDto(
+            "loan-1", "loan", "PRET CONSO Auto", 12345.67, 250.0,
+            "2023-01-01", "2028-01-01", new FinaryAccountCurrency("EUR", "€"), null);
+        stubPreviewFlow(checking, loan);
+
+        FinaryPreviewResponse preview = service.preview(null, 1L);
+        service.discardDeletedMemberPreview(new MemberDataDeletedEvent(1L));
+
+        assertThatThrownBy(() -> service.execute(preview.fileToken(), List.of(), 1L))
+            .isInstanceOf(SyncException.class)
+            .hasMessageContaining("expired or invalid");
     }
 
     @Test
