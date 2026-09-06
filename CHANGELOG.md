@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **BoursoBank's fraud-education interstitial no longer reads as a wrong password.**
+  When the bank parks a valid login on its fraud-prevention notice, the sidecar
+  returns `FRAUD_ACK_REQUIRED` and the app tells the user to validate the notice
+  on the bank's website and retry, instead of claiming the credentials are wrong.
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at
