@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createElement, type ReactNode } from 'react'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { LoginOutcome } from './api'
 
@@ -23,15 +23,16 @@ vi.stubGlobal('sessionStorage', memoryStorage())
 
 // Mock the network layer — the hooks only care about the resolved LoginOutcome.
 // vi.hoisted lets the (hoisted) vi.mock factory reference these safely.
-const { loginWithRememberMe, verifyMfa } = vi.hoisted(() => ({
+const { loginWithRememberMe, verifyMfa, getStatus } = vi.hoisted(() => ({
   loginWithRememberMe: vi.fn(),
   verifyMfa: vi.fn(),
+  getStatus: vi.fn(),
 }))
 vi.mock('./api', () => ({
-  mfaApi: { loginWithRememberMe, verifyMfa },
+  mfaApi: { loginWithRememberMe, verifyMfa, getStatus },
 }))
 
-const { useLoginWithRememberMe, useVerifyMfa } = await import('./hooks')
+const { useLoginWithRememberMe, useVerifyMfa, useMfaStatus } = await import('./hooks')
 const { useAuthStore } = await import('@/stores/auth-store')
 const { useProfileStore } = await import('@/stores/profile-store')
 
@@ -61,6 +62,32 @@ beforeEach(() => {
   useProfileStore.getState().reset()
   loginWithRememberMe.mockReset()
   verifyMfa.mockReset()
+  getStatus.mockReset()
+})
+
+describe('MFA status freshness', () => {
+  it('refetches a warm status when a sensitive flow requires a fresh value', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
+    })
+    queryClient.setQueryData(['mfa', 'status'], {
+      enabled: false,
+      enrolledAt: null,
+      remainingRecoveryCodes: 0,
+    })
+    getStatus.mockResolvedValue({
+      enabled: true,
+      enrolledAt: '2026-09-03T00:00:00Z',
+      remainingRecoveryCodes: 10,
+    })
+
+    const { result } = renderHook(() => useMfaStatus({ fresh: true }), {
+      wrapper: makeWrapper(queryClient),
+    })
+
+    await waitFor(() => expect(result.current.data?.enabled).toBe(true))
+    expect(getStatus).toHaveBeenCalledOnce()
+  })
 })
 
 describe('login client-state reset (session-bleed fix)', () => {

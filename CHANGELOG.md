@@ -169,9 +169,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mark, and on-chain wallets — whose provider is a bare ticker, so no provider
   logo can match — show a blockchain mark by default. A wallet held on a Ledger
   can be switched to the Ledger logo from the account form, next to the color
-  picker; the choice is stored on the account, so it follows every device and
-  family member. Existing wallets are backfilled by a migration.
-  See [feature notes](docs/features/bank-logos.md).
+   picker; the choice is stored on the account, so it follows every device and
+   family member. Existing wallets are backfilled by a migration.
+   See [feature notes](docs/features/bank-logos.md).
+- **Self-service account deletion (GDPR Art. 17).** Settings → Danger zone lets
+  users erase their login and owned data through `DELETE /api/me`, after
+  re-authentication and username confirmation. The final administrator keeps
+  the same login, role, and MFA configuration but loses all member-owned data
+  and access keys while every session is revoked. An ordered database lock prevents concurrent
+  deletions from leaving the instance without an administrator; persistent sessions are bound
+  to the credential generation that issued them so an in-flight login cannot restore access
+  after the reset. See the
+  [feature notes](docs/features/account-deletion.md) (#118).
 
 ### Changed
 

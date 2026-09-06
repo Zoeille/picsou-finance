@@ -222,8 +222,16 @@ public class AuthController {
         }
 
         Long userId = claims.get("uid", Long.class);
-        AppUser user = userRepository.findByIdWithMember(userId)
-            .orElseThrow(() -> new BadCredentialsException("User not found"));
+        AppUser user = userRepository.findByIdWithMember(userId).orElse(null);
+        Long challengeTokenVersion = jwtUtil.getTokenVersion(claims);
+        if (user == null || !user.isActivated() || challengeTokenVersion == null
+            || challengeTokenVersion.longValue() != user.getTokenVersion()) {
+            cookieWriter.clearMfaChallenge(httpRes);
+            ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED, "Invalid MFA challenge");
+            problem.setProperty("code", "MFA_CHALLENGE_INVALID");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+        }
 
         boolean isRecovery = Boolean.TRUE.equals(req.isRecoveryCode());
         if (!mfaService.verifyTotpOrRecovery(user, req.code(), isRecovery)) {

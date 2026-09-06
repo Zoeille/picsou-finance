@@ -53,6 +53,9 @@ public class PersistentSession {
     @Builder.Default
     private boolean trustedFor2fa = false;
 
+    @Column(name = "token_version", nullable = false, updatable = false)
+    private long tokenVersion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

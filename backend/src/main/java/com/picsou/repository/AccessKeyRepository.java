@@ -21,6 +21,10 @@ public interface AccessKeyRepository extends JpaRepository<AccessKey, Long> {
     /** Member-scoped lookup for revoke (404 if it is not the caller's key). */
     Optional<AccessKey> findByIdAndMemberId(Long id, Long memberId);
 
+    @Modifying
+    @Query("DELETE FROM AccessKey a WHERE a.createdBy = :userId")
+    int deleteAllByCreatedBy(@Param("userId") Long userId);
+
     /**
      * Throttled last-used stamp. Bulk update bypasses the entity lifecycle on purpose, so this
      * frequent hot-path write never bumps {@code updated_at} via JPA auditing.

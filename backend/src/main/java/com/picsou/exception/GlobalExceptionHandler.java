@@ -78,8 +78,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(com.picsou.service.ReAuthService.ReAuthFailedException.class)
     ProblemDetail handleReAuthFailed(com.picsou.service.ReAuthService.ReAuthFailedException ex) {
-        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
-        pd.setTitle("REAUTH_FAILED");
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.UNAUTHORIZED, "Re-authentication failed");
+        pd.setTitle("Re-authentication failed");
+        pd.setProperty("code", "REAUTH_FAILED");
+        return pd;
+    }
+
+    @ExceptionHandler(LastAdministratorException.class)
+    ProblemDetail handleLastAdministrator(LastAdministratorException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        pd.setProperty("code", "LAST_ADMIN");
         return pd;
     }
 

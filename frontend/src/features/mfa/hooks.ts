@@ -80,10 +80,11 @@ export function useVerifyMfa() {
 
 // ─── status / enroll / disable / regenerate ──────────────────────────
 
-export function useMfaStatus() {
+export function useMfaStatus({ fresh = false }: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: MFA_KEYS.status,
     queryFn: () => mfaApi.getStatus(),
+    ...(fresh ? { staleTime: 0, refetchOnMount: 'always' as const } : {}),
   })
 }
 

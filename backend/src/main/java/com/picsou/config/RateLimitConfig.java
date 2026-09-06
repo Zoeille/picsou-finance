@@ -169,6 +169,17 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-user self-service account deletion rate limiter: 3 deletions per hour.
+     * Stricter than export (5/h) because deletion is irreversible and also gates
+     * re-auth brute force through a stolen session cookie. Keyed by user id like
+     * the export buckets.
+     */
+    @Bean("deleteBuckets")
+    public Map<String, Bucket> deleteBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
      * Per-key MCP rate limiter: keyed by access-key id (not IP), since one key may serve many
      * tool calls from a single AI client. Lives in the {@code AccessKeyAuthFilter}, which creates
      * a bucket lazily on first use — only after the key has resolved to a valid one, so the key
@@ -309,6 +320,15 @@ public class RateLimitConfig {
             .addLimit(Bandwidth.builder()
                 .capacity(5)
                 .refillIntervally(5, Duration.ofMinutes(60))
+                .build())
+            .build();
+    }
+
+    public static Bucket createDeleteBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(3)
+                .refillIntervally(3, Duration.ofMinutes(60))
                 .build())
             .build();
     }

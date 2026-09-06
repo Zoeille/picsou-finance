@@ -46,6 +46,7 @@ class PersistentSessionServiceTest {
     @Test
     void issue_persistsSessionWithHashedTokenAndExpiry() {
         when(repository.save(any(PersistentSession.class))).thenAnswer(inv -> inv.getArgument(0));
+        user.setTokenVersion(7L);
 
         PersistentSessionService.IssueResult result =
             service.issue(user, true, "Mozilla/5.0", "192.168.1.42");
@@ -63,6 +64,7 @@ class PersistentSessionServiceTest {
         assertThat(saved.getTokenHash()).isEqualTo(PersistentSessionService.sha256Hex(token));
         assertThat(saved.getTokenHash()).doesNotContain(token); // raw token is NOT stored
         assertThat(saved.isTrustedFor2fa()).isTrue();
+        assertThat(saved.getTokenVersion()).isEqualTo(7L);
         assertThat(saved.getUserAgent()).isEqualTo("Mozilla/5.0");
         assertThat(saved.getIpPrefix()).isEqualTo("192.168.1.");
         assertThat(saved.getExpiresAt()).isEqualTo(NOW.plus(90, ChronoUnit.DAYS));
@@ -307,6 +309,26 @@ class PersistentSessionServiceTest {
     }
 
     @Test
+    void validateAndRotate_revokesSessionFromAnOlderTokenVersion() {
+        UUID series = UUID.randomUUID();
+        String token = "raw-token";
+        user.setTokenVersion(5L);
+        PersistentSession session = PersistentSession.builder()
+            .id(1L).seriesId(series).user(user)
+            .tokenHash(PersistentSessionService.sha256Hex(token))
+            .tokenVersion(4L)
+            .createdAt(NOW.minus(1, ChronoUnit.DAYS))
+            .lastUsedAt(NOW.minus(1, ChronoUnit.HOURS))
+            .expiresAt(NOW.plus(80, ChronoUnit.DAYS))
+            .build();
+        when(repository.findBySeriesIdForUpdate(series)).thenReturn(Optional.of(session));
+
+        assertThat(service.validateAndRotate(series + ":" + token)).isEmpty();
+        assertThat(session.getRevokedAt()).isEqualTo(NOW);
+        verify(repository).save(session);
+    }
+
+    @Test
     void validateAndRotate_unknownSeriesReturnsEmpty() {
         UUID unknown = UUID.randomUUID();
         when(repository.findBySeriesIdForUpdate(unknown)).thenReturn(Optional.empty());
@@ -381,6 +403,29 @@ class PersistentSessionServiceTest {
         when(repository.findBySeriesId(unknown)).thenReturn(Optional.empty());
 
         assertThat(service.isSeriesActive(unknown)).isFalse();
+    }
+
+    @Test
+    void isSeriesActive_falseWhenCredentialGenerationChanged() {
+        UUID series = UUID.randomUUID();
+        user.setTokenVersion(5L);
+        PersistentSession session = sessionFor(series, null, NOW.plus(1, ChronoUnit.DAYS));
+        session.setTokenVersion(4L);
+        when(repository.findBySeriesId(series)).thenReturn(Optional.of(session));
+
+        assertThat(service.isSeriesActive(series)).isFalse();
+    }
+
+    @Test
+    void isTrustedDeviceFor_falseWhenCredentialGenerationChanged() {
+        UUID series = UUID.randomUUID();
+        user.setTokenVersion(5L);
+        PersistentSession session = sessionFor(series, null, NOW.plus(1, ChronoUnit.DAYS));
+        session.setTokenVersion(4L);
+        session.setTrustedFor2fa(true);
+        when(repository.findBySeriesId(series)).thenReturn(Optional.of(session));
+
+        assertThat(service.isTrustedDeviceFor(user, series + ":token")).isFalse();
     }
 
     private PersistentSession sessionFor(UUID seriesId, Instant revokedAt, Instant expiresAt) {

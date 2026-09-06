@@ -389,6 +389,7 @@ class AuthControllerTest {
         when(jwtUtil.isMfaChallengeToken(claims)).thenReturn(true);
         when(claims.get("uid", Long.class)).thenReturn(7L);
         when(userRepository.findByIdWithMember(7L)).thenReturn(Optional.of(active));
+        when(jwtUtil.getTokenVersion(claims)).thenReturn(3L);
         when(mfaService.verifyTotpOrRecovery(active, "000000", false)).thenReturn(false);
 
         ResponseEntity<?> res = controller.mfaVerify(
@@ -398,6 +399,29 @@ class AuthControllerTest {
         // frontend keeps the user on the page to retry instead of bouncing to /login.
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verify(cookieWriter, never()).clearMfaChallenge(httpRes);
+        verify(cookieWriter, never()).setAccessAndRefresh(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void mfaVerify_rejectsAndClearsChallenge_whenTokenVersionIsStale() {
+        AppUser active = user(true);
+        httpReq.setCookies(new Cookie(AuthCookieWriter.MFA_CHALLENGE_COOKIE, "challenge"));
+        Claims claims = org.mockito.Mockito.mock(Claims.class);
+        when(jwtUtil.validateAndParse("challenge")).thenReturn(claims);
+        when(jwtUtil.isMfaChallengeToken(claims)).thenReturn(true);
+        when(claims.get("uid", Long.class)).thenReturn(7L);
+        when(userRepository.findByIdWithMember(7L)).thenReturn(Optional.of(active));
+        when(jwtUtil.getTokenVersion(claims)).thenReturn(2L);
+
+        ResponseEntity<?> res = controller.mfaVerify(
+            new com.picsou.dto.MfaDtos.MfaVerifyRequest("123456", false, false), httpReq, httpRes);
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(res.getBody()).isInstanceOf(ProblemDetail.class);
+        assertThat(((ProblemDetail) res.getBody()).getProperties())
+            .containsEntry("code", "MFA_CHALLENGE_INVALID");
+        verify(cookieWriter).clearMfaChallenge(httpRes);
+        verify(mfaService, never()).verifyTotpOrRecovery(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(cookieWriter, never()).setAccessAndRefresh(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 

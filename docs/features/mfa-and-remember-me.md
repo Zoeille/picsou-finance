@@ -1,6 +1,6 @@
 # Feature: 2FA (TOTP) and Remember Me
 
-> Last updated: 2026-07-04
+> Last updated: 2026-09-03
 > Status: ✅ Implemented (2026-04-26)
 >
 > Implementation notes vs. original design:
@@ -74,7 +74,7 @@ AppUser (id, username, password_hash, role, member_id, ...)
                    │            └─► Authenticated
                    │
                    └── no
-                             │ set mfa_challenge cookie (5 min JWT) carrying { uid, rememberMe }
+                             │ set mfa_challenge cookie (5 min JWT) carrying { uid, tv, rememberMe }
                              │ return 200 { requires2fa: true }
                              ▼
                 ┌─────────────────────────────────────────────────────┐
@@ -111,7 +111,7 @@ All cookies share the same attributes: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Se
 A separate JWT type, distinct from `access`/`refresh`:
 
 ```
-{ sub: <username>, uid: <id>, type: "mfa_challenge", remember_me: <bool>, exp: now+5min }
+{ sub: <username>, uid: <id>, tv: <tokenVersion>, type: "mfa_challenge", remember_me: <bool>, exp: now+5min }
 ```
 
 Only `/api/auth/mfa/verify` reads it; no other endpoint accepts it. Implemented via an explicit cookie read in `AuthController.mfaVerify`, not via the `JwtAuthenticationFilter`. The filter chain leaves `mfaVerify` accessible to anonymous requests in `SecurityConfig`.
@@ -125,12 +125,17 @@ Only `/api/auth/mfa/verify` reads it; no other endpoint accepts it. Implemented 
 The cookie value is opaque to the client. The server splits on `:` and looks up the series.
 
 **Storage:** `persistent_session.token_hash` = `SHA-256(token)` (hex). The plaintext is never stored.
+`persistent_session.token_version` records the user's credential generation at
+issue time, so a password change or final-admin reset invalidates even a session
+created by an authentication request that was already in flight.
 
 **Validation:**
 1. Parse `series_id`, look up active session (`revoked_at IS NULL AND expires_at > now`).
-2. Compare `SHA-256(received_token) == stored token_hash` in constant time.
-3. **If series exists but hashes mismatch → token theft suspected** → revoke the entire series (`revoked_at = now`), clear all cookies, log warning. (Improved Persistent Login Cookie pattern, Barry Jaspan.)
-4. If match → generate a new `token`, update `token_hash` and `last_used_at`, re-issue the cookie. The previous token is now invalid; if it gets replayed later, step 3 fires.
+2. Reject and revoke the session if its stored `token_version` differs from the
+   current `AppUser.tokenVersion`.
+3. Compare `SHA-256(received_token) == stored token_hash` in constant time.
+4. **If series exists but hashes mismatch → token theft suspected** → revoke the entire series (`revoked_at = now`), clear all cookies, log warning. (Improved Persistent Login Cookie pattern, Barry Jaspan.)
+5. If match → generate a new `token`, update `token_hash` and `last_used_at`, re-issue the cookie. The previous token is now invalid; if it gets replayed later, step 4 fires.
 
 ### TOTP
 
@@ -155,8 +160,8 @@ The cookie value is opaque to the client. The server splits on `:` and looks up 
 | Bucket | Scope | Limit | Tool |
 |---|---|---|---|
 | `loginBuckets` (existing) | IP | 5 / 15 min | Bucket4j |
-| `mfaVerifyBuckets` (new) | uid | 5 / 15 min | Bucket4j |
-| `mfaEnrollBuckets` (new) | uid | 10 / 1 h | Bucket4j |
+| `mfaVerifyBuckets` (new) | IP | 5 / 15 min | Bucket4j |
+| `mfaEnrollBuckets` (new) | IP | 10 / 1 h | Bucket4j |
 
 On `mfaVerifyBuckets` exhaustion, the `mfa_challenge` cookie is **cleared** so the user has to re-enter the password (kills any active challenge after lockout). 429 ProblemDetail returned.
 
@@ -178,6 +183,7 @@ The reauth check is a `passwordEncoder.matches(request.currentPassword, user.pas
 | `POST /api/auth/activate/{token}` (activation / admin reset / admin recovery) | Bump `tokenVersion` (revokes all access/refresh JWTs) and revoke all persistent sessions of the user. Mirrors `change-password` so an admin-initiated reset invalidates any pre-existing session. |
 | Enable 2FA | Revoke all persistent sessions (no inheritance of "trusted_for_2fa" from before enrollment). |
 | Disable 2FA | Revoke all persistent sessions (paranoid wipe — even non-trusted ones, in case the disable was a recovery action). |
+| Final-administrator account reset | Bump `tokenVersion`, revoke all persistent sessions, and reject any concurrently issued session carrying the previous generation. |
 | Regenerate recovery codes | No session impact (only revokes the codes themselves). |
 | Admin force-disables target's 2FA | Same as user-initiated disable: wipe target's persistent sessions. |
 | Logout | Revoke only the current device's persistent session. |
@@ -277,6 +283,7 @@ CREATE TABLE persistent_session (
     user_agent          VARCHAR(255),
     ip_prefix           VARCHAR(45),                           -- e.g. "192.168.1." or "2001:db8::/64"
     trusted_for_2fa     BOOLEAN NOT NULL DEFAULT FALSE,
+    token_version       BIGINT NOT NULL,                       -- credential generation at issue time (V82)
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_used_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at          TIMESTAMPTZ NOT NULL,
@@ -395,7 +402,7 @@ All UIs are mobile-responsive (per repo convention).
 | Lost authenticator | Recovery codes (self-service) + admin disable (for non-admin users) |
 | Lost admin authenticator + lost recovery codes | DB-level intervention required (`UPDATE user_mfa SET enabled = FALSE WHERE user_id = ?`). Acceptable for self-hosted. |
 | 2FA secret leaked from DB | Encrypted at rest (AES-GCM); leak of DB alone doesn't yield secrets without the encryption key |
-| Brute-force TOTP | Rate limit 5/15 min per uid + ±1 tolerance window only |
+| Brute-force TOTP | Rate limit 5/15 min per IP + ±1 tolerance window only |
 | Brute-force recovery codes | bcrypt cost 12 (~250 ms/check) + same rate limit |
 | User reactivates after admin force-disable | Admin disable wipes persistent sessions; user must log in fresh and re-enroll |
 | Username enumeration via login timing (CWE-208, GHSA-ww5m-pxgq-8qq6) | Unknown-user path runs a decoy bcrypt `matches()` so it costs the same as a wrong-password attempt — see [login-timing-attack.md](./login-timing-attack.md) |

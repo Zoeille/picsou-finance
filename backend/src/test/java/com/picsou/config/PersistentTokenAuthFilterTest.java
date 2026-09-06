@@ -134,6 +134,22 @@ class PersistentTokenAuthFilterTest {
     }
 
     @Test
+    void clearsAndRevokesCookie_whenCredentialGenerationChangedAfterRotation() throws Exception {
+        PersistentSession session = setupValidCookieFor(7L, true);
+        user.setTokenVersion(5L);
+        session.setTokenVersion(4L);
+        when(userRepository.findByIdWithMember(7L)).thenReturn(Optional.of(user));
+
+        filter.doFilter(request, response, chain);
+
+        verify(persistentSessionService).revokeBySeriesId(session.getSeriesId());
+        verify(cookieWriter).clearPersistent(response);
+        verify(jwtUtil, never()).generateAccessToken(any());
+        verify(chain).doFilter(request, response);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
     void noOps_whenServiceThrows() throws Exception {
         request.setCookies(new Cookie(AuthCookieWriter.PERSISTENT_COOKIE, "boom"));
         when(persistentSessionService.validateAndRotate("boom"))
@@ -205,7 +221,7 @@ class PersistentTokenAuthFilterTest {
      * the session service to return a freshly-rotated session for the given
      * user id with the given trusted-for-2fa flag.
      */
-    private void setupValidCookieFor(long userId, boolean trustedFor2fa) {
+    private PersistentSession setupValidCookieFor(long userId, boolean trustedFor2fa) {
         String rawCookie = "abc:def";
         request.setCookies(new Cookie(AuthCookieWriter.PERSISTENT_COOKIE, rawCookie));
 
@@ -226,5 +242,6 @@ class PersistentTokenAuthFilterTest {
             .thenReturn(Optional.of(new PersistentSessionService.ValidationResult(
                 "rotated-cookie-value", session
             )));
+        return session;
     }
 }

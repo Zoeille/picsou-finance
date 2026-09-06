@@ -1,7 +1,9 @@
 package com.picsou.service;
 
 import com.picsou.dto.SharingSettingsRequest;
+import com.picsou.dto.ReAuthDto;
 import com.picsou.model.Account;
+import com.picsou.model.AccountDeletionMode;
 import com.picsou.model.AccountType;
 import com.picsou.model.AppUser;
 import com.picsou.model.FamilyMember;
@@ -10,6 +12,7 @@ import com.picsou.model.SharedResource;
 import com.picsou.model.SharingLevel;
 import com.picsou.model.UserRole;
 import com.picsou.repository.AccountRepository;
+import com.picsou.repository.AccessKeyRepository;
 import com.picsou.repository.AppUserRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.GoalRepository;
@@ -26,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.springframework.web.server.ResponseStatusException;
@@ -49,6 +55,9 @@ class FamilyServiceTest {
     @Mock SharedResourceRepository sharedResourceRepository;
     @Mock AccountRepository accountRepository;
     @Mock GoalRepository goalRepository;
+    @Mock AccessKeyRepository accessKeyRepository;
+    @Mock PersistentSessionService persistentSessionService;
+    @Mock ReAuthService reAuthService;
     @Mock PasswordEncoder passwordEncoder;
 
     @InjectMocks FamilyService familyService;
@@ -111,51 +120,77 @@ class FamilyServiceTest {
 
     // ─── deleteMember ───────────────────────────────────────────────────
 
-    private AppUser appUser(UserRole role) {
-        return AppUser.builder().role(role).activated(true).build();
+    private AppUser appUser(Long id, UserRole role, FamilyMember member) {
+        return AppUser.builder()
+            .id(id)
+            .username("user-" + id)
+            .passwordHash("hash-" + id)
+            .role(role)
+            .activated(true)
+            .member(member)
+            .build();
+    }
+
+    private ReAuthDto reAuth() {
+        return new ReAuthDto("current-password", null);
     }
 
     @Test
     void deleteMember_activatedMember_deletes() {
+        FamilyMember requesterMember = FamilyMember.builder().id(1L).displayName("Alice").build();
+        AppUser requester = appUser(1L, UserRole.ADMIN, requesterMember);
         FamilyMember target = member("Bob");
-        when(memberRepository.findById(3L)).thenReturn(Optional.of(target));
-        when(userRepository.findByMemberId(3L)).thenReturn(Optional.of(appUser(UserRole.MEMBER)));
+        AppUser targetUser = appUser(7L, UserRole.MEMBER, target);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(requester));
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
+        when(memberRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(target));
+        when(userRepository.findByMemberIdForUpdate(3L)).thenReturn(Optional.of(targetUser));
 
         familyService.deleteMember(3L, 1L);
 
+        verify(userRepository).delete(targetUser);
         verify(memberRepository).delete(target);
     }
 
     @Test
     void deleteMember_self_throwsForbidden() {
-        when(memberRepository.findById(3L)).thenReturn(Optional.of(member("Self")));
+        FamilyMember requesterMember = member("Self");
+        AppUser requester = appUser(1L, UserRole.ADMIN, requesterMember);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(requester));
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
 
-        assertThatThrownBy(() -> familyService.deleteMember(3L, 3L))
+        assertThatThrownBy(() -> familyService.deleteMember(3L, 1L))
             .isInstanceOf(ResponseStatusException.class)
             .hasMessageContaining("Cannot delete your own account");
 
         verify(memberRepository, never()).delete(any());
+        verify(memberRepository, never()).findByIdForUpdate(any());
     }
 
     @Test
-    void deleteMember_lastAdmin_throwsForbidden() {
-        when(memberRepository.findById(3L)).thenReturn(Optional.of(member("TheAdmin")));
-        when(userRepository.findByMemberId(3L)).thenReturn(Optional.of(appUser(UserRole.ADMIN)));
-        when(userRepository.countByRole(UserRole.ADMIN)).thenReturn(1L);
+    void deleteMember_nonAdminRequester_isRejectedAfterReload() {
+        FamilyMember requesterMember = FamilyMember.builder().id(1L).displayName("Alice").build();
+        AppUser requester = appUser(1L, UserRole.MEMBER, requesterMember);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of());
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
 
         assertThatThrownBy(() -> familyService.deleteMember(3L, 1L))
             .isInstanceOf(ResponseStatusException.class)
-            .hasMessageContaining("Cannot delete the last administrator");
+            .hasMessageContaining("Admin access required");
 
         verify(memberRepository, never()).delete(any());
     }
 
     @Test
     void deleteMember_nonLastAdmin_deletes() {
+        FamilyMember requesterMember = FamilyMember.builder().id(1L).displayName("Alice").build();
+        AppUser requester = appUser(1L, UserRole.ADMIN, requesterMember);
         FamilyMember target = member("SecondAdmin");
-        when(memberRepository.findById(3L)).thenReturn(Optional.of(target));
-        when(userRepository.findByMemberId(3L)).thenReturn(Optional.of(appUser(UserRole.ADMIN)));
-        when(userRepository.countByRole(UserRole.ADMIN)).thenReturn(2L);
+        AppUser targetUser = appUser(7L, UserRole.ADMIN, target);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(requester, targetUser));
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
+        when(memberRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(target));
+        when(userRepository.findByMemberIdForUpdate(3L)).thenReturn(Optional.of(targetUser));
 
         familyService.deleteMember(3L, 1L);
 
@@ -164,7 +199,11 @@ class FamilyServiceTest {
 
     @Test
     void deleteMember_notFound_throws() {
-        when(memberRepository.findById(3L)).thenReturn(Optional.empty());
+        FamilyMember requesterMember = FamilyMember.builder().id(1L).displayName("Alice").build();
+        AppUser requester = appUser(1L, UserRole.ADMIN, requesterMember);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(requester));
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
+        when(memberRepository.findByIdForUpdate(3L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> familyService.deleteMember(3L, 1L))
             .isInstanceOf(ResponseStatusException.class)
@@ -179,28 +218,169 @@ class FamilyServiceTest {
      */
     @Test
     void deleteMember_withLogin_deletesUserBeforeMember() {
+        FamilyMember requesterMember = FamilyMember.builder().id(1L).displayName("Alice").build();
+        AppUser requester = appUser(1L, UserRole.ADMIN, requesterMember);
         FamilyMember target = member("Bob");
-        AppUser user = appUser(UserRole.MEMBER);
-        when(memberRepository.findById(3L)).thenReturn(Optional.of(target));
-        when(userRepository.findByMemberId(3L)).thenReturn(Optional.of(user));
+        AppUser user = appUser(7L, UserRole.MEMBER, target);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(requester));
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
+        when(memberRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(target));
+        when(userRepository.findByMemberIdForUpdate(3L)).thenReturn(Optional.of(user));
 
         familyService.deleteMember(3L, 1L);
 
         InOrder order = inOrder(userRepository, memberRepository);
+        order.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
+        order.verify(userRepository).findByIdWithMemberForUpdate(1L);
+        order.verify(memberRepository).findByIdForUpdate(3L);
+        order.verify(userRepository).findByMemberIdForUpdate(3L);
         order.verify(userRepository).delete(user);
+        order.verify(userRepository).flush();
         order.verify(memberRepository).delete(target);
+        order.verify(memberRepository).flush();
     }
 
     @Test
     void deleteMember_managedWithoutLogin_deletesOnlyMember() {
+        FamilyMember requesterMember = FamilyMember.builder().id(1L).displayName("Alice").build();
+        AppUser requester = appUser(1L, UserRole.ADMIN, requesterMember);
         FamilyMember target = member("Child");
-        when(memberRepository.findById(3L)).thenReturn(Optional.of(target));
-        when(userRepository.findByMemberId(3L)).thenReturn(Optional.empty());
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(requester));
+        when(userRepository.findByIdWithMemberForUpdate(1L)).thenReturn(Optional.of(requester));
+        when(memberRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(target));
+        when(userRepository.findByMemberIdForUpdate(3L)).thenReturn(Optional.empty());
 
         familyService.deleteMember(3L, 1L);
 
         verify(userRepository, never()).delete(any());
         verify(memberRepository).delete(target);
+    }
+
+    @Test
+    void deleteOwnAccount_lastAdmin_resetsDataButPreservesLoginIdentity() {
+        FamilyMember me = member("TheAdmin");
+        AppUser user = appUser(7L, UserRole.ADMIN, me);
+        user.setTokenVersion(4L);
+        user.setAcknowledgedWarning(true);
+        user.setActivationToken("pending-reset-link");
+        user.setActivationTokenExpires(Instant.parse("2030-01-01T00:00:00Z"));
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(user));
+        when(userRepository.findByIdWithMemberForUpdate(7L)).thenReturn(Optional.of(user));
+        when(memberRepository.saveAndFlush(any(FamilyMember.class))).thenAnswer(invocation -> {
+            FamilyMember replacement = invocation.getArgument(0);
+            replacement.setId(99L);
+            return replacement;
+        });
+
+        ReAuthDto reAuth = reAuth();
+        AccountDeletionMode mode = familyService.deleteOwnAccount(7L, reAuth);
+
+        assertThat(mode).isEqualTo(AccountDeletionMode.RESET_LAST_ADMIN);
+        assertThat(user.getId()).isEqualTo(7L);
+        assertThat(user.getUsername()).isEqualTo("user-7");
+        assertThat(user.getPasswordHash()).isEqualTo("hash-7");
+        assertThat(user.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(user.isActivated()).isTrue();
+        assertThat(user.isAcknowledgedWarning()).isTrue();
+        assertThat(user.getMember().getId()).isEqualTo(99L);
+        assertThat(user.getMember().getDisplayName()).isEqualTo("TheAdmin");
+        assertThat(user.getMember().isManaged()).isFalse();
+        assertThat(user.getTokenVersion()).isEqualTo(5L);
+        assertThat(user.getActivationToken()).isNull();
+        assertThat(user.getActivationTokenExpires()).isNull();
+        InOrder lockOrder = inOrder(userRepository, reAuthService);
+        lockOrder.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
+        lockOrder.verify(userRepository).findByIdWithMemberForUpdate(7L);
+        verify(reAuthService).verify(user, reAuth);
+        verify(userRepository, never()).delete(any());
+        verify(userRepository).saveAndFlush(user);
+        verify(persistentSessionService).revokeAllForUser(7L);
+        verify(accessKeyRepository).deleteAllByCreatedBy(7L);
+        verify(memberRepository).delete(me);
+        verifyNoInteractions(userMfaRepository);
+    }
+
+    @Test
+    void deleteOwnAccount_nonLastAdmin_deletesUserBeforeMember() {
+        FamilyMember me = member("SecondAdmin");
+        AppUser user = appUser(7L, UserRole.ADMIN, me);
+        FamilyMember otherMember = FamilyMember.builder().id(8L).displayName("Other").build();
+        AppUser otherAdmin = appUser(8L, UserRole.ADMIN, otherMember);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of(user, otherAdmin));
+        when(userRepository.findByIdWithMemberForUpdate(7L)).thenReturn(Optional.of(user));
+
+        ReAuthDto reAuth = reAuth();
+        AccountDeletionMode mode = familyService.deleteOwnAccount(7L, reAuth);
+
+        assertThat(mode).isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
+        InOrder order = inOrder(userRepository, memberRepository, reAuthService);
+        order.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
+        order.verify(userRepository).findByIdWithMemberForUpdate(7L);
+        order.verify(reAuthService).verify(user, reAuth);
+        order.verify(userRepository).delete(user);
+        order.verify(userRepository).flush();
+        order.verify(memberRepository).delete(me);
+        order.verify(memberRepository).flush();
+    }
+
+    @Test
+    void deleteOwnAccount_memberRole_deletesUnderTheSharedIdentityLockProtocol() {
+        FamilyMember me = member("Bob");
+        AppUser user = appUser(7L, UserRole.MEMBER, me);
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of());
+        when(userRepository.findByIdWithMemberForUpdate(7L)).thenReturn(Optional.of(user));
+
+        ReAuthDto reAuth = reAuth();
+        AccountDeletionMode mode = familyService.deleteOwnAccount(7L, reAuth);
+
+        assertThat(mode).isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
+        InOrder order = inOrder(userRepository, memberRepository, reAuthService);
+        order.verify(userRepository).findAllByRoleForUpdate(UserRole.ADMIN);
+        order.verify(userRepository).findByIdWithMemberForUpdate(7L);
+        order.verify(reAuthService).verify(user, reAuth);
+        order.verify(userRepository).delete(user);
+        order.verify(userRepository).flush();
+        order.verify(memberRepository).delete(me);
+        order.verify(memberRepository).flush();
+    }
+
+    @Test
+    void deleteOwnAccount_reAuthFailureRollsBackBeforeMutation() {
+        FamilyMember me = member("Bob");
+        AppUser user = appUser(7L, UserRole.MEMBER, me);
+        ReAuthDto reAuth = reAuth();
+        when(userRepository.findAllByRoleForUpdate(UserRole.ADMIN)).thenReturn(List.of());
+        when(userRepository.findByIdWithMemberForUpdate(7L)).thenReturn(Optional.of(user));
+        doThrow(new ReAuthService.ReAuthFailedException("invalid password"))
+            .when(reAuthService).verify(user, reAuth);
+
+        assertThatThrownBy(() -> familyService.deleteOwnAccount(7L, reAuth))
+            .isInstanceOf(ReAuthService.ReAuthFailedException.class);
+
+        verify(userRepository, never()).delete(any());
+        verify(memberRepository, never()).delete(any());
+    }
+
+    @Test
+    void previewOwnAccountDeletion_reportsResetForCurrentLastAdmin() {
+        FamilyMember me = member("TheAdmin");
+        AppUser user = appUser(7L, UserRole.ADMIN, me);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(userRepository.countByRole(UserRole.ADMIN)).thenReturn(1L);
+
+        assertThat(familyService.previewOwnAccountDeletion(7L))
+            .isEqualTo(AccountDeletionMode.RESET_LAST_ADMIN);
+    }
+
+    @Test
+    void previewOwnAccountDeletion_reportsFullDeleteForMemberWithoutCountingAdmins() {
+        FamilyMember me = member("Bob");
+        AppUser user = appUser(7L, UserRole.MEMBER, me);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        assertThat(familyService.previewOwnAccountDeletion(7L))
+            .isEqualTo(AccountDeletionMode.DELETE_ACCOUNT);
+        verify(userRepository, never()).countByRole(any());
     }
 
     // ─── manual sharing ownership ─────────────────────────────────────────
