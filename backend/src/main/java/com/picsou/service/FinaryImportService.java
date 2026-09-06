@@ -118,7 +118,9 @@ public class FinaryImportService {
      */
     @Transactional
     public FinaryImportResultResponse executeImport(FinaryImportRequest req, Long memberId) {
-        ParsedFinaryData parsed = cache.find(req.fileToken(), memberId, PREVIEW_TTL)
+        // Claim the preview before any persistence work. A claimed token is deliberately
+        // single-use, matching the direct Finary API sync flow.
+        ParsedFinaryData parsed = cache.consume(req.fileToken(), memberId, PREVIEW_TTL)
             .orElseThrow(() -> new IllegalArgumentException("Preview expired or invalid -- please re-upload the file"));
 
         FamilyMember member = familyMemberRepository.findById(memberId)
@@ -194,8 +196,6 @@ public class FinaryImportService {
                 ));
             }
         }
-
-        cache.discard(req.fileToken());
 
         return new FinaryImportResultResponse(
             accountsCreated, accountsMapped, accountsSkipped,

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Finary XLSX and CSV previews are claimed atomically before import writes,
+  preventing duplicate financial data when two executions overlap. A claimed
+  preview is single-use; retrying a failed import requires a new preview.
+- MFA verification now enforces an account budget in addition to the IP limit,
+  shared by TOTP and recovery codes and preserved across new login challenges.
+
 - The account-deletion dialog scrolls on short screens and wraps long action
   labels without horizontal overflow.
 
@@ -176,9 +182,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mark, and on-chain wallets — whose provider is a bare ticker, so no provider
   logo can match — show a blockchain mark by default. A wallet held on a Ledger
   can be switched to the Ledger logo from the account form, next to the color
-   picker; the choice is stored on the account, so it follows every device and
-   family member. Existing wallets are backfilled by a migration.
-   See [feature notes](docs/features/bank-logos.md).
+  picker; the choice is stored on the account, so it follows every device and
+  family member. Existing wallets are backfilled by a migration.
+  See [feature notes](docs/features/bank-logos.md).
 - **Self-service account deletion (GDPR Art. 17).** Settings → Danger zone lets
   users erase their login and owned data through `DELETE /api/me`, after
   re-authentication and username confirmation. The final administrator keeps

@@ -114,12 +114,16 @@ public class TransactionImportService {
     public TransactionImportResultResponse executeImport(Long accountId, Long memberId, TransactionImportRequest req) {
         Account account = getInvestmentAccount(accountId, memberId);
 
-        CachedCsv cached = cache.find(req.fileToken(), memberId, PREVIEW_TTL)
+        CachedCsv preview = cache.find(req.fileToken(), memberId, PREVIEW_TTL)
             .orElseThrow(() -> new IllegalArgumentException("Preview expired or invalid -- please re-upload the file"));
         // Bind the token to its account so a preview cannot be replayed against another account.
-        if (!cached.accountId().equals(accountId)) {
+        if (!preview.accountId().equals(accountId)) {
             throw new IllegalArgumentException("Preview does not belong to this account");
         }
+        // Validate the account binding first so a request for another account cannot burn the
+        // token. Once claimed, the preview is single-use even if the later import fails.
+        CachedCsv cached = cache.consume(req.fileToken(), memberId, PREVIEW_TTL)
+            .orElseThrow(() -> new IllegalArgumentException("Preview expired or invalid -- please re-upload the file"));
 
         CsvDialect dialect = toDialect(req.dialect());
         List<List<String>> rows = CsvReader.parse(cached.content(), dialect.delimiter());
@@ -143,8 +147,6 @@ public class TransactionImportService {
             transactionRepository.saveAll(toSave);
             holdingComputeService.recomputeHoldings(account);
         }
-        cache.discard(req.fileToken());
-
         log.info("CSV import for account {}: {} imported, {} skipped", accountId, toSave.size(), errors.size());
         return new TransactionImportResultResponse(toSave.size(), errors.size(), errors);
     }

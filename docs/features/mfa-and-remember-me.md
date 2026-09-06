@@ -161,9 +161,16 @@ created by an authentication request that was already in flight.
 |---|---|---|---|
 | `loginBuckets` (existing) | IP | 5 / 15 min | Bucket4j |
 | `mfaVerifyBuckets` (new) | IP | 5 / 15 min | Bucket4j |
+| `mfaVerifyUserBuckets` (new) | Validated user ID | 5 / 15 min | Bucket4j |
 | `mfaEnrollBuckets` (new) | IP | 10 / 1 h | Bucket4j |
 
-On `mfaVerifyBuckets` exhaustion, the `mfa_challenge` cookie is **cleared** so the user has to re-enter the password (kills any active challenge after lockout). 429 ProblemDetail returned.
+`mfaVerifyUserBuckets` is consumed alongside the IP budget only after the challenge JWT has
+passed signature/type, user, activation, and token-version checks. This prevents source-IP
+rotation from multiplying the guesses available for one account, while invalid challenges never
+allocate or consume an account bucket. Buckets are keyed by the immutable user ID, so issuing a
+fresh challenge does not reset the account budget. On either MFA-verification budget's exhaustion,
+the `mfa_challenge` cookie is **cleared** so the user has to re-enter the password (kills any active
+challenge after lockout). 429 ProblemDetail returned.
 
 ### Step-up reauthentication
 
@@ -402,8 +409,8 @@ All UIs are mobile-responsive (per repo convention).
 | Lost authenticator | Recovery codes (self-service) + admin disable (for non-admin users) |
 | Lost admin authenticator + lost recovery codes | DB-level intervention required (`UPDATE user_mfa SET enabled = FALSE WHERE user_id = ?`). Acceptable for self-hosted. |
 | 2FA secret leaked from DB | Encrypted at rest (AES-GCM); leak of DB alone doesn't yield secrets without the encryption key |
-| Brute-force TOTP | Rate limit 5/15 min per IP + ±1 tolerance window only |
-| Brute-force recovery codes | bcrypt cost 12 (~250 ms/check) + same rate limit |
+| Brute-force TOTP | 5/15 min per IP and per validated account + ±1 tolerance window only |
+| Brute-force recovery codes | bcrypt cost 12 (~250 ms/check) + the same IP and account limits |
 | User reactivates after admin force-disable | Admin disable wipes persistent sessions; user must log in fresh and re-enroll |
 | Username enumeration via login timing (CWE-208, GHSA-ww5m-pxgq-8qq6) | Unknown-user path runs a decoy bcrypt `matches()` so it costs the same as a wrong-password attempt — see [login-timing-attack.md](./login-timing-attack.md) |
 | Admin resets a (possibly compromised) member's password | `AuthController.activate` — the shared sink for new-member activation, admin-initiated password reset (`FamilyService.resetPasswordToken`) and admin-recovery completion — bumps `tokenVersion` and calls `PersistentSessionService.revokeAllForUser`, exactly like self-service `change-password`. The member's pre-existing access/refresh JWTs and Remember-Me cookies are all invalidated (CWE-613/640). |
@@ -424,7 +431,7 @@ All UIs are mobile-responsive (per repo convention).
 - **Backup code collision**: 8-digit codes have ~33 bits — collision risk with 10 codes is negligible, but generation must `SecureRandom`-loop until unique within the user's set to avoid duplicates.
 - **`@JsonIgnore` on lazy `AppUser` ref in `UserMfa`**: per project convention with `open-in-view: false`.
 - **PostgreSQL UUID column for `series_id`**: use Hibernate's `@JdbcTypeCode(SqlTypes.UUID)` to avoid varchar fallback.
-- **MFA challenge cookie cleared on `mfaVerifyBuckets` lockout**: critical — otherwise the user is permanently stuck at the MFA screen until 5-min cookie expires anyway, but explicit clearing makes the UX cleaner (returns straight to `/login`).
+- **MFA challenge cookie cleared on MFA-verification lockout**: this applies to either the IP or per-account budget. It avoids leaving the user at the MFA screen with a challenge that cannot make progress; they return to `/login`. A newly issued challenge still uses the existing per-account budget.
 - **Demo mode**: enrollment must be rejected with 403 ProblemDetail "MFA is disabled in demo mode" to avoid leaking enrollment state in the shared demo instance.
 - **Multi-tab restore grace window (addressed)**: multiple tabs restored at once each present the *same* `persistent_token` to `PersistentTokenAuthFilter`/`validateAndRotate`; the first request rotates it and the rest used to look like a replayed token, tripping theft detection and revoking the whole series (logging the user out everywhere). Two changes fix this: (1) the rotate path is **serialized** with a row-level lock (`PersistentSessionRepository.findBySeriesIdForUpdate`, `@Lock(PESSIMISTIC_WRITE)`), so concurrent restores no longer both read the pre-rotation state and orphan each other's token; (2) `validateAndRotate` remembers the immediately-previous token hash (`previous_token_hash`/`previous_token_at`, migration `V56`) and accepts it for `app.persistent-session.rotation-grace-seconds` (default 30s). The previous slot is **anchored** — armed only when the *current* token is presented (a genuine rotation), and left untouched on a previous-token (grace) acceptance. So it keeps pointing at the one pre-burst token: every tab in the burst is accepted (not just the first two), and replaying the previous token cannot slide the window forward. The persistent cookie is shared across tabs and converges on the latest rotated value; a token presented after the window still trips theft detection.
 - **Known follow-up, not yet addressed**: the session-probe (`useSessionProbe`) only runs from `RequireAuth` — `PublicOnly` never probes, so opening `/login` directly after a restart shows the form despite a restorable session, and `RequireAdmin` doesn't either; a single probe at app bootstrap shared by all three guards would be more consistent than probing only from `RequireAuth`.

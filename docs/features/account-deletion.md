@@ -84,6 +84,24 @@ The final-administrator reset invalidates every existing authentication path:
 MFA remains enabled. The administrator signs in again with the same password and
 the same TOTP setup or an unused recovery code.
 
+### Database upgrade
+
+`V82__persistent_session_token_version.sql` adds the session generation, backfills
+it from each owning user, and makes the column non-null in one Flyway transaction.
+PostgreSQL holds an `ACCESS EXCLUSIVE` table lock until that transaction ends;
+the backfill and non-null validation therefore run while session traffic is stopped.
+
+Upgrade the single app instance with the previous backend stopped, and wait for
+Flyway and application startup to complete before resuming requests. This migration
+does not provide a rolling upgrade with old and new backends writing concurrently.
+Splitting the constraint validation alone would not provide that compatibility:
+older backends do not populate the new column. A future deployment requiring
+continuous writes would need a separate staged schema and application rollout.
+
+See the [PostgreSQL 16 ALTER TABLE documentation](https://www.postgresql.org/docs/16/sql-altertable.html)
+for lock levels and non-null validation, and [Docker deployment](./docker-deployment.md)
+for the app-container topology.
+
 ## Concurrency rule
 
 Both self-deletion and admin member deletion call

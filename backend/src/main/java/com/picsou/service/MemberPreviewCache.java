@@ -82,13 +82,6 @@ public final class MemberPreviewCache<T> {
         }
     }
 
-    /** Removes one preview after the caller has completed its import. */
-    public void discard(String token) {
-        synchronized (monitor) {
-            entries.remove(token);
-        }
-    }
-
     private Optional<T> findLocked(String token, Long requestedMemberId, Duration ttl) {
         T preview = entries.get(token);
         if (preview == null) {

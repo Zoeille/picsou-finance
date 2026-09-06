@@ -305,29 +305,33 @@ class AccountDeletionPostgresIntegrationTest {
         try {
             removeDeleteDelayTrigger();
         } finally {
-            Fixture fixture = activeFixture;
-            if (fixture == null) {
-                return;
-            }
-            activeFixture = null;
-            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-                jdbcTemplate.update("""
-                    WITH deleted_users AS (
-                        DELETE FROM app_user
-                        WHERE id IN (?, ?, ?)
-                        RETURNING member_id
-                    )
-                    DELETE FROM family_member
-                    WHERE id IN (SELECT member_id FROM deleted_users)
-                       OR id IN (?, ?, ?)
-                    """,
-                    fixture.firstAdminId(), fixture.secondAdminId(), fixture.controlUserId(),
-                    fixture.firstOldMemberId(), fixture.secondOldMemberId(), fixture.controlMemberId());
-                jdbcTemplate.update(
-                    "UPDATE app_setting SET value = ? WHERE setting_key = 'setup.state'",
-                    fixture.initialSetupState());
-            });
+            removeFixtureData();
         }
+    }
+
+    private void removeFixtureData() {
+        Fixture fixture = activeFixture;
+        if (fixture == null) {
+            return;
+        }
+        activeFixture = null;
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbcTemplate.update("""
+                WITH deleted_users AS (
+                    DELETE FROM app_user
+                    WHERE id IN (?, ?, ?)
+                    RETURNING member_id
+                )
+                DELETE FROM family_member
+                WHERE id IN (SELECT member_id FROM deleted_users)
+                   OR id IN (?, ?, ?)
+                """,
+                fixture.firstAdminId(), fixture.secondAdminId(), fixture.controlUserId(),
+                fixture.firstOldMemberId(), fixture.secondOldMemberId(), fixture.controlMemberId());
+            jdbcTemplate.update(
+                "UPDATE app_setting SET value = ? WHERE setting_key = 'setup.state'",
+                fixture.initialSetupState());
+        });
     }
 
     private AccountDeletionMode eraseWhenReleased(

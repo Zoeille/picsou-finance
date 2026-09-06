@@ -28,6 +28,9 @@ Expired entries are rejected during execute, independently of the scheduled
 sweep. A committed member deletion or final-admin reset purges the raw previews
 for the removed member; rollback preserves them. Registration checks member
 existence under the purge monitor to prevent late previews from being retained.
+A request for another member or account is rejected without consuming the
+token. A valid execute then claims the preview atomically before any rows are
+written, making it single-use even if parsing or persistence later fails.
 
 ### Key files
 
@@ -53,7 +56,7 @@ upload CSV ─► preview() ─► detect dialect + guess mapping ─► cache r
 user adjusts mapping/dialect ◄───────────────────────────────────────┘
         │
         ▼
-execute(token, mapping, dialect) ─► re-parse ─► map rows ─► saveAll(is_manual) ─► recomputeHoldings()
+execute(token, mapping, dialect) ─► validate scope + claim token ─► re-parse ─► map rows ─► saveAll(is_manual) ─► recomputeHoldings()
 ```
 
 ## Technical choices
@@ -80,6 +83,9 @@ execute(token, mapping, dialect) ─► re-parse ─► map rows ─► saveAll(
   CSV cannot replace provider-owned positions.
 - Multipart limit was raised to **10 MB** (`application.yml`) for multi-year histories; the endpoint
   is member-scoped and throttled.
+- A preview is **single-use after a valid execute begins**. If that import fails after claiming
+  the token, upload the CSV again before retrying; a wrong member or account leaves the token usable
+  by its original scope.
 - Demo mode returns `{}` for unhandled endpoints — UI consumers must guard accordingly.
 
 ## Tests

@@ -146,6 +146,19 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-account MFA verify rate limiter: 5 attempts per 15 minutes.
+     *
+     * <p>This is additive to {@link #mfaVerifyBuckets()}: rotating source IPs must not
+     * turn a stolen, valid MFA challenge into unlimited guesses for one account. Its key is
+     * the server-assigned user id, and the controller only creates/consumes a bucket after
+     * it has fully validated that challenge. A new challenge deliberately reuses this bucket.
+     */
+    @Bean("mfaVerifyUserBuckets")
+    public Map<Long, Bucket> mfaVerifyUserBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
      * Per-IP MFA enrollment rate limiter: 10 requests per hour.
      * QR generation is CPU-bound (PNG encoding) and enrollment is per-user
      * one-time — anything beyond a handful per hour from the same IP is abuse.
@@ -291,6 +304,13 @@ public class RateLimitConfig {
                 .refillIntervally(5, Duration.ofMinutes(15))
                 .build())
             .build();
+    }
+
+    /**
+     * Uses the same verification-attempt budget as the per-IP limiter.
+     */
+    public static Bucket createMfaVerifyUserBucket() {
+        return createMfaVerifyBucket();
     }
 
     public static Bucket createMfaEnrollBucket() {
