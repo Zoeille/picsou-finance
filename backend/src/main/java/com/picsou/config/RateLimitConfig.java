@@ -146,6 +146,19 @@ public class RateLimitConfig {
     }
 
     /**
+     * Per-account MFA verify rate limiter: 5 attempts per 15 minutes.
+     *
+     * <p>This is additive to {@link #mfaVerifyBuckets()}: rotating source IPs must not
+     * turn a stolen, valid MFA challenge into unlimited guesses for one account. Its key is
+     * the server-assigned user id, and the controller only creates/consumes a bucket after
+     * it has fully validated that challenge. A new challenge deliberately reuses this bucket.
+     */
+    @Bean("mfaVerifyUserBuckets")
+    public Map<Long, Bucket> mfaVerifyUserBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
      * Per-IP MFA enrollment rate limiter: 10 requests per hour.
      * QR generation is CPU-bound (PNG encoding) and enrollment is per-user
      * one-time — anything beyond a handful per hour from the same IP is abuse.
@@ -165,6 +178,17 @@ public class RateLimitConfig {
      */
     @Bean("exportBuckets")
     public Map<String, Bucket> exportBuckets() {
+        return boundedBucketStore();
+    }
+
+    /**
+     * Per-user self-service account deletion rate limiter: 3 deletions per hour.
+     * Stricter than export (5/h) because deletion is irreversible and also gates
+     * re-auth brute force through a stolen session cookie. Keyed by user id like
+     * the export buckets.
+     */
+    @Bean("deleteBuckets")
+    public Map<String, Bucket> deleteBuckets() {
         return boundedBucketStore();
     }
 
@@ -282,6 +306,13 @@ public class RateLimitConfig {
             .build();
     }
 
+    /**
+     * Uses the same verification-attempt budget as the per-IP limiter.
+     */
+    public static Bucket createMfaVerifyUserBucket() {
+        return createMfaVerifyBucket();
+    }
+
     public static Bucket createMfaEnrollBucket() {
         return Bucket.builder()
             .addLimit(Bandwidth.builder()
@@ -309,6 +340,15 @@ public class RateLimitConfig {
             .addLimit(Bandwidth.builder()
                 .capacity(5)
                 .refillIntervally(5, Duration.ofMinutes(60))
+                .build())
+            .build();
+    }
+
+    public static Bucket createDeleteBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(3)
+                .refillIntervally(3, Duration.ofMinutes(60))
                 .build())
             .build();
     }

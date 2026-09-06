@@ -61,6 +61,7 @@ class AuthControllerTest {
 
     Map<String, Bucket> loginBuckets;
     Map<String, Bucket> mfaVerifyBuckets;
+    Map<Long, Bucket> mfaVerifyUserBuckets;
     AuthController controller;
     MockHttpServletRequest httpReq;
     MockHttpServletResponse httpRes;
@@ -69,6 +70,7 @@ class AuthControllerTest {
     void setUp() {
         loginBuckets = new HashMap<>();
         mfaVerifyBuckets = new HashMap<>();
+        mfaVerifyUserBuckets = new HashMap<>();
         controller = newController(false);
         httpReq = new MockHttpServletRequest();
         httpReq.setRemoteAddr("10.0.0.5");
@@ -78,7 +80,7 @@ class AuthControllerTest {
     private AuthController newController(boolean adminRecoveryEnabled) {
         return new AuthController(
             userRepository, passwordEncoder, jwtUtil,
-            loginBuckets, mfaVerifyBuckets, cookieWriter,
+            loginBuckets, mfaVerifyBuckets, mfaVerifyUserBuckets, cookieWriter,
             mfaService, persistentSessionService, auditService,
             adminRecoveryEnabled
         );
@@ -224,7 +226,7 @@ class AuthControllerTest {
         PasswordEncoder realEncoder = spy(new BCryptPasswordEncoder(12));
         AuthController timingController = new AuthController(
             userRepository, realEncoder, jwtUtil,
-            loginBuckets, mfaVerifyBuckets, cookieWriter,
+            loginBuckets, mfaVerifyBuckets, mfaVerifyUserBuckets, cookieWriter,
             mfaService, persistentSessionService, auditService, false);
 
         // Path A — the username does not exist: there is no stored hash to compare,
@@ -275,7 +277,7 @@ class AuthControllerTest {
         PasswordEncoder realEncoder = spy(new BCryptPasswordEncoder(12));
         AuthController timingController = new AuthController(
             userRepository, realEncoder, jwtUtil,
-            loginBuckets, mfaVerifyBuckets, cookieWriter,
+            loginBuckets, mfaVerifyBuckets, mfaVerifyUserBuckets, cookieWriter,
             mfaService, persistentSessionService, auditService, false);
 
         AppUser pending = AppUser.builder()
@@ -321,7 +323,7 @@ class AuthControllerTest {
 
         AuthController spoofTestController = new AuthController(
             userRepository, passwordEncoder, jwtUtil,
-            mockedLoginBuckets, mfaVerifyBuckets, cookieWriter,
+            mockedLoginBuckets, mfaVerifyBuckets, mfaVerifyUserBuckets, cookieWriter,
             mfaService, persistentSessionService, auditService, false);
 
         MockHttpServletRequest firstCall = new MockHttpServletRequest();
@@ -389,6 +391,7 @@ class AuthControllerTest {
         when(jwtUtil.isMfaChallengeToken(claims)).thenReturn(true);
         when(claims.get("uid", Long.class)).thenReturn(7L);
         when(userRepository.findByIdWithMember(7L)).thenReturn(Optional.of(active));
+        when(jwtUtil.getTokenVersion(claims)).thenReturn(3L);
         when(mfaService.verifyTotpOrRecovery(active, "000000", false)).thenReturn(false);
 
         ResponseEntity<?> res = controller.mfaVerify(
@@ -398,6 +401,111 @@ class AuthControllerTest {
         // frontend keeps the user on the page to retry instead of bouncing to /login.
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verify(cookieWriter, never()).clearMfaChallenge(httpRes);
+        verify(cookieWriter, never()).setAccessAndRefresh(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void mfaVerify_capsValidatedAccountAcrossIpRotation_andKeepsAccountsIsolated() {
+        AppUser alice = user(true);
+        AppUser bob = user(true);
+        bob.setId(8L);
+        bob.setUsername("bob");
+
+        Claims aliceClaims = mock(Claims.class);
+        when(jwtUtil.validateAndParse("alice-challenge")).thenReturn(aliceClaims);
+        when(jwtUtil.isMfaChallengeToken(aliceClaims)).thenReturn(true);
+        when(aliceClaims.get("uid", Long.class)).thenReturn(7L);
+        when(jwtUtil.getTokenVersion(aliceClaims)).thenReturn(3L);
+        when(userRepository.findByIdWithMember(7L)).thenReturn(Optional.of(alice));
+        when(mfaService.verifyTotpOrRecovery(alice, "123456", false)).thenReturn(false);
+
+        // Each attempt deliberately comes from a new IP. The per-IP limiter therefore permits
+        // all of them, leaving the validated account bucket as the control under test.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            MockHttpServletRequest attemptRequest = new MockHttpServletRequest();
+            attemptRequest.setRemoteAddr("10.0.1." + attempt);
+            attemptRequest.setCookies(new Cookie(AuthCookieWriter.MFA_CHALLENGE_COOKIE, "alice-challenge"));
+
+            ResponseEntity<?> attemptResponse = controller.mfaVerify(
+                new com.picsou.dto.MfaDtos.MfaVerifyRequest("123456", false, false),
+                attemptRequest, new MockHttpServletResponse());
+
+            assertThat(attemptResponse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        MockHttpServletRequest limitedRequest = new MockHttpServletRequest();
+        limitedRequest.setRemoteAddr("10.0.1.99");
+        // A newly issued, still-valid challenge must not give this account a fresh budget.
+        limitedRequest.setCookies(new Cookie(AuthCookieWriter.MFA_CHALLENGE_COOKIE, "alice-new-challenge"));
+        MockHttpServletResponse limitedResponse = new MockHttpServletResponse();
+        when(jwtUtil.validateAndParse("alice-new-challenge")).thenReturn(aliceClaims);
+
+        ResponseEntity<?> limited = controller.mfaVerify(
+            // A normal recovery-code-shaped input shares the same account budget as TOTP.
+            new com.picsou.dto.MfaDtos.MfaVerifyRequest("12345678", false, true),
+            limitedRequest, limitedResponse);
+
+        assertThat(limited.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        verify(cookieWriter).clearMfaChallenge(limitedResponse);
+        verify(mfaService, times(5)).verifyTotpOrRecovery(alice, "123456", false);
+        verify(mfaService, never()).verifyTotpOrRecovery(alice, "12345678", true);
+
+        Claims bobClaims = mock(Claims.class);
+        when(jwtUtil.validateAndParse("bob-challenge")).thenReturn(bobClaims);
+        when(jwtUtil.isMfaChallengeToken(bobClaims)).thenReturn(true);
+        when(bobClaims.get("uid", Long.class)).thenReturn(8L);
+        when(jwtUtil.getTokenVersion(bobClaims)).thenReturn(3L);
+        when(userRepository.findByIdWithMember(8L)).thenReturn(Optional.of(bob));
+        when(mfaService.verifyTotpOrRecovery(bob, "12345678", true)).thenReturn(false);
+
+        MockHttpServletRequest bobRequest = new MockHttpServletRequest();
+        bobRequest.setRemoteAddr("10.0.1.100");
+        bobRequest.setCookies(new Cookie(AuthCookieWriter.MFA_CHALLENGE_COOKIE, "bob-challenge"));
+
+        ResponseEntity<?> bobResult = controller.mfaVerify(
+            new com.picsou.dto.MfaDtos.MfaVerifyRequest("12345678", false, true),
+            bobRequest, new MockHttpServletResponse());
+
+        assertThat(bobResult.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        verify(mfaService).verifyTotpOrRecovery(bob, "12345678", true);
+        assertThat(mfaVerifyUserBuckets).containsOnlyKeys(7L, 8L);
+    }
+
+    @Test
+    void mfaVerify_doesNotConsumeAccountBudget_whenChallengeIsInvalid() {
+        httpReq.setCookies(new Cookie(AuthCookieWriter.MFA_CHALLENGE_COOKIE, "invalid-challenge"));
+        when(jwtUtil.validateAndParse("invalid-challenge"))
+            .thenThrow(new io.jsonwebtoken.JwtException("invalid signature"));
+
+        ResponseEntity<?> res = controller.mfaVerify(
+            new com.picsou.dto.MfaDtos.MfaVerifyRequest("123456", false, false), httpReq, httpRes);
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(mfaVerifyUserBuckets).isEmpty();
+        verify(mfaService, never()).verifyTotpOrRecovery(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void mfaVerify_rejectsAndClearsChallenge_whenTokenVersionIsStale() {
+        AppUser active = user(true);
+        httpReq.setCookies(new Cookie(AuthCookieWriter.MFA_CHALLENGE_COOKIE, "challenge"));
+        Claims claims = org.mockito.Mockito.mock(Claims.class);
+        when(jwtUtil.validateAndParse("challenge")).thenReturn(claims);
+        when(jwtUtil.isMfaChallengeToken(claims)).thenReturn(true);
+        when(claims.get("uid", Long.class)).thenReturn(7L);
+        when(userRepository.findByIdWithMember(7L)).thenReturn(Optional.of(active));
+        when(jwtUtil.getTokenVersion(claims)).thenReturn(2L);
+
+        ResponseEntity<?> res = controller.mfaVerify(
+            new com.picsou.dto.MfaDtos.MfaVerifyRequest("123456", false, false), httpReq, httpRes);
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(res.getBody()).isInstanceOf(ProblemDetail.class);
+        assertThat(((ProblemDetail) res.getBody()).getProperties())
+            .containsEntry("code", "MFA_CHALLENGE_INVALID");
+        assertThat(mfaVerifyUserBuckets).isEmpty();
+        verify(cookieWriter).clearMfaChallenge(httpRes);
+        verify(mfaService, never()).verifyTotpOrRecovery(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(cookieWriter, never()).setAccessAndRefresh(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 

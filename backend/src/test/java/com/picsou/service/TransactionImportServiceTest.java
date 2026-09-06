@@ -11,6 +11,7 @@ import com.picsou.model.Account;
 import com.picsou.model.AccountType;
 import com.picsou.model.Transaction;
 import com.picsou.repository.AccountRepository;
+import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,12 +23,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.mock.web.MockMultipartFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +47,7 @@ class TransactionImportServiceTest {
 
     @Mock AccountRepository accountRepository;
     @Mock TransactionRepository transactionRepository;
+    @Mock FamilyMemberRepository familyMemberRepository;
     @Mock HoldingComputeService holdingComputeService;
     @Mock InstrumentFieldResolver instrumentFieldResolver;
 
@@ -45,7 +56,8 @@ class TransactionImportServiceTest {
     @BeforeEach
     void setUp() {
         service = new TransactionImportService(accountRepository, transactionRepository,
-            holdingComputeService, new TransactionRowMapper(instrumentFieldResolver));
+            holdingComputeService, new TransactionRowMapper(instrumentFieldResolver), familyMemberRepository);
+        lenient().when(familyMemberRepository.existsById(anyLong())).thenReturn(true);
     }
 
     private Account pea() {
@@ -157,6 +169,8 @@ class TransactionImportServiceTest {
         when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
         Account otherCto = Account.builder().id(3L).type(AccountType.COMPTE_TITRES).currency("EUR").build();
         when(accountRepository.findByIdAndMemberId(3L, 10L)).thenReturn(Optional.of(otherCto));
+        when(instrumentFieldResolver.resolve(any(), any()))
+            .thenReturn(new InstrumentFieldResolver.ResolvedInstrument("AAPL", "Apple", "Apple"));
 
         String token = service.preview(2L, 10L, file(CSV)).fileToken(); // bound to account 2
         TransactionImportRequest req =
@@ -165,6 +179,70 @@ class TransactionImportServiceTest {
         assertThatThrownBy(() -> service.executeImport(3L, 10L, req))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("does not belong");
+
+        assertThat(service.executeImport(2L, 10L, req).imported()).isEqualTo(2);
+        verify(transactionRepository).saveAll(any());
+    }
+
+    @Test
+    void executeImport_tokenBoundToAnotherMember_throws() {
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
+        when(accountRepository.findByIdAndMemberId(2L, 11L)).thenReturn(Optional.of(pea()));
+        when(instrumentFieldResolver.resolve(any(), any()))
+            .thenReturn(new InstrumentFieldResolver.ResolvedInstrument("AAPL", "Apple", "Apple"));
+
+        String token = service.preview(2L, 10L, file(CSV)).fileToken();
+        TransactionImportRequest req =
+            new TransactionImportRequest(token, mapping(), dialect(), true, false, null);
+
+        assertThatThrownBy(() -> service.executeImport(2L, 11L, req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expired or invalid");
+
+        assertThat(service.executeImport(2L, 10L, req).imported()).isEqualTo(2);
+        verify(transactionRepository).saveAll(any());
+    }
+
+    @Test
+    void executeImport_concurrentReplayHasOnlyOneWriter() throws Exception {
+        when(accountRepository.findByIdAndMemberId(2L, 10L)).thenReturn(Optional.of(pea()));
+        when(instrumentFieldResolver.resolve(any(), any()))
+            .thenReturn(new InstrumentFieldResolver.ResolvedInstrument("AAPL", "Apple", "Apple"));
+
+        String token = service.preview(2L, 10L, file(CSV)).fileToken();
+        TransactionImportRequest req =
+            new TransactionImportRequest(token, mapping(), dialect(), true, false, null);
+        CountDownLatch firstWriteEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirstWrite = new CountDownLatch(1);
+        AtomicBoolean firstWrite = new AtomicBoolean(true);
+        when(transactionRepository.saveAll(any())).thenAnswer(invocation -> {
+            if (firstWrite.compareAndSet(true, false)) {
+                firstWriteEntered.countDown();
+                if (!releaseFirstWrite.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("First import did not receive its release signal");
+                }
+            }
+            return invocation.getArgument(0);
+        });
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<TransactionImportResultResponse> winner = executor.submit(
+            () -> service.executeImport(2L, 10L, req));
+        try {
+            assertThat(firstWriteEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> service.executeImport(2L, 10L, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("expired or invalid");
+            verify(transactionRepository, times(1)).saveAll(any());
+            verify(holdingComputeService, never()).recomputeHoldings(any());
+        } finally {
+            releaseFirstWrite.countDown();
+            executor.shutdown();
+        }
+
+        assertThat(winner.get(5, TimeUnit.SECONDS).imported()).isEqualTo(2);
+        verify(holdingComputeService).recomputeHoldings(any());
     }
 
     @Test

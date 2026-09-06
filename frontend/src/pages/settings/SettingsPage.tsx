@@ -31,11 +31,14 @@ import {
   Shield,
   KeyRound,
   ExternalLink,
+  TriangleAlert,
+  Trash2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { APP_VERSION } from '@/lib/app-version'
 import { SecuritySection } from './security/SecuritySection'
+import { DeleteAccountDialog } from './security/DeleteAccountDialog'
 import { AccessKeysSection } from './sections/AccessKeysSection'
 
 // ---------------------------------------------------------------------------
@@ -115,10 +118,11 @@ export function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const logoutMutation = useLogout()
   const setUsername = useAuthStore((s) => s.setUsername)
-  const { dateFormat, setDateFormat, sidebarStyle, setSidebarStyle } = useAppStore()
+  const { dateFormat, setDateFormat, sidebarStyle, setSidebarStyle, demoMode } = useAppStore()
 
   // Username editing -------------------------------------------------------
   const [editingUsername, setEditingUsername] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [newUsername, setNewUsername] = useState('')
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [usernameSaving, setUsernameSaving] = useState(false)
@@ -354,6 +358,24 @@ export function SettingsPage() {
         </SectionCard>
       )}
 
+      {!demoMode && (
+        <SectionCard
+          icon={TriangleAlert}
+          title={t('settings.deleteAccountDangerTitle')}
+          description={t('settings.deleteAccountDangerDesc')}
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              {t('settings.deleteAccountDangerBody')}
+            </p>
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)} className="w-auto self-start">
+              <Trash2 className="mr-2 size-4" />
+              {t('settings.deleteAccountButton')}
+            </Button>
+          </div>
+        </SectionCard>
+      )}
+
       {/* About ------------------------------------------------------------ */}
       <SectionCard
         icon={Globe}
@@ -385,6 +407,8 @@ export function SettingsPage() {
           </div>
         </div>
       </SectionCard>
+
+      {deleteOpen && <DeleteAccountDialog open onOpenChange={setDeleteOpen} />}
     </div>
   )
 }

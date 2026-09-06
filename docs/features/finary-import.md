@@ -1,6 +1,6 @@
 # Feature: Finary Import
 
-> Last updated: 2026-07-07
+> Last updated: 2026-09-06
 
 ## Context
 
@@ -40,7 +40,14 @@ Type suggestions are auto-computed from the Finary category via `FinaryPersisten
 
 - `FinaryImportService` uses a `ConcurrentHashMap` with 30-minute expiry (cleaned every 60s by `@Scheduled`).
 - `FinaryApiSyncService` uses a `ConcurrentHashMap` with 10-minute expiry (cleaned every 60s by `@Scheduled`).
-- Cache tokens are UUIDs. The preview+execute must complete within the TTL or the user must re-upload.
+- Cache tokens are UUIDs bound to the originating member. Execute rejects a different
+  member or an expired entry before processing, independently of the scheduled sweep.
+- A valid execute request claims its preview atomically before persistence starts. Previews are
+  single-use, including when a later mapping or import step fails; retrying then requires a new
+  upload or API preview.
+- A committed member deletion or final-admin reset purges that member's cached
+  previews. Rollback preserves them. Registration checks member existence under
+  the same monitor used by the purge, preventing late previews from being retained.
 
 ### Auto-sync
 
@@ -94,14 +101,13 @@ User reviews + maps accounts (SKIP / MAP_EXISTING / CREATE_NEW)
         v
 FinaryImportService.executeImport(fileToken + mappings)
         |
-        +-- Retrieve cached data
+        +-- Validate member, then atomically claim cached data (single-use)
         +-- For each mapping:
         |       +-- SKIP: skip
         |       +-- MAP_EXISTING: update balance, set externalAccountId
         |       +-- CREATE_NEW: create account, set externalAccountId
         |       +-- Reconstruct balance snapshots from transactions
         |       +-- Import transactions
-        +-- Remove from cache
         +-- Return result (counts + imported accounts)
 
 API Sync:
@@ -137,9 +143,8 @@ User reviews + maps accounts
         v
 FinaryApiSyncService.execute(syncToken + mappings)
         |
-        +-- Retrieve cached session
+        +-- Atomically claim cached session (single-use)
         +-- Apply mappings + import transactions
-        +-- Remove from cache
         +-- Return result
 
 Auto-sync (button or daily at 08:00):
@@ -181,6 +186,9 @@ POST /api/finary/api-sync/auto
 - **Manual transactions survive Finary re-syncs**: `FinaryPersistenceHelper.importTransactions()` calls `deleteByAccountIdAndIsManualFalse()` instead of `deleteByAccountId()`. Manually-added transactions are preserved across any number of re-syncs.
 - **TOTP is a query parameter**: The TOTP code is sent as `?totp={code}` on the POST preview request. This avoids body parsing complexity but means the code is visible in server access logs.
 - **Preview tokens expire quickly**: XLSX tokens expire after 30 minutes, API sync tokens after 10 minutes. Users must complete the mapping within that window or re-upload.
+- **Preview tokens are single-use after execute starts**: a valid execute claims the token before
+  any data is written. If the import later fails because of an invalid mapping or an unexpected
+  persistence error, re-upload the XLSX file or start a new API preview before retrying.
 - **Clerk API version is hardcoded**: The `__clerk_api_version` and `_clerk_js_version` query parameters are hardcoded in `FinaryApiClient`. If Clerk updates, these may need to be updated.
 - **Account name matching is case-insensitive but exact**: Auto-mapping matches Finary account name to Picsou account name. If the user renamed an account in Picsou, it won't match.
 - **Transactions are per-category**: API sync fetches transactions only from checkings, savings, investments, and credits categories. Other categories (real estate, cryptos) do not have a transactions endpoint.

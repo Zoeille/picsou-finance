@@ -72,7 +72,9 @@ export const mfaApi = {
 
   // ─── settings flow (authenticated) ──────────────────────────────────
 
-  getStatus: () => api.get<MfaStatus>('/auth/mfa/status').then(r => r.data),
+  getStatus: () => api
+    .get<MfaStatus>('/auth/mfa/status', { skipMemberOverride: true })
+    .then(r => r.data),
 
   enrollInit: (currentPassword: string) =>
     api

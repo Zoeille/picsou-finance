@@ -1,6 +1,6 @@
 # Feature: CSV transaction import (investment accounts)
 
-> Last updated: 2026-08-31
+> Last updated: 2026-09-06
 
 ## Context
 
@@ -17,12 +17,20 @@ Two phases, modelled on the Finary XLSX importer but mapping **columns** into an
 
 1. **Preview** — the raw file is uploaded, the dialect (delimiter / decimal / date format) is
    sniffed, a best-guess column mapping is built from the header names, and the raw file is cached
-   under a `fileToken` **bound to the target account** (30-min TTL). The response returns the
+   under a `fileToken` **bound to the originating member and target account** (30-min TTL). The response returns the
    detected columns, a sample of rows, and the guesses — all overridable in the wizard.
 2. **Execute** — the client echoes the `fileToken` plus the (possibly user-adjusted) mapping and
    dialect. The raw file is **re-parsed** with the confirmed dialect, each row is mapped to a
    manual BUY/SELL transaction, valid rows are bulk-inserted (`is_manual = true`), and holdings are
    recomputed **once**. Invalid rows are reported per-row rather than failing the whole file.
+
+Expired entries are rejected during execute, independently of the scheduled
+sweep. A committed member deletion or final-admin reset purges the raw previews
+for the removed member; rollback preserves them. Registration checks member
+existence under the purge monitor to prevent late previews from being retained.
+A request for another member or account is rejected without consuming the
+token. A valid execute then claims the preview atomically before any rows are
+written, making it single-use even if parsing or persistence later fails.
 
 ### Key files
 
@@ -48,7 +56,7 @@ upload CSV ─► preview() ─► detect dialect + guess mapping ─► cache r
 user adjusts mapping/dialect ◄───────────────────────────────────────┘
         │
         ▼
-execute(token, mapping, dialect) ─► re-parse ─► map rows ─► saveAll(is_manual) ─► recomputeHoldings()
+execute(token, mapping, dialect) ─► validate scope + claim token ─► re-parse ─► map rows ─► saveAll(is_manual) ─► recomputeHoldings()
 ```
 
 ## Technical choices
@@ -75,6 +83,9 @@ execute(token, mapping, dialect) ─► re-parse ─► map rows ─► saveAll(
   CSV cannot replace provider-owned positions.
 - Multipart limit was raised to **10 MB** (`application.yml`) for multi-year histories; the endpoint
   is member-scoped and throttled.
+- A preview is **single-use after a valid execute begins**. If that import fails after claiming
+  the token, upload the CSV again before retrying; a wrong member or account leaves the token usable
+  by its original scope.
 - Demo mode returns `{}` for unhandled endpoints — UI consumers must guard accordingly.
 
 ## Tests

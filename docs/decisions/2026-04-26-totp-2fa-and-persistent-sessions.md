@@ -25,7 +25,7 @@ Concretely:
 - Persistent session = `<series_id>:<token>` cookie (90 days), where `series_id` is a UUID and `token` is 64 random bytes. Server stores `SHA-256(token)` only.
 - Theft detection: if the series exists but the hash mismatches, the entire series is revoked (Improved Persistent Login Cookie pattern, Barry Jaspan).
 - Anti-replay: `user_mfa.last_used_step` rejects re-use within the ±1 step tolerance window.
-- Rate limits via Bucket4j: `mfaVerifyBuckets` (5 / 15 min per uid), `mfaEnrollBuckets` (10 / 1h per uid).
+- Rate limits via Bucket4j: `mfaVerifyBuckets` (5 / 15 min per IP) and `mfaVerifyUserBuckets` (5 / 15 min per validated user ID) are both consumed before TOTP or recovery-code verification; `mfaEnrollBuckets` remains 10 / 1h per IP. The per-user bucket is only reached after the challenge JWT, user activation, and token version validate, and is not reset by issuing another challenge.
 - A short-lived `mfa_challenge` JWT (5 min, distinct `type` claim) carries the MFA-pending state between `/login` and `/mfa/verify`.
 - New `PersistentTokenAuthFilter` runs **after** `JwtAuthenticationFilter` (so an active access token short-circuits) and re-issues access+refresh from a valid persistent token, rotating the persistent cookie on every use.
 - Admin can force-disable 2FA on any non-admin or non-self target (`DELETE /api/admin/members/{id}/mfa`), wiping their persistent sessions in the same transaction.

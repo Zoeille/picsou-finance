@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Finary XLSX and CSV previews are claimed atomically before import writes,
+  preventing duplicate financial data when two executions overlap. A claimed
+  preview is single-use; retrying a failed import requires a new preview.
+- MFA verification now enforces an account budget in addition to the IP limit,
+  shared by TOTP and recovery codes and preserved across new login challenges.
+
+- The account-deletion dialog scrolls on short screens and wraps long action
+  labels without horizontal overflow.
+
+- Account deletion preserves the last active administrator even when other
+  administrator logins are inactive. Committed deletion also purges pending
+  Finary and CSV import data, with member binding and expiry checked on execute.
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at
@@ -172,6 +185,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picker; the choice is stored on the account, so it follows every device and
   family member. Existing wallets are backfilled by a migration.
   See [feature notes](docs/features/bank-logos.md).
+- **Self-service account deletion (GDPR Art. 17).** Settings → Danger zone lets
+  users erase their login and owned data through `DELETE /api/me`, after
+  re-authentication and username confirmation. The final administrator keeps
+  the same login, role, and MFA configuration but loses all member-owned data
+  and access keys while every session is revoked. An ordered database lock prevents concurrent
+  deletions from leaving the instance without an administrator; persistent sessions are bound
+  to the credential generation that issued them so an in-flight login cannot restore access
+  after the reset. See the
+  [feature notes](docs/features/account-deletion.md) (#118).
 
 ### Changed
 

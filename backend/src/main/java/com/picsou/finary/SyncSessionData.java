@@ -13,6 +13,7 @@ import java.util.Map;
  * Cached in memory with a UUID key (syncToken) until execute is called or timeout.
  */
 public record SyncSessionData(
+    Long memberId,
     List<CategorizedFinaryAccount> allAccounts,
     Map<String, List<FinaryTransactionDto>> transactionsByCategory,
     Instant createdAt
