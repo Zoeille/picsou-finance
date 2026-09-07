@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Trade Republic and DEGIRO daily snapshots now cost today's positions, not
+  yesterday's.** Both syncs took the day's snapshot before replacing the holdings,
+  and the snapshot derives its invested amount from the holdings in the table, so
+  every daily point carried the cost basis of the previous sync. The snapshot now
+  follows the holdings. The Trade Republic PEA's cash pocket also reaches
+  `cashBalance`, so it counts on both sides of the valuation instead of dropping
+  out of the live value.
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at
