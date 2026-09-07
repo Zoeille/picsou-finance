@@ -70,6 +70,7 @@ public class JwtUtil {
             .claim("uid", user.getId())
             .claim("role", user.getRole().name())
             .claim("type", "mfa_challenge")
+            .claim("tv", user.getTokenVersion())
             .claim("remember_me", rememberMe)
             .issuedAt(Date.from(Instant.now()))
             .expiration(Date.from(expiry))

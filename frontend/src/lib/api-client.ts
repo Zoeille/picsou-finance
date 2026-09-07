@@ -4,10 +4,12 @@ import { useAppStore } from '@/stores/app-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useConnectivityStore } from '@/stores/connectivity-store'
 import { useProfileStore } from '@/stores/profile-store'
+import { getErrorCode } from '@/lib/errors'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
     skipGlobalErrorRedirect?: boolean
+    skipMemberOverride?: boolean
   }
 }
 
@@ -28,21 +30,31 @@ if (import.meta.env.VITE_DEMO_MODE === 'true') {
 api.interceptors.request.use((config) => {
   const { activeMemberId } = useProfileStore.getState()
   const isAdmin = useAuthStore.getState().user?.role === 'ADMIN'
-  if (isAdmin && activeMemberId) {
+  if (!config.skipMemberOverride && isAdmin && activeMemberId) {
     config.params = { ...config.params, memberId: activeMemberId }
   }
   return config
 })
 
 let isRefreshing = false
-let refreshSubscribers: Array<() => void> = []
+let refreshSubscribers: Array<{
+  resolve: () => void
+  reject: (error: unknown) => void
+}> = []
 
-function subscribeToRefresh(cb: () => void) {
-  refreshSubscribers.push(cb)
+function waitForRefresh() {
+  return new Promise<void>((resolve, reject) => {
+    refreshSubscribers.push({ resolve, reject })
+  })
 }
 
-function notifyRefreshSubscribers() {
-  refreshSubscribers.forEach(cb => cb())
+function resolveRefreshSubscribers() {
+  refreshSubscribers.forEach(subscriber => subscriber.resolve())
+  refreshSubscribers = []
+}
+
+function rejectRefreshSubscribers(error: unknown) {
+  refreshSubscribers.forEach(subscriber => subscriber.reject(error))
   refreshSubscribers = []
 }
 
@@ -109,23 +121,25 @@ api.interceptors.response.use(
     // 401: Unauthorized - token refresh
     if (
       error.response?.status === 401 &&
+      getErrorCode(error) !== 'REAUTH_FAILED' &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/')
     ) {
+      originalRequest._retry = true
+
       if (isRefreshing) {
-        return new Promise(resolve => {
-          subscribeToRefresh(() => resolve(api(originalRequest!)))
-        })
+        await waitForRefresh()
+        return api(originalRequest!)
       }
 
-      originalRequest._retry = true
       isRefreshing = true
 
       try {
         await api.post('/auth/refresh')
-        notifyRefreshSubscribers()
+        resolveRefreshSubscribers()
         return api(originalRequest!)
-      } catch {
+      } catch (refreshError: unknown) {
+        rejectRefreshSubscribers(refreshError)
         // Refresh failed: the session is dead. Clear the JS-side auth flag
         // (sessionStorage) before redirecting, otherwise PublicOnly on /login
         // sees `isAuthenticated=true` and bounces back to "/", which fires

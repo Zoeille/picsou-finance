@@ -70,6 +70,7 @@ describe('api-client memberId interceptor', () => {
   afterEach(() => {
     useAuthStore.getState().logout()
     useProfileStore.getState().reset()
+    window.history.replaceState(null, '', '/')
   })
 
   function asUser(role: 'ADMIN' | 'MEMBER') {
@@ -97,6 +98,13 @@ describe('api-client memberId interceptor', () => {
     expect(captured?.memberId).toBeUndefined()
   })
 
+  it('does NOT attach memberId when an identity operation opts out', async () => {
+    asUser('ADMIN')
+    useProfileStore.getState().setActiveMember(5)
+    await api.delete('/me', { skipMemberOverride: true })
+    expect(captured?.memberId).toBeUndefined()
+  })
+
   it('does not redirect global 5xx errors when a GET opts out', async () => {
     const href = window.location.href
     api.defaults.adapter = async (config) => Promise.reject({
@@ -109,5 +117,125 @@ describe('api-client memberId interceptor', () => {
     ).rejects.toMatchObject({ response: { status: 502 } })
 
     expect(window.location.href).toBe(href)
+  })
+
+  it('does not refresh or replay a destructive request when re-authentication fails', async () => {
+    let deleteCalls = 0
+    let refreshCalls = 0
+    api.defaults.adapter = async (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshCalls += 1
+        return {
+          data: null,
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config,
+        }
+      }
+
+      deleteCalls += 1
+      return Promise.reject({
+        config,
+        response: {
+          status: 401,
+          data: { code: 'REAUTH_FAILED' },
+        },
+      })
+    }
+
+    await expect(api.delete('/me', {
+      data: { reAuth: { password: 'wrong' } },
+    })).rejects.toMatchObject({ response: { status: 401 } })
+
+    expect(deleteCalls).toBe(1)
+    expect(refreshCalls).toBe(0)
+  })
+
+  it('rejects every queued request when the shared refresh fails', async () => {
+    let resourceCalls = 0
+    let refreshCalls = 0
+    let releaseRefresh = () => {}
+    const refreshGate = new Promise<void>(resolve => {
+      releaseRefresh = resolve
+    })
+    window.history.replaceState(null, '', '/login')
+
+    api.defaults.adapter = async (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshCalls += 1
+        await refreshGate
+      } else {
+        resourceCalls += 1
+      }
+      return Promise.reject({
+        config,
+        response: { status: 401, data: {} },
+      })
+    }
+
+    const first = api.get('/first')
+    await vi.waitFor(() => expect(refreshCalls).toBe(1))
+    const second = api.get('/second')
+    await vi.waitFor(() => expect(resourceCalls).toBe(2))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    releaseRefresh()
+
+    const completion = await Promise.race([
+      Promise.allSettled([first, second]).then(results => ({ results })),
+      new Promise<{ results: null }>(resolve => {
+        setTimeout(() => resolve({ results: null }), 500)
+      }),
+    ])
+
+    expect(completion.results).not.toBeNull()
+    if (completion.results === null) return
+    expect(completion.results).toHaveLength(2)
+    expect(completion.results.every(result => result.status === 'rejected')).toBe(true)
+    expect(refreshCalls).toBe(1)
+    expect(resourceCalls).toBe(2)
+  })
+
+  it('replays queued requests at most once after a shared refresh', async () => {
+    const resourceCalls = new Map<string, number>()
+    let refreshCalls = 0
+    let releaseRefresh = () => {}
+    const refreshGate = new Promise<void>(resolve => {
+      releaseRefresh = resolve
+    })
+
+    api.defaults.adapter = async (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshCalls += 1
+        await refreshGate
+        return {
+          data: null,
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config,
+        }
+      }
+
+      const url = config.url ?? ''
+      resourceCalls.set(url, (resourceCalls.get(url) ?? 0) + 1)
+      return Promise.reject({
+        config,
+        response: { status: 401, data: {} },
+      })
+    }
+
+    const first = api.get('/first')
+    await vi.waitFor(() => expect(refreshCalls).toBe(1))
+    const second = api.get('/second')
+    await vi.waitFor(() => expect(resourceCalls.get('/second')).toBe(1))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    releaseRefresh()
+
+    const results = await Promise.allSettled([first, second])
+    expect(results.every(result => result.status === 'rejected')).toBe(true)
+    expect(refreshCalls).toBe(1)
+    expect(resourceCalls.get('/first')).toBe(2)
+    expect(resourceCalls.get('/second')).toBe(2)
   })
 })

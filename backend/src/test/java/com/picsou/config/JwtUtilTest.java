@@ -76,10 +76,12 @@ class JwtUtilTest {
 
     @Test
     void mfaChallengeToken_carriesUserIdAndRole() {
+        user.setTokenVersion(17L);
         Claims claims = jwt.validateAndParse(jwt.generateMfaChallengeToken(user, true));
         assertThat(claims.getSubject()).isEqualTo("alice");
         assertThat(claims.get("uid", Long.class)).isEqualTo(42L);
         assertThat(claims.get("role", String.class)).isEqualTo("ADMIN");
+        assertThat(jwt.getTokenVersion(claims)).isEqualTo(17L);
     }
 
     @Test

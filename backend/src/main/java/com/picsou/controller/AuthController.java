@@ -50,6 +50,7 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final Map<String, Bucket> loginBuckets;
     private final Map<String, Bucket> mfaVerifyBuckets;
+    private final Map<Long, Bucket> mfaVerifyUserBuckets;
     private final AuthCookieWriter cookieWriter;
     private final MfaService mfaService;
     private final PersistentSessionService persistentSessionService;
@@ -70,6 +71,7 @@ public class AuthController {
         JwtUtil jwtUtil,
         @org.springframework.beans.factory.annotation.Qualifier("loginBuckets") Map<String, Bucket> loginBuckets,
         @org.springframework.beans.factory.annotation.Qualifier("mfaVerifyBuckets") Map<String, Bucket> mfaVerifyBuckets,
+        @org.springframework.beans.factory.annotation.Qualifier("mfaVerifyUserBuckets") Map<Long, Bucket> mfaVerifyUserBuckets,
         AuthCookieWriter cookieWriter,
         MfaService mfaService,
         PersistentSessionService persistentSessionService,
@@ -81,6 +83,7 @@ public class AuthController {
         this.jwtUtil = jwtUtil;
         this.loginBuckets = loginBuckets;
         this.mfaVerifyBuckets = mfaVerifyBuckets;
+        this.mfaVerifyUserBuckets = mfaVerifyUserBuckets;
         this.cookieWriter = cookieWriter;
         this.mfaService = mfaService;
         this.persistentSessionService = persistentSessionService;
@@ -222,8 +225,29 @@ public class AuthController {
         }
 
         Long userId = claims.get("uid", Long.class);
-        AppUser user = userRepository.findByIdWithMember(userId)
-            .orElseThrow(() -> new BadCredentialsException("User not found"));
+        AppUser user = userId == null ? null : userRepository.findByIdWithMember(userId).orElse(null);
+        Long challengeTokenVersion = jwtUtil.getTokenVersion(claims);
+        if (user == null || !user.isActivated() || challengeTokenVersion == null
+            || challengeTokenVersion.longValue() != user.getTokenVersion()) {
+            cookieWriter.clearMfaChallenge(httpRes);
+            ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED, "Invalid MFA challenge");
+            problem.setProperty("code", "MFA_CHALLENGE_INVALID");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+        }
+
+        // The IP limiter above throttles noisy clients, while this independently caps guesses
+        // against a single account when an attacker rotates source IPs. Only a challenge that
+        // has been fully validated to this immutable, active user id can touch this bucket;
+        // issuing a fresh challenge does not reset it because the map is keyed by user id.
+        Bucket userBucket = mfaVerifyUserBuckets.computeIfAbsent(
+            userId, k -> RateLimitConfig.createMfaVerifyUserBucket());
+        if (!userBucket.tryConsume(1)) {
+            cookieWriter.clearMfaChallenge(httpRes);
+            ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
+            detail.setDetail("Too many verification attempts. Please log in again in 15 minutes.");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(detail);
+        }
 
         boolean isRecovery = Boolean.TRUE.equals(req.isRecoveryCode());
         if (!mfaService.verifyTotpOrRecovery(user, req.code(), isRecovery)) {

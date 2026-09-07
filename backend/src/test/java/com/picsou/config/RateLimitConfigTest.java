@@ -18,8 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>{@code loginBuckets} (String keys) and {@code mcpKeyBuckets} (Long keys) are exercised;
  * every other bucket-store bean is the same one-line delegation to the private
  * {@code boundedBucketStore()} factory, so these two cover all of them — including
- * {@code accessKeyCreateBuckets}, which shares {@code mcpKeyBuckets}'s {@code Map<Long, Bucket>}
- * shape.
+ * {@code accessKeyCreateBuckets} and {@code mfaVerifyUserBuckets}, which share
+ * {@code mcpKeyBuckets}'s {@code Map<Long, Bucket>} shape.
  */
 class RateLimitConfigTest {
 

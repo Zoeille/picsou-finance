@@ -101,7 +101,9 @@ public class PersistentTokenAuthFilter extends OncePerRequestFilter {
 
         PersistentSession session = validated.get().session();
         AppUser user = userRepository.findByIdWithMember(session.getUser().getId()).orElse(null);
-        if (user == null || !user.isActivated()) {
+        if (user == null || !user.isActivated()
+            || session.getTokenVersion() != user.getTokenVersion()) {
+            persistentSessionService.revokeBySeriesId(session.getSeriesId());
             cookieWriter.clearPersistent(response);
             chain.doFilter(request, response);
             return;

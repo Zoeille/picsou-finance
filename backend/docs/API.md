@@ -1385,3 +1385,56 @@ Domain failures use `422` RFC 7807 responses. Unlike Bourse Direct and Amundi,
 DEGIRO does not yet set a stable `code` property — clients should treat the
 absence of a code as a generic sync failure rather than parsing `detail`.
 Authentication rate limiting returns `429`.
+
+---
+
+### 14. Self-service account — `/api/me`
+
+#### `GET /api/me/deletion-impact`
+
+Returns the current account-deletion mode for dialog copy. This response is
+advisory. `DELETE /api/me` selects the outcome again while it holds the
+administrator lock.
+
+- **Auth:** Required
+
+**Response `200`:**
+
+```json
+{ "mode": "RESET_LAST_ADMIN" }
+```
+
+`mode` is `DELETE_ACCOUNT` or `RESET_LAST_ADMIN`.
+
+#### `DELETE /api/me`
+
+Erases the authenticated user's account and member-owned data. A member or a
+non-final administrator is fully deleted. The final administrator keeps the same
+login, password, `ADMIN` role, and MFA configuration, but receives a new empty
+member. Every existing session and access key is invalidated. The `?memberId=`
+override is ignored. The target always comes from the authenticated user id.
+
+- **Auth:** Required
+- **Rate limit:** Per user — 3 attempts / hour (`429` when exceeded)
+
+**Request body** (re-auth: TOTP code when 2FA is enabled, current password otherwise):
+```json
+{ "reAuth": { "password": "secret" } }
+```
+
+**Response `200`:**
+
+```json
+{ "mode": "DELETE_ACCOUNT" }
+```
+
+`mode` is the committed `DELETE_ACCOUNT` or `RESET_LAST_ADMIN` outcome. The
+response clears all auth cookies. The client must clear local state and open
+`/login`. It must not send a second `POST /auth/logout`.
+
+Failures use RFC 7807 responses. A rejected factor returns `401` with
+`code: "REAUTH_FAILED"`. An exhausted deletion bucket returns `429` with
+`code: "ACCOUNT_DELETION_RATE_LIMITED"`.
+
+Export your data with `POST /api/me/export` before deletion if you need a copy.
+Data erasure cannot be undone.

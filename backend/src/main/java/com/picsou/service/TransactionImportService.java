@@ -16,23 +16,25 @@ import com.picsou.imports.csv.DecimalStyle;
 import com.picsou.model.Account;
 import com.picsou.model.Transaction;
 import com.picsou.repository.AccountRepository;
+import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.TransactionRepository;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Two-phase CSV import of investment transactions into a single target account. Phase one
@@ -42,21 +44,36 @@ import java.util.concurrent.ConcurrentHashMap;
  * once. Mirrors {@code FinaryImportService}'s token/cache/TTL shape.
  */
 @Service
-@RequiredArgsConstructor
 public class TransactionImportService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionImportService.class);
 
     private static final int SAMPLE_ROWS = 15;
+    private static final Duration PREVIEW_TTL = Duration.ofMinutes(30);
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final HoldingComputeService holdingComputeService;
     private final TransactionRowMapper rowMapper;
 
-    private final ConcurrentHashMap<String, CachedCsv> cache = new ConcurrentHashMap<>();
+    private final MemberPreviewCache<CachedCsv> cache;
 
-    record CachedCsv(Long accountId, String content, Instant parsedAt) {}
+    record CachedCsv(Long accountId, Long memberId, String content, Instant parsedAt) {}
+
+    public TransactionImportService(
+        AccountRepository accountRepository,
+        TransactionRepository transactionRepository,
+        HoldingComputeService holdingComputeService,
+        TransactionRowMapper rowMapper,
+        FamilyMemberRepository familyMemberRepository
+    ) {
+        this.accountRepository = accountRepository;
+        this.transactionRepository = transactionRepository;
+        this.holdingComputeService = holdingComputeService;
+        this.rowMapper = rowMapper;
+        this.cache = new MemberPreviewCache<>(
+            familyMemberRepository, CachedCsv::memberId, CachedCsv::parsedAt);
+    }
 
     // --- Phase 1: preview -------------------------------------------------------------------
 
@@ -82,7 +99,9 @@ public class TransactionImportService {
         List<List<String>> sampleRows = dataRows.stream().limit(SAMPLE_ROWS).toList();
 
         String fileToken = UUID.randomUUID().toString();
-        cache.put(fileToken, new CachedCsv(accountId, content, Instant.now()));
+        if (!cache.register(fileToken, new CachedCsv(accountId, memberId, content, Instant.now()))) {
+            throw new ResourceNotFoundException("Family member not found");
+        }
 
         CsvDialectDto dialect = new CsvDialectDto(String.valueOf(delimiter), decimal.name(), dateFormat);
         return new TransactionImportPreviewResponse(
@@ -95,14 +114,16 @@ public class TransactionImportService {
     public TransactionImportResultResponse executeImport(Long accountId, Long memberId, TransactionImportRequest req) {
         Account account = getInvestmentAccount(accountId, memberId);
 
-        CachedCsv cached = cache.get(req.fileToken());
-        if (cached == null) {
-            throw new IllegalArgumentException("Preview expired or invalid -- please re-upload the file");
-        }
+        CachedCsv preview = cache.find(req.fileToken(), memberId, PREVIEW_TTL)
+            .orElseThrow(() -> new IllegalArgumentException("Preview expired or invalid -- please re-upload the file"));
         // Bind the token to its account so a preview cannot be replayed against another account.
-        if (!cached.accountId().equals(accountId)) {
+        if (!preview.accountId().equals(accountId)) {
             throw new IllegalArgumentException("Preview does not belong to this account");
         }
+        // Validate the account binding first so a request for another account cannot burn the
+        // token. Once claimed, the preview is single-use even if the later import fails.
+        CachedCsv cached = cache.consume(req.fileToken(), memberId, PREVIEW_TTL)
+            .orElseThrow(() -> new IllegalArgumentException("Preview expired or invalid -- please re-upload the file"));
 
         CsvDialect dialect = toDialect(req.dialect());
         List<List<String>> rows = CsvReader.parse(cached.content(), dialect.delimiter());
@@ -126,8 +147,6 @@ public class TransactionImportService {
             transactionRepository.saveAll(toSave);
             holdingComputeService.recomputeHoldings(account);
         }
-        cache.remove(req.fileToken());
-
         log.info("CSV import for account {}: {} imported, {} skipped", accountId, toSave.size(), errors.size());
         return new TransactionImportResultResponse(toSave.size(), errors.size(), errors);
     }
@@ -253,7 +272,11 @@ public class TransactionImportService {
     /** Evicts cached uploads older than 30 minutes (copy of the Finary importer's TTL sweep). */
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     void cleanupExpiredCache() {
-        Instant cutoff = Instant.now().minusSeconds(1800);
-        cache.entrySet().removeIf(e -> e.getValue().parsedAt().isBefore(cutoff));
+        cache.discardExpired(PREVIEW_TTL);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void discardDeletedMemberPreview(MemberDataDeletedEvent event) {
+        cache.discardForMember(event.memberId());
     }
 }

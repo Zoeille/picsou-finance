@@ -60,6 +60,7 @@ public class PersistentSessionService {
             .userAgent(truncate(userAgent, 255))
             .ipPrefix(ipPrefix(remoteAddr))
             .trustedFor2fa(trustedFor2fa)
+            .tokenVersion(user.getTokenVersion())
             .createdAt(now)
             .lastUsedAt(now)
             .expiresAt(now.plus(expiryDays, ChronoUnit.DAYS))
@@ -97,6 +98,11 @@ public class PersistentSessionService {
         Instant now = Instant.now(clock);
 
         if (!session.isActive(now)) return Optional.empty();
+        if (session.getTokenVersion() != session.getUser().getTokenVersion()) {
+            session.setRevokedAt(now);
+            repository.save(session);
+            return Optional.empty();
+        }
 
         String presentedHash = sha256Hex(parsed.token());
         boolean matchesCurrent = constantTimeEquals(presentedHash, session.getTokenHash());
@@ -142,7 +148,9 @@ public class PersistentSessionService {
     }
 
     public List<PersistentSession> listActiveForUser(AppUser user) {
-        return repository.findByUserIdAndRevokedAtIsNullOrderByLastUsedAtDesc(user.getId());
+        return repository.findByUserIdAndRevokedAtIsNullOrderByLastUsedAtDesc(user.getId()).stream()
+            .filter(session -> session.getTokenVersion() == user.getTokenVersion())
+            .toList();
     }
 
     @Transactional
@@ -189,6 +197,7 @@ public class PersistentSessionService {
             .filter(s -> s.getUser().getId().equals(user.getId()))
             .filter(PersistentSession::isTrustedFor2fa)
             .filter(s -> s.isActive(Instant.now(clock)))
+            .filter(s -> s.getTokenVersion() == user.getTokenVersion())
             .isPresent();
     }
 
@@ -212,9 +221,11 @@ public class PersistentSessionService {
      * has revoked, even while the refresh JWT itself is still cryptographically valid. Unknown
      * series → {@code false} (treat as no longer valid).
      */
+    @Transactional(readOnly = true)
     public boolean isSeriesActive(UUID seriesId) {
         return repository.findBySeriesId(seriesId)
             .filter(s -> s.isActive(Instant.now(clock)))
+            .filter(s -> s.getTokenVersion() == s.getUser().getTokenVersion())
             .isPresent();
     }
 

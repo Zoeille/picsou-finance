@@ -17,18 +17,21 @@ import com.picsou.model.AccountType;
 import com.picsou.repository.AccountRepository;
 import com.picsou.repository.FamilyMemberRepository;
 import com.picsou.repository.FinarySessionRepository;
-import lombok.RequiredArgsConstructor;
+import com.picsou.service.MemberDataDeletedEvent;
+import com.picsou.service.MemberPreviewCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -37,7 +40,6 @@ import java.util.stream.Collectors;
  * 2. execute(syncToken, mappings) -- apply user mappings, import accounts + transactions
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class FinaryApiSyncService {
 
@@ -50,6 +52,7 @@ public class FinaryApiSyncService {
      * categories above; they come from the dedicated {@code /loans} endpoint (issue #11).
      */
     private static final String LOANS_CATEGORY = "loans";
+    private static final Duration PREVIEW_TTL = Duration.ofMinutes(10);
     private static final List<String> TRANSACTION_CATEGORIES = List.of(
         "checkings", "savings", "investments", "credits"
     );
@@ -61,7 +64,25 @@ public class FinaryApiSyncService {
     private final FinarySessionRepository finarySessionRepository;
     private final FinaryPersistenceHelper persistenceHelper;
 
-    private final ConcurrentHashMap<String, SyncSessionData> cache = new ConcurrentHashMap<>();
+    private final MemberPreviewCache<SyncSessionData> cache;
+
+    public FinaryApiSyncService(
+        FinaryApiClient finaryApiClient,
+        CryptoEncryption encryption,
+        AccountRepository accountRepository,
+        FamilyMemberRepository familyMemberRepository,
+        FinarySessionRepository finarySessionRepository,
+        FinaryPersistenceHelper persistenceHelper
+    ) {
+        this.finaryApiClient = finaryApiClient;
+        this.encryption = encryption;
+        this.accountRepository = accountRepository;
+        this.familyMemberRepository = familyMemberRepository;
+        this.finarySessionRepository = finarySessionRepository;
+        this.persistenceHelper = persistenceHelper;
+        this.cache = new MemberPreviewCache<>(
+            familyMemberRepository, SyncSessionData::memberId, SyncSessionData::createdAt);
+    }
 
     // ---------------------------------------------------------------------------
     // Connection management
@@ -200,9 +221,11 @@ public class FinaryApiSyncService {
             // Cache everything with a sync token
             String syncToken = UUID.randomUUID().toString();
             SyncSessionData sessionData = new SyncSessionData(
-                allAccounts, transactionsByCategory, Instant.now()
+                memberId, allAccounts, transactionsByCategory, Instant.now()
             );
-            cache.put(syncToken, sessionData);
+            if (!cache.register(syncToken, sessionData)) {
+                throw new ResourceNotFoundException("Family member not found");
+            }
 
             // Build preview: count transactions per account
             Map<String, Integer> txCountByAccountId = new HashMap<>();
@@ -281,11 +304,8 @@ public class FinaryApiSyncService {
      */
     @Transactional
     public FinaryImportResultResponse execute(String syncToken, List<FinaryAccountMapping> mappings, Long memberId) {
-        SyncSessionData session = cache.get(syncToken);
-        if (session == null) {
-            throw new SyncException("Sync session expired or invalid -- please start a new sync");
-        }
-        cache.remove(syncToken);
+        SyncSessionData session = cache.consume(syncToken, memberId, PREVIEW_TTL)
+            .orElseThrow(() -> new SyncException("Sync session expired or invalid -- please start a new sync"));
 
         FamilyMember member = familyMemberRepository.findById(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Family member not found"));
@@ -507,7 +527,11 @@ public class FinaryApiSyncService {
      */
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     void cleanupExpiredCache() {
-        Instant tenMinutesAgo = Instant.now().minusSeconds(600);
-        cache.entrySet().removeIf(e -> e.getValue().createdAt().isBefore(tenMinutesAgo));
+        cache.discardExpired(PREVIEW_TTL);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void discardDeletedMemberPreview(MemberDataDeletedEvent event) {
+        cache.discardForMember(event.memberId());
     }
 }
