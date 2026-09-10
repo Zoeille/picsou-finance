@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A CSV transaction import can no longer run twice on one preview.** The
+  `fileToken` was removed from the cache only after the rows had been saved, so a
+  second execute that arrived during the import (a double click, a request the
+  client retried after a timeout) passed every check and saved the whole file a
+  second time: duplicated transactions, and a cost basis and realized P&L off by
+  exactly one import, with nothing to flag it. The token is now consumed atomically
+  before anything is written, and handed back if the import fails, since its
+  transaction rolled back.
 - **Trade Republic re-authentication persists again.** Trade Republic now issues a
   session token longer than 1472 bytes, which `CryptoEncryption` inflates past the
   `VARCHAR(2000)` of `trade_republic_session.session_token`: the 2FA succeeded, then
