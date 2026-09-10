@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Trade Republic re-authentication persists again.** Trade Republic now issues a
+  session token longer than 1472 bytes, which `CryptoEncryption` inflates past the
+  `VARCHAR(2000)` of `trade_republic_session.session_token`: the 2FA succeeded, then
+  the INSERT that stored the session was refused, and every following sync asked to
+  reconnect, forever. The three encrypted columns whose length a third party controls
+  (the Trade Republic session and refresh tokens, the DEGIRO session blob) are now
+  `TEXT`, as the Amundi, Bourse Direct and BoursoBank session state already was. (#115)
+
 - **An Amundi account holding two share classes of the same fund now syncs.**
   Amundi does not always put an ISIN in `codeIsin` — on employer funds it holds
   the AMF code — so the holding was keyed on a slug of the fund label, capped at
