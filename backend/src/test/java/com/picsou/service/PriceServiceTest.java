@@ -351,6 +351,41 @@ class PriceServiceTest {
         verify(yahoo, times(1)).getPricesEur(Set.of("AAPL"));
     }
 
+    /**
+     * A cash balance converts with an FX rate. Yahoo answers chart/USD with the ProShares Ultra
+     * Semiconductors ETF (~89 USD a share), so routing a bare currency code through the price
+     * path valued a 1 000 USD account at ~76 000 EUR and wrote that into its daily snapshots.
+     */
+    @Test
+    void toEur_convertsACashBalanceWithTheFxRate_neverWithAChartSymbol() {
+        when(yahoo.getFxRateToEur("USD")).thenReturn(new BigDecimal("0.86"));
+
+        assertThat(priceService.toEur(new BigDecimal("1000"), "USD", null)).isEqualByComparingTo("860");
+
+        verify(yahoo, times(0)).getPricesEur(anySet());
+        verifyNoInteractions(coinGecko);
+    }
+
+    @Test
+    void toEur_returnsTheBalanceUnconverted_andLogsAtError_whenNoRateIsAvailable() {
+        when(yahoo.getFxRateToEur("USD")).thenReturn(null);
+
+        assertThat(priceService.toEur(new BigDecimal("1000"), "USD", null)).isEqualByComparingTo("1000");
+
+        assertThat(eventsAt(Level.ERROR)).anySatisfy(e ->
+            assertThat(e.getFormattedMessage()).contains("USD").contains("UNCONVERTED"));
+    }
+
+    @Test
+    void toEur_stillPricesAnAccountThatIsOneAsset_throughItsTicker() {
+        when(coinGecko.supports("AAPL")).thenReturn(false);
+        when(yahoo.getPricesEur(Set.of("AAPL"))).thenReturn(Map.of("AAPL", new BigDecimal("200")));
+
+        assertThat(priceService.toEur(new BigDecimal("3"), "USD", "AAPL")).isEqualByComparingTo("600");
+
+        verify(yahoo, times(0)).getFxRateToEur(any());
+    }
+
     /** Runs the backfill and fails loudly if it throws — the ApplicationRunner contract. */
     private int assertThatNoStartupFailure(java.util.function.Supplier<Integer> backfill) {
         var result = new int[1];

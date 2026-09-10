@@ -41,7 +41,11 @@ Anything still unresolved returns nothing.
 
 `PriceService.toEur(balance, currency, ticker)` converts an account balance to EUR:
 - If currency is EUR and no ticker is set, returns the balance as-is.
-- Otherwise, uses the ticker (preferred) or currency code to fetch a price, then multiplies.
+- If a ticker is set (an account that is itself one asset), fetches that ticker's EUR price and multiplies.
+- Otherwise the balance is plain cash in `currency`: it is multiplied by the `{CURRENCY}EUR=X` rate from `YahooFinancePriceProvider.getFxRateToEur`, never by a chart symbol. Yahoo resolves a bare currency code as whatever instrument trades under it (`chart/USD` is the ProShares Ultra Semiconductors ETF), which used to value a 1 000 USD account at ~76 000 EUR.
+- `valuation()` reports that converted figure as both the value and the cost basis of a holdings-less account, so cash never shows an FX gain or loss.
+- A failed FX lookup is remembered for 60 s in `YahooFinancePriceProvider` (`FX_MISS_CACHE_TTL`), the way a failed price is: without it, every holdings-less valuation of a USD account (dashboard, account cards, history, one after the other) sent its own synchronous chart request, each able to wait the full timeout, for as long as Yahoo was down.
+- `balance_snapshot.balance` is EUR whatever the account's currency: `AccountService.upsertSnapshotFromNative` converts a hand-typed balance (account form, manual snapshot) and a bank-reported one (Enable Banking) with the same `toEur` before storing it, so the history chart and the `HistoryService` totals read the figure the dashboard shows. A back-dated manual snapshot converts at today's rate: the provider has no historical FX, and an approximate EUR figure beats a USD one read as EUR.
 
 ### Scheduler
 
