@@ -352,39 +352,38 @@ class PriceServiceTest {
     }
 
     /**
-     * The scenario that engraved a partial exchange total: a dashboard render remembers a miss
-     * for ETH, then the exchange sync asks for the same ticker within the miss TTL. The network is
-     * skipped, but the miss must not come back as a null-priced Quote that hides the last recorded
-     * price from refreshCryptoQuotes.
+     * A cash balance converts with an FX rate. Yahoo answers chart/USD with the ProShares Ultra
+     * Semiconductors ETF (~89 USD a share), so routing a bare currency code through the price
+     * path valued a 1 000 USD account at ~76 000 EUR and wrote that into its daily snapshots.
      */
     @Test
-    void refreshCryptoQuotes_aRememberedMissStillValuesFromTheRecordedPrice() {
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        when(coinGecko.supports("ETH")).thenReturn(true);
-        when(coinGecko.getPricesEur(Set.of("ETH"))).thenReturn(Map.of());
-        when(priceSnapshotRepository.findRecentByTickers(eq(Set.of("ETH")), any(), any()))
-            .thenReturn(List.of(snapshot("ETH", yesterday, "3000")));
+    void toEur_convertsACashBalanceWithTheFxRate_neverWithAChartSymbol() {
+        when(yahoo.getFxRateToEur("USD")).thenReturn(new BigDecimal("0.86"));
 
-        priceService.getCryptoQuote("ETH"); // the render that remembers the miss
+        assertThat(priceService.toEur(new BigDecimal("1000"), "USD", null)).isEqualByComparingTo("860");
 
-        Map<String, PriceService.Quote> quotes = priceService.refreshCryptoQuotes(Set.of("ETH"));
-
-        assertThat(quotes.get("ETH")).isNotNull();
-        assertThat(quotes.get("ETH").price()).isEqualByComparingTo("3000");
-        assertThat(quotes.get("ETH").live()).isFalse();
-        verify(coinGecko, times(1)).getPricesEur(Set.of("ETH"));
+        verify(yahoo, times(0)).getPricesEur(anySet());
+        verifyNoInteractions(coinGecko);
     }
 
     @Test
-    void backfill_cryptoOnly_leavesAnUnmappedCoinWithoutHistory_ratherThanAskingYahoo() {
-        LocalDate from = LocalDate.of(2026, 1, 1);
-        when(coinGecko.supports("STX")).thenReturn(false);
+    void toEur_returnsTheBalanceUnconverted_andLogsAtError_whenNoRateIsAvailable() {
+        when(yahoo.getFxRateToEur("USD")).thenReturn(null);
 
-        assertThat(priceService.backfillHistoricalPrices(Set.of("STX"), from, true)).isZero();
+        assertThat(priceService.toEur(new BigDecimal("1000"), "USD", null)).isEqualByComparingTo("1000");
 
-        verify(yahoo, times(0)).getHistoricalPricesEur(any(), any(), any());
-        assertThat(eventsAt(Level.WARN)).anySatisfy(e ->
-            assertThat(e.getFormattedMessage()).contains("STX").contains("No CoinGecko mapping"));
+        assertThat(eventsAt(Level.ERROR)).anySatisfy(e ->
+            assertThat(e.getFormattedMessage()).contains("USD").contains("UNCONVERTED"));
+    }
+
+    @Test
+    void toEur_stillPricesAnAccountThatIsOneAsset_throughItsTicker() {
+        when(coinGecko.supports("AAPL")).thenReturn(false);
+        when(yahoo.getPricesEur(Set.of("AAPL"))).thenReturn(Map.of("AAPL", new BigDecimal("200")));
+
+        assertThat(priceService.toEur(new BigDecimal("3"), "USD", "AAPL")).isEqualByComparingTo("600");
+
+        verify(yahoo, times(0)).getFxRateToEur(any());
     }
 
     /** Runs the backfill and fails loudly if it throws — the ApplicationRunner contract. */

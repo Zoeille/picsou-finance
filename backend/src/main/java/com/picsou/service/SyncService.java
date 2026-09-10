@@ -437,7 +437,7 @@ public class SyncService {
         }
 
         account = accountRepository.save(account);
-        accountService.upsertSnapshot(account, data.balance(), LocalDate.now());
+        accountService.upsertSnapshotFromNative(account, data.balance(), LocalDate.now());
 
         return Optional.of(accountService.toResponse(account));
     }
